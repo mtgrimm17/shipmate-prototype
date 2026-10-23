@@ -214,3 +214,89 @@ function smTileMarkBBoxes() {
   }
   return out;
 }
+
+
+/* ══ THE SOCIAL MARKS (v8.84) ════════════════════════════════════════════
+   Epic draws its Follow Us row as monochrome 28px glyphs, one per service,
+   at the page's own foreground (.95 white) — measured on Rocket League,
+   Fortnite and Go Ape Ship. This is the registry they come out of, and it
+   works exactly as SM_TILE_MARKS above does: a key, a 24-unit viewBox, a
+   path, and `smSocialMark()` to draw it.
+
+   THE ART WAS ALREADY IN THE REPOSITORY (v8.85). Adam: "many of these
+   icons exist in Marketing - Website." They do — CONTACT_ICONS in
+   web-page.js has been drawing the marketing page's contact row since
+   v6.x, and six of Epic's twelve services are in it. v8.84 shipped
+   lettered placeholders for all eleven non-website marks on the view that
+   Shipmate does not redraw other companies' logos. That view is unchanged
+   and still the reason the missing six are missing; what was wrong was
+   assuming the set did not exist, when it was one file away.
+
+   So this borrows rather than copies. EGS_SOCIAL_TO_CONTACT maps Epic's
+   service ids onto CONTACT_ICONS' keys and smSocialMark reads that table
+   at DRAW time, which matters twice: web-page.js loads after this file, so
+   there is nothing to copy at definition time anyway; and an icon improved
+   for the marketing page improves here in the same edit, which a copy
+   would quietly stop doing.
+
+   THE SIX THAT ARE STILL LETTERS — Facebook, Twitch, VKontakte, Naver,
+   Youku, Weibo — are the ones the marketing page never needed. They keep
+   the placeholder disc at the same size, colour and spacing the real mark
+   will take, so nothing shifts when the art lands. Adding one is still the
+   one-line swap SM_TILE_MARKS's own note describes: drop a 24-unit path in
+   beside its key below, and smSocialMark prefers it from that moment. */
+const SM_SOCIAL_MARKS = {};
+
+/* Epic's service ids -> CONTACT_ICONS' keys (web-page.js). Epic still calls
+   it Twitter and the marketing page already calls it X; one service, two
+   names, and the icon is the one the art was drawn for. */
+const EGS_SOCIAL_TO_CONTACT = {
+  website: 'web', twitter: 'x', instagram: 'instagram',
+  discord: 'discord', youtube: 'youtube', reddit: 'reddit',
+};
+
+/* WHAT A SERVICE FALLS BACK TO, and it is a TABLE rather than the first
+   letter of the label. Twitter and Twitch both start with T, as do no end
+   of others once a storefront adds them, and two identical discs in a row
+   of eight is worse than no mark at all — a reader cannot even tell they
+   are different services. These are deliberately NOT the brands' own
+   shorthands: Facebook's lowercase f and Twitter's X are the marks
+   themselves, which is the thing this fallback exists to avoid. */
+const SM_SOCIAL_ABBR = {
+  website: 'www', twitter: 'Tw', facebook: 'Fb', instagram: 'Ig',
+  twitch: 'Tc', discord: 'Dc', vkontakte: 'Vk', youtube: 'Yt',
+  reddit: 'Rd', naver: 'Nv', youku: 'Yk', weibo: 'Wb',
+};
+function _smSocialLetter(id, label) {
+  return SM_SOCIAL_ABBR[id] || (String(label || '?').trim()[0] || '?').toUpperCase();
+}
+
+function smSocialMark(id, label) {
+  /* The marketing page's own art first, read live rather than copied. Its
+     svgs carry a viewBox and no width or height, so the size comes from CSS
+     — which is how web-page.css sizes them too. */
+  const shared = (typeof CONTACT_ICONS !== 'undefined')
+    ? CONTACT_ICONS[EGS_SOCIAL_TO_CONTACT[id]]
+    : null;
+  if (shared && shared.svg) {
+    return `<span class="sm-social-mark is-shared" aria-hidden="true">${shared.svg}</span>`;
+  }
+  const art = SM_SOCIAL_MARKS[id];
+  if (art) {
+    return `<svg class="sm-social-mark" viewBox="0 0 24 24" width="28" height="28"
+                 aria-hidden="true">${art}</svg>`;
+  }
+  const tag = _smSocialLetter(id, label);
+  /* Sized by how much there is to fit, so a two-letter tag does not touch
+     the disc it sits in. */
+  const fs = tag.length >= 3 ? 7.6 : (tag.length === 2 ? 9.4 : 11.5);
+  return `<svg class="sm-social-mark is-letter" viewBox="0 0 24 24" width="28" height="28"
+               aria-hidden="true">
+            <circle cx="12" cy="12" r="10.4" fill="none"
+                    stroke="currentColor" stroke-width="1.5" opacity=".55"/>
+            <text x="12" y="12" text-anchor="middle" dominant-baseline="central"
+                  font-size="${fs}" font-weight="700" fill="currentColor"
+                  font-family="Inter, system-ui, sans-serif"
+            >${typeof escHtml === 'function' ? escHtml(tag) : tag}</text>
+          </svg>`;
+}

@@ -21098,14 +21098,39 @@ function buildEgsStorePreviewSection() {
      given there is nobody to follow, so the empty state says what the block
      is for instead — and says it in the heading rather than in a sentence
      underneath, which is what the glow is already for. */
+  /* ── AND IT IS DRAWN THE WAY EPIC DRAWS IT (v8.84) ───────────────────
+     Measured on Rocket League, Fortnite and Go Ape Ship, and it turns out
+     to be a shape this page already has: the heading is a plain h2 OUTSIDE
+     the block, 20px above it, and the block itself is the same chip the
+     System Requirements group got in v8.69 — rgb(32,32,36), radius 12,
+     padding 32/56. Not a near-match: the same three numbers, read off the
+     same pages. So this uses .egs-sp-sysgroup and .egs-sp-chip rather than
+     a second set of rules that would drift from them.
+
+     INSIDE IT, A CENTRED ROW OF MONOCHROME GLYPHS — flex, gap 24, 28px
+     marks at the page's own .95 foreground. The pills this replaces said
+     each service's NAME, which is not what a store page does and is also
+     twelve words where Epic has twelve shapes.
+
+     The glyphs themselves come from SM_SOCIAL_MARKS (platform-icons.js),
+     which holds a globe and eleven lettered placeholders; see its note for
+     why the real marks are not in this repository and how little it takes
+     to add one. */
   const followHtml = `
-    <div class="egs-sp-foot ${egsHitCls(socialLinks.length)}" data-spp-el="socialMedia"
-         onclick="openStepModal('egs','socialMedia')">
+    <div class="egs-sp-sysgroup">
       <div class="egs-spp-h2">${socialLinks.length ? 'Follow Us' : 'Social Media Links'}</div>
-      ${socialLinks.length
-        ? `<div class="egs-sp-social">${socialLinks.map(l =>
-             `<span class="egs-sp-social-item">${escHtml(l.label)}</span>`).join('')}</div>`
-        : ''}
+      <div class="egs-sp-chip egs-sp-chip--social ${egsHitCls(socialLinks.length)}"
+           data-spp-el="socialMedia"
+           onclick="openStepModal('egs','socialMedia')">
+        ${socialLinks.length
+          ? `<div class="egs-sp-social">${socialLinks.map(l =>
+               `<span class="egs-sp-social-item" title="${escHtml(l.label)}"
+                      aria-label="${escHtml(l.label)}">${
+                 typeof smSocialMark === 'function'
+                   ? smSocialMark(l.id, l.label)
+                   : escHtml(l.label)}</span>`).join('')}</div>`
+          : `<div class="egs-spp-placeholder">Links to your game&rsquo;s channels</div>`}
+      </div>
     </div>`;
 
   const supported = EGS_SPEC_OS.filter(o => a.specs[o.id].supported === 'yes');

@@ -29811,18 +29811,58 @@ textarea.egs-sp-body {
   color: var(--epic-fg-2);
   margin: 18px 0 4px;
 }
+/* ── FOLLOW US IS A ROW OF MARKS, NOT A ROW OF NAMES (v8.84) ─────────────
+   Measured on Rocket League and Fortnite: a flex row, centred, 24px apart,
+   each glyph 28px at the page's own foreground. The pill these replace was
+   a name in a capsule — twelve words where Epic has twelve shapes, and not
+   a thing any store page does.
+
+   The chip around them is NOT a second chip: .egs-sp-chip, the one v8.69
+   measured for System Requirements, down to the same rgb(32,32,36), the
+   same radius 12 and the same 32/56 of padding. The two blocks really are
+   the same object on Epic's page, so they are one rule here. `--social`
+   only says the chip holds one centred row rather than a stack of parts. */
+.egs-sp .egs-sp-chip--social { padding-top: 22px; padding-bottom: 22px; }
+.egs-sp .egs-sp-social {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
 .egs-sp .egs-sp-social-item {
-  height: 32px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
-  padding: 0 14px;
+  justify-content: center;
+  padding: 0;
   border: none;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.15);
-  font-size: 12px;
-  letter-spacing: 0.36px;
+  border-radius: 0;
+  background: none;
   color: var(--epic-fg);
+  cursor: pointer;
+  transition: color .12s ease, opacity .12s ease;
 }
+.egs-sp .egs-sp-social-item .sm-social-mark { display: block; }
+/* The marketing page's marks come in with a viewBox and no width or height,
+   and two shapes of viewBox — 24x24 for the drawn ones and 127x96 for the
+   exported brand art. Height is therefore what is set, and the width
+   follows the art, which is what web-page.css does with `svg.brand` too. */
+.egs-sp .egs-sp-social-item .sm-social-mark.is-shared {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+}
+.egs-sp .egs-sp-social-item .sm-social-mark.is-shared > svg {
+  height: 28px;
+  width: auto;
+  display: block;
+}
+.egs-sp .egs-sp-social-item .sm-social-mark.is-shared > svg.brand { height: 22px; }
+/* The lettered placeholder sits a shade back, so a row that is half real
+   marks and half initials does not read as one set of twelve. */
+.egs-sp .egs-sp-social-item .sm-social-mark.is-letter { opacity: .78; }
+.egs-sp .egs-sp-chip--social:hover .egs-sp-social-item { opacity: 1; }
 .egs-sp .egs-sp-sysos-name {
   font-size: 14px;
   font-weight: 700;
