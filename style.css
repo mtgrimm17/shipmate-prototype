@@ -29918,6 +29918,20 @@ textarea.egs-sp-body {
    the strip's first thumbnail says the same thing the stage does. Nothing
    here plays: pointer-events off, so the click still reaches the stage and
    opens Screenshots. */
+/* The trailer's own frame on the stage (v8.83): the whole picture is the
+   play target, so it fills the viewport it sits in and takes the pointer. */
+.egs-sp .egs-sp-car-trailer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.egs-sp .egs-sp-car-trailer img,
+.egs-sp .egs-sp-car-trailer video {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
 .egs-sp .egs-sp-car-play {
   position: absolute;
   top: 50%; left: 50%;

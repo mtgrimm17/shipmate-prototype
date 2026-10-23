@@ -3895,14 +3895,25 @@ function isEgsSectionComplete(sectionId) {
    Counts only top-level (depth 1) questions — follow-ups are implicitly
    covered since a top-level question can't be "complete" while a follow-up
    it revealed is still unanswered (see giarcIsSubtreeComplete). */
-/* ── WHAT THE LOGO STEP OFFERS (v8.82) ───────────────────────────────────
-   The scrape's own key art and logotypes, plus anything uploaded here,
-   minus anything removed here. "Key art and logotypes" is literally what
-   the asset pool calls them: `logo` is a logotype, `art-land` and
-   `art-port` are key art, and smAssetKind (assets.js) is what decided
-   which is which on the way in. Screenshots and icons are not offered —
-   a screenshot in a 16:9 contain-fit slot is a screenshot with bars. */
-const EGS_LOGO_KINDS = ['logo', 'art-land', 'art-port'];
+/* ── WHAT THE LOGO STEP OFFERS (v8.82, narrowed v8.83) ───────────────────
+   The scrape's own LOGOTYPES, plus anything uploaded here, minus anything
+   removed here.
+
+   KEY ART IS NOT A LOGO, and v8.82 offering it was the wrong kind of
+   helpful. The two are different objects: a logotype is the game's name
+   drawn as a shape, usually on transparency, which is what Epic's slot
+   contains and what it means by "legible on a dark background"; key art is
+   a picture with the name somewhere in it. Seeding the step with key art
+   put a plausible wrong answer in front of the developer and made the
+   featured one a coin toss, since the first candidate wins by default.
+
+   Nothing is lost by it: key art is still in the asset pool, and the + slot
+   takes any file at all, so a developer who really does want to crop their
+   key art down to a logo can still upload it. `logo` is what smAssetKind
+   (assets.js) stamps on a logotype on the way in, and the import keeps the
+   SOURCE's own word for it where the source said — provenance is a fact and
+   geometry is an inference, which is that function's own rule. */
+const EGS_LOGO_KINDS = ['logo'];
 
 function egsLogoCandidates() {
   const pool = (typeof smPool === 'function') ? smPool() : [];

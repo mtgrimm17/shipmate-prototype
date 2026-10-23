@@ -20946,13 +20946,34 @@ function buildEgsStorePreviewSection() {
   /* ONE DRAWING FOR THE STAGE AND THE STRIP, so the first thumbnail cannot
      disagree with the picture above it. `muted` and `playsinline` on the
      video are what let a browser paint its first frame without being asked
-     to play; nothing here plays, this is a drawing of a store page. */
-  const mediaInner = (it) => {
+     to play.
+
+     AND ON THE STAGE, PRESSING IT PLAYS IT (v8.83) — the same rule the two
+     Apple previews follow, through the same function, so a pool video and
+     the Steam HLS manifest behave here exactly as they do in Game Details.
+     Three things come from _sppTrailerFrameHtml's own note and all three
+     matter: the PICTURE is the target rather than the badge, because a play
+     control you have to aim at is a worse control than the picture itself;
+     `stopPropagation`, because the stage around it opens the Screenshots
+     step and playing a trailer must not also navigate away from the page
+     you wanted to watch it on; and the badge stays `pointer-events: none`
+     so it cannot become a second, smaller target over the first.
+
+     IN THE STRIP IT STILL SELECTS. A thumbnail's job is to bring its slide
+     to the stage — Mac's strip does the same, and a tile that played
+     instead would leave the stage showing something else. */
+  const mediaInner = (it, onStage) => {
     if (it.kind === 'trailer') {
       const pic = it.poster
         ? `<img src="${escHtml(it.poster)}" alt="${escHtml(it.name)}">`
         : `<video src="${escHtml(it.src)}" muted playsinline preload="metadata"></video>`;
-      return `${pic}<span class="egs-sp-car-play">&#9654;</span>`;
+      const badge = `<span class="egs-sp-car-play">&#9654;</span>`;
+      return onStage
+        ? `<div class="egs-sp-car-trailer" role="button" tabindex="0"
+                title="Play ${escHtml(it.name)}"
+                onclick="event.stopPropagation(); smPlayAppTrailer()"
+           >${pic}${badge}</div>`
+        : `${pic}${badge}`;
     }
     if (it.kind === 'trailer-pending') {
       return `<div class="egs-sp-car-pending">${escHtml(it.name)}</div>`;
@@ -20966,7 +20987,7 @@ function buildEgsStorePreviewSection() {
            title="Open Screenshots">
         <div class="egs-sp-car-viewport">
           ${media.length
-            ? mediaInner(media[mediaIdx])
+            ? mediaInner(media[mediaIdx], true)
             : `<div class="egs-spp-hero-empty">Your trailer and screenshots appear here</div>`}
         </div>
         ${media.length > 1 ? `
