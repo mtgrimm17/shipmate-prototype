@@ -30392,3 +30392,10 @@ textarea.egs-sp-body {
   text-align: right;
   line-height: 1.35;
 }
+
+/* The greyed preview of what a topic's Yes would ask (v8.62, egsPreviewChildren).
+   Same indent and rail as the real follow-ups, so pressing Yes lights the rows
+   in place rather than inserting them; dimmed, and `inert` in the markup. */
+.giarc-flat .giarc-preview { opacity: .38; }
+.giarc-flat .giarc-preview .is-selected,
+.giarc-flat .giarc-preview .is-sel-none { background: var(--pill-off-bg); color: var(--pill-off-color); }
