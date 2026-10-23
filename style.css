@@ -30211,6 +30211,66 @@ textarea.egs-sp-body {
 .egs-sp .egs-ach-tab.is-on { color: var(--epic-fg); border-bottom-color: var(--epic-fg); }
 .egs-sp .egs-ach-pane { display: flex; flex-direction: column; gap: 18px; }
 
+/* ── THE ANSWER BESIDE THE QUESTION (v8.61) ──────────────────────────────
+   Epic's Content Questions shape, borrowed: the label takes the slack and the
+   control sits at the right of the same line. Only the two one-word questions
+   on this form wear it — Visibility and XP — because only they have an answer
+   short enough to fit. */
+.egs-sp .egs-ach-field.egs-ach-rowfield {
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  min-height: 40px;
+}
+.egs-sp .egs-ach-rowfield > .egs-ach-label { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; }
+.egs-sp .egs-ach-rowfield > .egs-ach-segs,
+.egs-sp .egs-ach-rowfield > .egs-ach-xprow { flex: 0 0 auto; }
+.egs-sp .egs-ach-rowfield > .egs-ach-segs { width: 240px; }
+
+/* The app's tooltip badge is 15px, which inside this card's 0.68 canvas
+   paints at ten — too small to aim at. Scaled here so the painted handle is
+   the size it is everywhere else. */
+.egs-sp .tooltip-icon {
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  margin-left: 8px;
+  background: rgba(255, 255, 255, .06);
+  border-color: var(--epic-well-line-todo);
+  color: var(--epic-fg-2);
+  cursor: help;
+}
+.egs-sp .tooltip-anchor:hover .tooltip-icon {
+  border-color: var(--epic-well-line-hover);
+  color: var(--epic-fg);
+}
+
+/* ── THE x ON A ROW (v8.61) ──────────────────────────────────────────────
+   Mac App Store's Game Center puts deleting an achievement on the row itself
+   (.iap-product-remove), not inside the editor, so it works without opening
+   anything. Same place here, in this page's own colours. */
+.egs-sp .egs-sp-ach-x {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-left: 12px;
+  border: none;
+  background: none;
+  color: var(--epic-fg-2);
+  font-size: 14px;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s ease, color .12s ease, background-color .12s ease;
+}
+/* It appears with the pointer, like Epic's own carousel arrows — and is
+   always there for the keyboard, which is what :focus-visible is for. */
+.egs-sp .egs-sp-ach-row:hover .egs-sp-ach-x,
+.egs-sp .egs-sp-ach-row.is-open .egs-sp-ach-x,
+.egs-sp .egs-sp-ach-x:focus-visible { opacity: 1; }
+.egs-sp .egs-sp-ach-x:hover { color: #ff2d9b; background: rgba(255, 255, 255, .06); }
+
 /* The icon wells */
 .egs-sp .egs-ach-icon-well {
   position: relative;
@@ -30283,20 +30343,8 @@ textarea.egs-sp-body {
 .egs-sp .egs-ach-tier.is-silver { background: #c8ccd4; }
 .egs-sp .egs-ach-tier.is-gold   { background: #e8b64c; }
 
-.egs-sp .egs-ach-editor-foot { display: flex; justify-content: flex-end; }
-.egs-sp .egs-ach-remove {
-  border: 1px solid var(--epic-well-line);
-  background: none;
-  color: var(--epic-fg-2);
-  border-radius: var(--epic-well-radius);
-  padding: 7px 14px;
-  font-family: inherit;
-  font-size: 14px;
-  letter-spacing: 0.28px;
-  cursor: pointer;
-  transition: border-color .12s ease, color .12s ease;
-}
-.egs-sp .egs-ach-remove:hover { border-color: #ff2d9b; color: #ff2d9b; }
+/* .egs-ach-editor-foot and .egs-ach-remove went with the button in v8.61 —
+   deleting an achievement is the x on its row now. */
 .egs-sp .egs-sp-ach-empty {
   width: 80%;
   margin: 0 auto;

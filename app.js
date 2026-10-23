@@ -516,6 +516,10 @@ async function toggleStepSection(pid, stepId) {
   }
   if (pid === 'android') seedOnboardingToAndroid();
   if (pid === 'android' || pid === 'egs') giarcSeedFromIos();
+  /* The Store Page Preview may open straight onto the Achievements tab — the
+     tab is remembered between visits — so the adoption cannot live only in
+     setEgsPreviewTab. No-op once there is a list. */
+  if (pid === 'egs' && typeof _egsEnsureAchievements === 'function') _egsEnsureAchievements();
   if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
     seedOnboardingToIOS(pid);
     if (pid === 'macos')      seedMacAppStoreListing();
@@ -3285,6 +3289,8 @@ async function openStepModal(pid, stepId) {
     // element, exactly like opening the preview for the first time would.
     if (!state.storePreviewFocus) state.storePreviewFocus = { ios: null, macos: null };
     state.storePreviewFocus[pid] = null;
+    /* Same reason as the inline pane's own copy above. */
+    if (pid === 'egs' && typeof _egsEnsureAchievements === 'function') _egsEnsureAchievements();
   }
 
   if (pid === 'web') {
@@ -11418,6 +11424,23 @@ async function _applySteamAchievements(appId, expectedTitle) {
   updateIOSCard('macos');
   updateIOSCard('ios');
   updateIOSCard('macos_full');
+
+  /* EPIC'S OWN LIST GETS THEM TOO, AND EDITABLE (v8.61). The scrape has just
+     filled the Game Center arrays; this is the one moment the Store Page
+     Preview's Achievements tab can be seeded without a render having to
+     mutate state to do it. A no-op if Epic's list already has anything in
+     it, so re-importing never overwrites edited rows. */
+  /* AND IT REPAINTS IF THE TAB IS ALREADY OPEN. The scrape is async: a
+     developer can be looking at an empty Achievements tab when it lands, and
+     adopting into state without redrawing would leave them looking at the
+     empty state over a list that now exists. Only when it actually adopted,
+     and only while this card's preview is the open step. */
+  if (typeof _egsEnsureAchievements === 'function' && _egsEnsureAchievements()
+      && state.stepModal && state.stepModal.platformId === 'egs'
+      && state.stepModal.stepId === 'storePreview'
+      && typeof reRenderStepModal === 'function') {
+    reRenderStepModal();
+  }
 
   // Kick off an AI-translated fallback for every newly-imported
   // achievement's three fields — the Steam-import counterpart to
@@ -23806,20 +23829,43 @@ function adoptEgsAchievements() {
   if (!state.egsAchievements) state.egsAchievements = [];
   if (state.egsAchievements.length) return;
   const shown = (typeof egsAchievements === 'function') ? egsAchievements() : [];
+  if (!shown.length) return;
   state.egsAchievements = shown.map(x => {
     const a = makeBlankEgsAchievement();
     a.open = false;
     a.visibility          = x.hidden ? 'hidden' : 'shown';
     a.unlockedDisplayName = x.name || '';
     a.unlockedDescription = x.description || '';
-    /* Steam serves ONE icon per achievement and says nothing about locked or
-       unlocked, so it seeds the unlocked face — the one Epic requires — and
-       the locked well stays empty rather than claiming an answer Steam never
-       gave. */
-    a.unlockedIcon        = x.icon ? { name: 'Imported from Steam', dataUrl: x.icon } : null;
+    /* BOTH FACES, FROM THE ONE THING STEAM GIVES (v8.61). Steam serves a
+       single icon, name and description per achievement and says nothing
+       about locked or unlocked. v8.60 put them on the unlocked face only, on
+       the grounds that the locked well should not claim an answer Steam never
+       gave — but an empty locked face is not a truer answer, it is just a
+       second form to fill in, and the imported text is a perfectly good
+       starting point for both. They are COPIES from this moment on: editing
+       one never touches the other, the same rule Mac App Store's own
+       pre-earned description carries (_applySteamAchievements). */
+    const icon            = x.icon ? { name: 'Imported from Steam', dataUrl: x.icon } : null;
+    a.unlockedIcon        = icon;
+    a.lockedIcon          = icon ? { name: icon.name, dataUrl: icon.dataUrl } : null;
+    a.lockedDisplayName   = x.name || '';
+    a.lockedDescription   = x.description || '';
     a.xp                  = x.xp ? String(x.xp) : '';
     return a;
   });
+}
+
+/* EDITABLE THE MOMENT THEY LAND (v8.61). Until now the Steam import was a
+   read-out until the developer pressed Add, which made "add one of my own"
+   the only way to correct one of eleven imported rows. This is the adoption
+   on its own, called from the three places the import can first be seen: the
+   scrape itself, opening the Store Page Preview, and switching to the
+   Achievements tab. Each one is a no-op once there is a list, so they cannot
+   fight each other, and none of them runs during a render. */
+function _egsEnsureAchievements() {
+  if ((state.egsAchievements || []).length) return false;
+  adoptEgsAchievements();
+  return (state.egsAchievements || []).length > 0;
 }
 
 function addEgsAchievement() {
@@ -23988,6 +24034,7 @@ function setEgsPreviewTab(tab) {
   const next = (tab === 'achievements') ? 'achievements' : 'overview';
   if (state.egsPreviewTab === next) return;
   state.egsPreviewTab = next;
+  if (next === 'achievements') _egsEnsureAchievements();
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
 }
 

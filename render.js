@@ -20167,6 +20167,15 @@ function egsPageField(o) {
    this splits them into the Locked and Unlocked tabs that were asked for,
    each tab holding the icon, the display name and the description for that
    one state so the pairing is visible instead of remembered. */
+/* The app's own tooltip, which is a delegated handler over `data-tip` on a
+   `.tooltip-anchor` and a single fixed bubble (initGlobalTooltip, app.js) —
+   so it is not clipped by this card's scroller or shrunk by its zoom. Same
+   anchor Epic's Content Questions use (giarcTooltip, further down). */
+function egsAchTip(text) {
+  return `<span class="tooltip-anchor" data-tip="${escHtml(text)}"
+                onclick="event.stopPropagation()"><span class="tooltip-icon">?</span></span>`;
+}
+
 function egsAchField(o) {
   const val  = o.value || '';
   const over = val.length > EGS_ACH_CHAR_MAX;
@@ -20195,7 +20204,7 @@ function egsAchField(o) {
 
 function egsAchIconWell(a, which) {
   const icon  = (which === 'locked' ? a.lockedIcon : a.unlockedIcon) || null;
-  const label = which === 'locked' ? 'Locked Icon' : 'Unlocked Icon';
+  const label = which === 'locked' ? 'Locked icon' : 'Unlocked icon';
   const id    = `egs-ach-icon-${which}-${a.id}`;
   return `
     <div class="egs-ach-field">
@@ -20230,9 +20239,20 @@ function buildEgsAchEditor(a) {
      than paraphrased: it is the only place that says what Hidden does to a
      player, and a paraphrase of a rule is how a prototype teaches a rule
      wrong. */
-  const visNote = hidden
-    ? `Hidden achievements are presented to the user without a title and description until they are unlocked. In a locked state, they are presented to users as a &ldquo;Hidden Achievement&rdquo; with the icon that was uploaded for them. Only unlocked title and description are available to edit.`
-    : `Shown achievements are visible to players. For locked and unlocked achievements, their titles and descriptions are available to edit.`;
+  /* BOTH HALVES, ALWAYS, because this is a tooltip on the word "Visibility"
+     now rather than a line under the control: it has to explain the choice
+     rather than narrate the one already made. Epic's own (i) says both. */
+  const visNote = 'Shown achievements are visible to players. For locked and unlocked '
+    + 'achievements, their titles and descriptions are available to edit. '
+    + 'Hidden achievements are presented to the user without a title and description '
+    + 'until they are unlocked. In a locked state, they are presented to users as a '
+    + '"Hidden Achievement" with the icon that was uploaded for them. Only unlocked '
+    + 'title and description are available to edit for Hidden Achievements.';
+  const xpNote = `Each product must total exactly ${EGS_ACH_XP.total} XP. A single `
+    + `achievement is a multiple of ${EGS_ACH_XP.step}, from ${EGS_ACH_XP.min} to `
+    + `${EGS_ACH_XP.max} XP. Bronze ${EGS_ACH_TIERS[0].min}\u2013${EGS_ACH_TIERS[0].max}, `
+    + `Silver ${EGS_ACH_TIERS[1].min}\u2013${EGS_ACH_TIERS[1].max}, `
+    + `Gold ${EGS_ACH_TIERS[2].min}\u2013${EGS_ACH_TIERS[2].max}.`;
 
   const seg = (v, label) => `
     <button type="button" class="egs-ach-seg${a.visibility === v ? ' is-on' : ''}"
@@ -20269,26 +20289,37 @@ function buildEgsAchEditor(a) {
 
   return `
     <div class="egs-ach-editor" onclick="event.stopPropagation();">
-      ${egsAchField({ id: `egs-ach-achievementId-${a.id}`, label: 'Achievement ID', required: true,
-          value: a.achievementId, placeholder: 'e.g. first_win_achievement',
-          note: 'Internal backend identifier &mdash; cannot contain spaces or special characters.',
-          onChange: `commitEgsAchField('${a.id}','achievementId', this.value)` })}
+      <!-- NO ACHIEVEMENT ID (v8.61). Epic's form asks for one because the row
+           it creates has to be linked to an EOS achievement by key; this card
+           is a preview of the store page, where no such key is ever printed.
+           It was the one field here that existed for the backend rather than
+           for the player. -->
 
-      <div class="egs-ach-field">
-        <span class="egs-ach-label">Visibility</span>
+      <!-- THE ANSWER SITS BESIDE THE QUESTION (v8.61), which is the shape
+           Epic's own Content Questions use on this card: giarc-row is a flex
+           row whose label takes the slack and whose control is flex 0 0 auto
+           on the right. Two controls on this form are answers to a one-word
+           question — Visibility and XP — so both take that shape, and the
+           sentence explaining each moves into the question mark beside its
+           label rather than sitting under the control, pushing the next
+           field down. -->
+      <div class="egs-ach-field egs-ach-rowfield">
+        <span class="egs-ach-label">Visibility${egsAchTip(visNote)}</span>
         <div class="egs-ach-segs">${seg('shown', 'Shown')}${seg('hidden', 'Hidden')}</div>
-        <div class="egs-ach-note">${visNote}</div>
       </div>
 
-      <div class="egs-ach-tabs">${tabBtn('locked', 'Locked')}${tabBtn('unlocked', 'Unlocked')}</div>
+      <!-- UNLOCKED FIRST (v8.61). It is the face Epic requires, the one the
+           store page prints and the one a developer fills in first; Locked is
+           the optional second pass. -->
+      <div class="egs-ach-tabs">${tabBtn('unlocked', 'Unlocked')}${tabBtn('locked', 'Locked')}</div>
       <div class="egs-ach-pane">${tab === 'locked' ? lockedPane : unlockedPane}</div>
 
       ${egsAchField({ id: `egs-ach-flavorText-${a.id}`, label: 'Flavor text',
           value: a.flavorText, placeholder: 'Optional. Yours to use however you like.',
           onChange: `commitEgsAchField('${a.id}','flavorText', this.value)` })}
 
-      <div class="egs-ach-field">
-        <label class="egs-ach-label" for="egs-ach-xp-${a.id}">XP <span class="egs-ach-req">*</span></label>
+      <div class="egs-ach-field egs-ach-rowfield">
+        <label class="egs-ach-label" for="egs-ach-xp-${a.id}">XP <span class="egs-ach-req">*</span>${egsAchTip(xpNote)}</label>
         <div class="egs-ach-xprow">
           <input class="egs-ach-input egs-ach-xpinput${xpErr ? ' is-over-limit' : ''}"
                  id="egs-ach-xp-${a.id}" type="text" inputmode="numeric" value="${escHtml(a.xp || '')}"
@@ -20296,15 +20327,14 @@ function buildEgsAchEditor(a) {
                  onchange="setEgsAchXp('${a.id}', this.value)">
           ${tier ? `<span class="egs-ach-tier is-${tier.id}">${tier.label}</span>` : ''}
         </div>
-        <div class="egs-ach-note${xpErr ? ' is-err' : ''}">${xpErr
-          ? escHtml(xpErr)
-          : `A multiple of 5, from ${EGS_ACH_XP.min} to ${EGS_ACH_XP.max}. Bronze ${EGS_ACH_TIERS[0].min}&ndash;${EGS_ACH_TIERS[0].max}, Silver ${EGS_ACH_TIERS[1].min}&ndash;${EGS_ACH_TIERS[1].max}, Gold ${EGS_ACH_TIERS[2].min}&ndash;${EGS_ACH_TIERS[2].max}.`}</div>
       </div>
-
-      <div class="egs-ach-editor-foot">
-        <button type="button" class="egs-ach-remove"
-                onclick="event.stopPropagation(); removeEgsAchievement('${a.id}')">Remove achievement</button>
-      </div>
+      <!-- AN ERROR IS NOT A HINT, so it does not go in the tooltip with the
+           rule. The rule is there to be looked up; "35 is not a multiple of
+           5" has to be read without hovering anything. -->
+      ${xpErr ? `<div class="egs-ach-note is-err">${escHtml(xpErr)}</div>` : ''}
+      <!-- NO "Remove achievement" BUTTON (v8.61). Deleting one is now the x
+           on its own row in the list, which is where Mac App Store's Game
+           Center puts it and which works without opening the editor first. -->
     </div>`;
 }
 
@@ -20413,6 +20443,9 @@ function buildEgsAchievementsPanel() {
             ? `${x.xp} XP`
             : `<span class="egs-spp-placeholder">XP not set</span>`}${trophySvg}</div>
         </div>
+        ${rec ? `<button class="egs-sp-ach-x" type="button" title="Remove achievement"
+                         aria-label="Remove achievement"
+                         onclick="event.stopPropagation(); removeEgsAchievement('${rec.id}')">&#10005;</button>` : ''}
       </div>
       ${open ? buildEgsAchEditor(rec) : ''}
     </div>`;
