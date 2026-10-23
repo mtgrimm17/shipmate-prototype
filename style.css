@@ -29416,7 +29416,43 @@ textarea.egs-sp-body {
    apply to this page — the viewport is not what it is being drawn into.
    Pinned here rather than by editing those queries, which Epic Games Store
    Full's preview and Specifications still use. */
-.egs-sp .egs-sp-cols { gap: 56px; grid-template-columns: minmax(0, 1fr) 300px; }
+.egs-sp .egs-sp-cols {
+  column-gap: 56px;
+  /* The 48 the carousel used to take from .egs-sp-main's own gap (v8.73). */
+  row-gap: 48px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  /* TOP AND BOTTOM TOGETHER (v8.73). The carousel and the panel are the two
+     cells of row 1, so the row is as tall as the taller of them and `stretch`
+     gives that height to both — the carousel's ring and the panel's frame
+     start and end on the same two lines whatever either contains. */
+  align-items: stretch;
+}
+.egs-sp .egs-sp-cols > .egs-sp-car  { grid-column: 1; grid-row: 1; }
+.egs-sp .egs-sp-cols > .egs-sp-side { grid-column: 2; grid-row: 1; }
+.egs-sp .egs-sp-cols > .egs-sp-main { grid-column: 1; grid-row: 2; }
+/* Under 820px the grid is one column (the base rule below), so the explicit
+   cells have to go or all three would be stacked into row 1. DOM order is
+   carousel, panel, the rest — the same reading order the one-column layout
+   had when the carousel was inside .egs-sp-main. */
+@media (max-width: 820px) {
+  .egs-sp .egs-sp-cols > .egs-sp-car,
+  .egs-sp .egs-sp-cols > .egs-sp-side,
+  .egs-sp .egs-sp-cols > .egs-sp-main { grid-column: 1; grid-row: auto; }
+}
+/* THE PANEL'S OWN FRAME REACHES THE BOTTOM LINE. .egs-sp-side is a flex
+   column and the Base Game frame is its last child, so without this a row
+   made taller by the carousel would leave the frame's bottom edge short of
+   the carousel's while the cell itself stretched — aligned boxes, unaligned
+   lines, which is the only part anyone can see. */
+.egs-sp .egs-sp-side > .egs-sp-biz { flex: 1 1 auto; }
+/* The picture sits in the middle of whatever height the row hands over,
+   rather than at the top with the slack below it. 16:9 is untouched: the
+   stage is still sized from the column's width (car856 owns that). */
+.egs-sp .egs-sp-cols > .egs-sp-car {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
 /* EQUAL HALVES (v8.59) — Epic's own columns are `flex: 1 1 50%`, measured on
    go-ape-ship: 367px each of a 750px row. */
 .egs-sp .egs-sp-tagcols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 24px; }
@@ -30363,15 +30399,53 @@ textarea.egs-sp-body {
 .egs-sp .egs-sp-long .egs-sp-fieldrow { position: relative; }
 .egs-sp .egs-sp-main > .egs-sp-fieldrow > .egs-sp-edit,
 .egs-sp .egs-sp-long .egs-sp-fieldrow > .egs-sp-edit { flex: 1 1 100%; width: 100%; }
+/* ── BESIDE THE CORNER, NOT UNDER IT (v8.73) ─────────────────────────────
+   Under the box was never free, and the headline is where that showed: its
+   block pays 20px to the body below it, the counter wanted 20 of its own in
+   the same place, and the body's row — also positioned, and later in the
+   tree — painted straight over it. The number had been drawn correctly and
+   invisibly since v8.69.
+
+   The gutter is where the room actually is. Column 1 is 700 wide and these
+   fields are 732 (they bleed 16 each side to line up with the blocks), so
+   the field's right edge stops 40px short of the panel's column. A 34px
+   number 6px clear of the field fits in that 40 exactly, and the panel's
+   own content ends above the first of the three in any case.
+
+   The over-limit sentence does NOT follow it there: 160px of prose has
+   nowhere to go in a 40px gutter, so it keeps the line under the field's
+   right-hand end, which is empty except when something is wrong. */
 .egs-sp .egs-sp-main > .egs-sp-fieldrow > .ias-char-counter-row,
 .egs-sp .egs-sp-long .egs-sp-fieldrow > .ias-char-counter-row {
   position: absolute;
+  left: 100%;
+  /* -7px, NOT 0. These fields carry `margin: -7px 0` so their line sits on
+     the blocks' line, which means the row's own box ends 7px ABOVE the
+     field's painted bottom edge — and `bottom: 0` put the number that far
+     up the side of the box instead of level with its corner. */
+  bottom: -7px;
+  width: 34px;
+  margin: 0 0 0 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  pointer-events: none;
+}
+/* The headline is the one field that zeroes that bottom margin (its wrap
+   pays Epic's 20px to the body instead), so its row already ends on the
+   field's edge and it takes none of the correction above. */
+.egs-sp .egs-sp-long .egs-sp-headline-wrap .egs-sp-fieldrow > .ias-char-counter-row {
+  bottom: 0;
+}
+.egs-sp .egs-sp-main > .egs-sp-fieldrow > .ias-char-counter-row > .ias-char-error,
+.egs-sp .egs-sp-long .egs-sp-fieldrow > .ias-char-counter-row > .ias-char-error {
+  position: absolute;
   top: 100%;
   right: 0;
+  width: 160px;
   margin-top: 3px;
-  justify-content: flex-end;
-  gap: 10px;
-  pointer-events: none;
+  text-align: right;
+  line-height: 1.35;
 }
 
 /* ── THE FOOT IS ONE CHIP, WITH ITS HEADING OUTSIDE (v8.69) ──────────────

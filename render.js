@@ -19961,37 +19961,44 @@ function buildEgsProductDetailsSection() {
          Developer Portal asks for and the store page never shows. Same
          reasoning that kept Seller here in v8.59 — a field with no line of
          its own on the page has nowhere else to be typed. -->
+    <!-- SELLER GOES FIRST NOW (v8.73). It was last because v8.59 took
+         Developer and Publisher out of the group it used to share, leaving
+         its heading stranded at the bottom of the form. Of what is left on
+         this step it is the only REQUIRED field, and a form that opens on
+         its one asterisk is a form you can finish from the top down. -->
+    <div class="ios-content-step-label">Seller${egsAchTip('The legal entity that receives funds from selling this offer \u2014 often the studio\u2019s registered company rather than the name on the store page.')}</div>
+    ${egsPortalField({ id: 'seller', label: 'Seller name', required: true, counter: true,
+        value: a.sellerName, max: 280,
+        onChange: `setEgsProductText('sellerName', this.value)` })}
+
+    <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Legal info</div>
-    ${egsPortalField({ id: 'eula', label: 'EULA link', value: a.eulaLink, max: 260,
+    <!-- COUNTED, NOT CAPPED (v8.73), which is the same swap v8.49 made for
+         Seller name and the four fields on the Store Page Preview. A
+         a "max 260" beside the label states a rule; a count answers the
+         question actually being asked, which is how much room is left. The
+         two cannot both be on one field: a maxlength means the count can
+         never go negative, so the warning under it would be unreachable
+         decoration. Counted fields are uncapped and warn instead, which is
+         what lets a developer paste a long URL and then cut it down. -->
+    ${egsPortalField({ id: 'eula', label: 'EULA link', value: a.eulaLink, max: 260, counter: true,
         type: 'url', placeholder: 'https://your-studio.com/eula',
         onChange: `setEgsProductText('eulaLink', this.value)` })}
 
     <div class="ios-q-divider"></div>
-    <div class="ios-content-step-label">User support${supportDone ? '' : ' <span style="color:#e0555a;">*</span>'}</div>
-    <div class="form-hint" style="margin-top:-2px;">Contact information in case players have questions. Epic asks for <b>at least one</b> of the two, not both.</div>
-    ${egsPortalField({ id: 'supportpage', label: 'Support page link', value: a.supportPageLink, max: 260,
+    <!-- THE SENTENCE BECAME A TOOLTIP AND A RULE (v8.73). It was doing two
+         jobs in one line: explaining WHAT user support is, which a developer
+         needs once, and stating that one of the two will do, which they need
+         every time they look at the pair. The explanation moved to the
+         heading's tooltip; the rule stays on the page, as a rule. -->
+    <div class="ios-content-step-label">User support${supportDone ? '' : ' <span style="color:#e0555a;">*</span>'}${egsAchTip('Contact information in case users have questions about the product or need assistance.')}</div>
+    <div class="form-hint" style="margin-top:-2px;">Provide at least one option.</div>
+    ${egsPortalField({ id: 'supportpage', label: 'Support page link', value: a.supportPageLink, max: 260, counter: true,
         type: 'url', placeholder: 'https://your-studio.com/support',
         onChange: `setEgsProductText('supportPageLink', this.value)` })}
-    ${egsPortalField({ id: 'supportmail', label: 'Support email', value: a.supportEmail, max: 260,
+    ${egsPortalField({ id: 'supportmail', label: 'Support email', value: a.supportEmail, max: 260, counter: true,
         type: 'email', placeholder: 'support@your-studio.com',
         onChange: `setEgsProductText('supportEmail', this.value)` })}
-
-    <div class="ios-q-divider"></div>
-    <!-- DEVELOPER AND PUBLISHER LEFT THIS FORM (v8.59) for the Store Page
-         Preview's own panel, where Epic prints them and where they are now
-         typed directly onto the line that shows them. Seller stays: it is
-         the legal entity that receives the money, Epic asks for it on the
-         offer rather than on the page, and the page never prints it — so
-         unlike the other two it has no line of its own to be typed on.
-         That also undoes v8.45's reason for moving Seller up here beside
-         them, which is why the heading is now its own.
-         An HTML comment, not a JS one: this is inside the template, where a
-         /* */ would have been printed on the page. -->
-    <div class="ios-content-step-label">Seller</div>
-    ${egsPortalField({ id: 'seller', label: 'Seller name', required: true, counter: true,
-        value: a.sellerName, max: 280,
-        onChange: `setEgsProductText('sellerName', this.value)`,
-        hint: 'The legal entity that receives funds from selling this offer &mdash; often the studio&rsquo;s registered company rather than the name on the store page.' })}
 
     <div class="ios-q-divider"></div>
     ${ynRow('Early access product',
@@ -20955,14 +20962,24 @@ function buildEgsStorePreviewSection() {
               data-spp-el="achievements" onclick="setEgsPreviewTab('achievements')">Achievements</span>
       </div>
       ${tab === 'achievements' ? buildEgsAchievementsPanel() : `
+      <!-- THE CAROUSEL LEAVES THE MAIN COLUMN (v8.73), to stand beside the
+           panel as its own grid cell rather than as the first of four blocks
+           inside a cell. Jaco's ask was that the two line up top and bottom:
+           inside .egs-sp-main the carousel's height was whatever 16:9 of the
+           column came to — 422 against the panel's 494 — and nothing could
+           make the two agree, because a flex child cannot see across the
+           grid. As cells in the SAME ROW they agree by construction, in
+           either direction and at any content length. The row gap replaces
+           the 48px the carousel used to get from .egs-sp-main, so the three
+           blocks below it keep Epic's one vertical measure. -->
       <div class="egs-sp-cols">
+        ${mediaHtml}
+        ${sideHtml}
         <div class="egs-sp-main">
-          ${mediaHtml}
           ${shortHtml}
           ${tagsHtml}
           ${aboutHtml}
         </div>
-        ${sideHtml}
       </div>
       ${followHtml}
       ${sysHtml}
