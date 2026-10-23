@@ -3722,11 +3722,15 @@ function isEgsSectionComplete(sectionId) {
        question it no longer asks — the rule the short description's own note
        states just above. They did not stop being required: the preview's
        roll-up carries them now, exactly as it took Specifications in v8.57. */
-    return a.textLanguages.length > 0
+    /* AND NO TEXT LANGUAGES TERM (v8.72), the fifth field to make that move,
+       with Login Accounts Required, Audio, the legal footer and the privacy
+       link. Text is the only one of the five Epic marks required, so it is
+       the only one that needed re-homing rather than simply deleting: it is
+       in the preview's roll-up below. */
+    return (!!a.supportPageLink.trim() || !!a.supportEmail.trim())
         /* USER SUPPORT IS AN OR, AND EPIC SAYS SO IN WORDS: "Provide at least
            one". A developer with a support site and no support inbox is
            finished, and asking for both would be inventing a requirement. */
-        && (!!a.supportPageLink.trim() || !!a.supportEmail.trim())
         && !!a.sellerName.trim()
         && a.nftBlockchain !== null
         && a.promotionalContent !== null;
@@ -3800,8 +3804,13 @@ function isEgsSectionComplete(sectionId) {
     /* GENRES, FEATURES, DEVELOPER AND PUBLISHER JOINED IN v8.59, when they
        moved onto this page. Epic marks all four required and the page prints
        all four, which is this arm's whole rule. */
+    /* AND TEXT LANGUAGES IN v8.72, when the foot chip's five fields left
+       Product Details. Only this one of the five: Epic marks Text required
+       and leaves Audio, Login Accounts Required, the legal footer and the
+       privacy link optional, so the other four have nothing to carry. */
     const ws = state.webSite || {};
     return platformSectionComplete('egs', 'contentRating')
+        && a.textLanguages.length > 0
         && isEgsSectionComplete('specifications')
         && isEgsSectionComplete('screenshots')
         && a.genres.length > 0

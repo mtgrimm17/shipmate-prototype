@@ -10351,7 +10351,12 @@ function sppRequiredElements(pid, lang) {
          Social Media 778, System Requirements 837). */
       { id: 'title',        label: 'Title',             required: true,  done: !!(fd.title || '').trim() },
       { id: 'achievements', label: 'Achievements',      required: false, done: true },
-      { id: 'screenshots',  label: 'Media Carousel',    required: true,  done: shots.length > 0 || pool.some(x => x.kind === 'art-land' && x.src), short: 'Media Carousel' },
+      /* A TRAILER OR A SCREENSHOT, NOT KEY ART (v8.72): the carousel stopped
+         drawing key art, so counting it here would tick a row for a strip
+         that is empty. */
+      { id: 'screenshots',  label: 'Media Carousel',    required: true,
+        done: shots.length > 0 || !!(typeof smAppTrailer === 'function' && smAppTrailer()),
+        short: 'Media Carousel' },
       { id: 'content',      label: 'Content',           required: true,  done: cq.total > 0 && cq.answered === cq.total },
       { id: 'business',     label: 'Business',          required: true,  done: !!(a.price && dev && pub) },
       { id: 'subtitle',     label: 'Short Description', required: true,  done: !!(typeof egsShortDesc === 'function' && (egsShortDesc() || '').trim()) },
@@ -19813,20 +19818,19 @@ function egsPickMenuHtml(fieldId) {
 }
 
 /* ── PRODUCT DETAILS' PICKER, WEARING THE STORE PAGE (v8.59) ──────────────
-   The same field as egsPickBox below — same list, same limit, same chips,
-   same filtered menu, same four handlers — drawn as Epic's own tag column
-   rather than as a form row: the heading is the column's heading, there is
+   The only drawing of these two fields since v8.72 — same list, same limit,
+   same chips, same filtered menu, same four handlers as the form row it
+   replaced — as Epic's own tag column: the heading is the column's heading, there is
    no form label and no "2 of 3" counter, and the hint only appears once the
    limit is actually reached.
 
-   IT KEEPS egsPickBox'S INPUT ID, and that is load-bearing rather than tidy:
-   openEgsPick repaints the whole step modal and then puts the caret back by
-   looking up `egs-pick-input-<field>` (_egsFocusPickInput, app.js). A second
-   id here would have meant a box that opens and loses the caret, which on a
-   list of thirty-eight genres is the difference between typing three letters
-   and reaching for the mouse. Safe because Product Details no longer draws
-   these two at all, so the id is never in the document twice. */
-function egsPreviewPick(fieldId, label) {
+   IT KEEPS THE OLD FORM ROW'S INPUT ID, and that is load-bearing rather than
+   tidy: openEgsPick repaints the whole step modal and then puts the caret
+   back by looking up `egs-pick-input-<field>` (_egsFocusPickInput, app.js).
+   A second id would have meant a box that opens and loses the caret, which on
+   a list of thirty-eight genres is the difference between typing three
+   letters and reaching for the mouse. */
+function egsPreviewPick(fieldId, label, emptyPlaceholder) {
   const cfg   = EGS_PICK_FIELDS[fieldId];
   const sel   = state.egsSubmitAnswers[fieldId] || [];
   const full  = cfg.max && sel.length >= cfg.max;
@@ -19850,7 +19854,8 @@ function egsPreviewPick(fieldId, label) {
              onclick="openEgsPick(event, '${fieldId}')">
           ${chips}
           <input class="egs-tagbox-input" id="${inId}" type="text" autocomplete="off"
-                 placeholder="${escHtml(full ? '' : (sel.length ? 'Add another' : 'Choose or type'))}"
+                 placeholder="${escHtml(full ? '' : (sel.length ? 'Add another'
+                                        : (emptyPlaceholder || 'Choose or type')))}"
                  value="${escHtml(open ? (state.egsPickFilter || '') : '')}"
                  ${full ? 'disabled' : ''}
                  onfocus="openEgsPick(event, '${fieldId}')"
@@ -19862,57 +19867,19 @@ function egsPreviewPick(fieldId, label) {
         <div class="egs-pick-menu" id="egspick-menu-${fieldId}"
              onclick="event.stopPropagation();">${open ? egsPickMenuHtml(fieldId) : ''}</div>
       </div>
-      ${full ? `<div class="egs-sp-tagnote">Epic's limit of ${cfg.max}. Remove one to choose another.</div>` : ''}
+      <!-- "Limit reached", not "Epic's limit of 3" (v8.72). The note is
+           read with the full box in front of you, where the number is the
+           chips you can count and whose limit it is was never the question. -->
+      ${full ? `<div class="egs-sp-tagnote">Limit reached. Remove one to choose another.</div>` : ''}
     </div>`;
 }
 
-function egsPickBox(fieldId) {
-  const cfg  = EGS_PICK_FIELDS[fieldId];
-  const sel  = state.egsSubmitAnswers[fieldId] || [];
-  const full = cfg.max && sel.length >= cfg.max;
-  const open = state.egsPickOpen === fieldId;
-  const req  = cfg.required ? ' <span style="color:#e0555a;">*</span>' : '';
-  const inId = 'egs-pick-input-' + fieldId;
-  const chips = sel.map(v => `
-    <span class="egs-tag">
-      <span class="egs-tag-label">${escHtml(v)}</span>
-      <button type="button" class="egs-tag-x" title="Remove ${escHtml(v)}"
-              aria-label="Remove ${escHtml(v)}"
-              onclick="event.stopPropagation(); toggleEgsProductList('${fieldId}', '${egsJsStr(v)}', false)">&times;</button>
-    </span>`).join('');
-  const chev = `<svg class="egs-pick-chev" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                     stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
-  const count = `${sel.length}${cfg.max ? ' of ' + cfg.max : ' selected'}`;
-  return `
-    <div class="form-group" data-answered="${sel.length ? '1' : '0'}">
-      <label class="form-label" for="${inId}">${escHtml(cfg.label)}${req}
-        <span class="form-hint-inline">${count}</span>
-      </label>
-      <div class="egs-pick${open ? ' is-open' : ''}" id="egspick-${fieldId}">
-        <div class="egs-tagbox${full ? ' is-full' : ''}" onclick="openEgsPick(event, '${fieldId}')">
-          ${chips}
-          <input class="egs-tagbox-input" id="${inId}" type="text" autocomplete="off"
-                 placeholder="${escHtml(full ? '' : (sel.length ? 'Add another' + (cfg.noun === 'language' ? ' language' : ' ' + cfg.noun) : 'Click to choose, or type to narrow the list'))}"
-                 value="${escHtml(open ? (state.egsPickFilter || '') : '')}"
-                 ${full ? 'disabled' : ''}
-                 onfocus="openEgsPick(event, '${fieldId}')"
-                 oninput="filterEgsPick('${fieldId}', this.value)"
-                 onkeydown="egsPickKey(event, '${fieldId}')">
-          ${chev}
-        </div>
-        <!-- THE MENU HAS TO SWALLOW ITS OWN CLICKS. It is a sibling of the
-             box, not a child, so a click on a row bubbles all the way to the
-             document handler that closes every dropdown — which cleared
-             state.egsPickOpen a moment before the tick repainted the form,
-             and shut the menu on every single choice. -->
-        <div class="egs-pick-menu" id="egspick-menu-${fieldId}"
-             onclick="event.stopPropagation();">${open ? egsPickMenuHtml(fieldId) : ''}</div>
-      </div>
-      ${full ? `<div class="form-hint" style="margin-top:6px;margin-bottom:0;">That is Epic's limit of ${cfg.max}. Remove one to choose another.</div>`
-             : (cfg.hint ? `<div class="form-hint" style="margin-top:6px;margin-bottom:0;">${cfg.hint}</div>` : '')}
-    </div>`;
-}
+/* egsPickBox IS GONE (v8.72). It drew Audio and Text as form rows in
+   Product Details, and Product Details no longer asks for them — the chip on
+   the Store Page Preview does, through egsPreviewPick above. Deleted rather
+   than left unreferenced, for the reason this file gives everywhere else: an
+   arm nobody renders is the one that silently rots, and its input carried the
+   same `egs-pick-input-<field>` id the preview's picker needs to be unique. */
 
 /* A TAG INPUT, BECAUSE EPIC'S LOGIN TYPE IS ONE (v8.45). Chips live inside
    the box with the caret, not above or below it: type a name, press Enter,
@@ -19951,6 +19918,12 @@ function egsTagBox(o) {
                onkeydown="${o.onKey}(event, this)">
       </div>
       ${o.hint ? `<div class="form-hint" style="margin-top:6px;margin-bottom:0;">${o.hint}</div>` : ''}
+      <!-- AT THE CAP, SAY SO (v8.72). The label row prints "2 of 3" and is
+           the first thing 'bare' drops, so on the page a full box simply
+           went blank and stopped taking typing with nothing to explain it.
+           The two pickers beside it in the same chip have said this since
+           v8.59; the wording is theirs, so the chip answers one way. -->
+      ${o.bare && full ? `<div class="egs-sp-tagnote">Limit reached. Remove one to choose another.</div>` : ''}
     </div>`;
 }
 
@@ -19973,31 +19946,22 @@ function buildEgsProductDetailsSection() {
          v8.48 and for the same reason: a list is easiest to get right while
          looking at the page it lands on. The lists themselves, their limits
          and their filtered menus are unchanged — only the door moved. -->
-    <!-- EPIC'S OWN WORDS FOR BOTH (v8.69), which are the words its store
-         page prints: "Login Accounts Required" and "Languages Supported".
-         The form said "Login type" and "Supported languages" while the
-         preview beside it already said Epic's — one answer, two names. -->
-    <div class="ios-content-step-label">Login requirements</div>
-    ${egsTagBox({ id: 'egs-login-input', label: 'Login Accounts Required', values: a.loginTypes,
-        max: EGS_LOGIN_TYPE_MAX, entryMax: EGS_LOGIN_TYPE_ENTRY_MAX,
-        placeholder: 'Type a login service and press Enter',
-        onKey: 'egsLoginTypeKey', onRemove: 'removeEgsLoginType',
-        hint: `Account systems a player needs in order to play. Epic suggests its own and lets you type any other, up to ${EGS_LOGIN_TYPE_MAX} entries of ${EGS_LOGIN_TYPE_ENTRY_MAX} characters.` })}
+    <!-- AND THEN ALL FIVE OF THEM LEFT (v8.72). v8.69 gave this form Epic's
+         own words for Login Accounts Required and Languages Supported, and
+         in the same breath put both — plus the legal footer and the privacy
+         link — on the Store Page Preview, inside the chip that prints them.
+         Two doors to one answer is the thing every move in this file has
+         been closing since v8.48: the short description, then Genres,
+         Features, Developer and Publisher. The fields, their limits, their
+         pickers and their handlers are untouched; only the door moved.
 
-    <div class="ios-q-divider"></div>
-    <div class="ios-content-step-label">Languages Supported</div>
-    ${egsPickBox('audioLanguages')}
-    ${egsPickBox('textLanguages')}
-
-    <div class="ios-q-divider"></div>
+         THE EULA LINK STAYS, and that is the line between the two forms.
+         Epic's page prints the legal footer and links the privacy policy;
+         it does not print the EULA, which is an offer-level agreement the
+         Developer Portal asks for and the store page never shows. Same
+         reasoning that kept Seller here in v8.59 — a field with no line of
+         its own on the page has nowhere else to be typed. -->
     <div class="ios-content-step-label">Legal info</div>
-    ${egsPortalField({ id: 'legal', label: 'Legal footer', multiline: true, rows: 4,
-        value: a.legalFooter, max: 10000,
-        placeholder: 'Copyright and trademark lines, shown at the foot of the store page.',
-        onChange: `setEgsProductText('legalFooter', this.value)` })}
-    ${egsPortalField({ id: 'privacy', label: 'Privacy link', value: a.privacyLink, max: 260,
-        type: 'url', placeholder: 'https://your-studio.com/privacy',
-        onChange: `setEgsProductText('privacyLink', this.value)` })}
     ${egsPortalField({ id: 'eula', label: 'EULA link', value: a.eulaLink, max: 260,
         type: 'url', placeholder: 'https://your-studio.com/eula',
         onChange: `setEgsProductText('eulaLink', this.value)` })}
@@ -20408,7 +20372,7 @@ function buildEgsAchEditor(a) {
       <div class="egs-ach-pane">${tab === 'locked' ? lockedPane : unlockedPane}</div>
 
       ${egsAchField({ id: `egs-ach-flavorText-${a.id}`, label: 'Flavor text',
-          value: a.flavorText, placeholder: 'Optional. Yours to use however you like.',
+          value: a.flavorText, placeholder: 'Optional',
           onChange: `commitEgsAchField('${a.id}','flavorText', this.value)` })}
 
       <div class="egs-ach-field egs-ach-rowfield">
@@ -20499,16 +20463,12 @@ function buildEgsAchievementsPanel() {
         own.length === 1 ? '' : 's'}, ${xpTotal} of ${EGS_ACH_XP.total} XP</span>` : ''}
     </div>`;
 
-  if (!list.length) {
-    return `
-      ${bandHtml}
-      ${addHtml}
-      <div class="egs-sp-ach-empty">
-        No achievements yet. Add one here, or pick the game&rsquo;s Steam title in Game
-        Details and its achievements &mdash; names, descriptions and icons &mdash; land here
-        to start from.
-      </div>`;
-  }
+  /* NO EMPTY-STATE SENTENCE (v8.72). It named the two ways to fill the list
+     and both are already in front of you: "+ Add achievement" is the button
+     directly above it, and the Steam import happens on its own when a Steam
+     title is picked in Game Details. A paragraph explaining a button sitting
+     six pixels above it is the page talking to itself. */
+  if (!list.length) return `${bandHtml}${addHtml}`;
 
   /* ONE ROW SHAPE, EDITABLE OR NOT. While the list is still the Steam import
      the rows are a read-out, exactly as in v8.55; once it is Epic's own list
@@ -20694,31 +20654,74 @@ function buildEgsStorePreviewSection() {
      block is a door to wherever it is filled in. The thumbnails and arrows
      stop the click from reaching it, so driving the carousel never kicks the
      developer into a step they did not ask for. */
-  const mediaSrcs = [];
-  const seenMedia  = new Set();
-  const pushMedia  = (src) => {
+  /* ── THE TRAILER FIRST, THEN SCREENSHOTS, AND NO KEY ART (v8.72) ───────
+     Epic's own carousel opens on the video and the rest of it is
+     screenshots; key art is the picture on the offer tile, which Epic prints
+     elsewhere on the page and never inside this strip. Until now this list
+     was key art followed by screenshots, so a product with art and no shots
+     showed a carousel of one wrong picture.
+
+     smAppTrailer (assets.js) is the accessor rather than reading the three
+     trailer slots here: it already flattens a pool video and the scraped
+     Steam trailer into one shape and honours the developer's own pick
+     (uploads.appTrailer.ref), so Epic's page opens on the same trailer every
+     other preview shows. Its two shapes differ in which field carries the
+     picture — a Steam trailer has a poster and no playable src, a pool video
+     has the file — so an item records both and the markup picks.
+
+     A DROPPED VIDEO THAT IS NOT IN THE POOL YET IS STILL A TRAILER. Assets
+     fills uploads.trailer with {name,size} on the drop and attaches the pool
+     ref asynchronously, so for a moment smAppTrailer cannot see it. Steam's
+     preview draws a labelled placeholder in exactly that gap and this does
+     the same, rather than having the first item appear a second late. */
+  const media     = [];
+  const seenMedia = new Set();
+  const pushShot  = (src) => {
     const s = (src || '').trim();
-    if (s && !seenMedia.has(s)) { seenMedia.add(s); mediaSrcs.push(s); }
+    if (s && !seenMedia.has(s)) { seenMedia.add(s); media.push({ kind: 'shot', src: s }); }
   };
-  if (keyArt) pushMedia(keyArt.src);
-  shots.forEach(sh => pushMedia(_screenshotSrc(sh) || sh.src || ''));
+  const trailer = (typeof smAppTrailer === 'function') ? smAppTrailer() : null;
+  if (trailer && (trailer.poster || trailer.src)) {
+    media.push({ kind: 'trailer', name: trailer.name || 'Trailer',
+                 poster: trailer.poster || '', src: trailer.src || '' });
+  } else if ((state.uploads || {}).trailer) {
+    media.push({ kind: 'trailer-pending',
+                 name: (state.uploads.trailer.name || 'Trailer') });
+  }
+  shots.forEach(sh => pushShot(_screenshotSrc(sh) || sh.src || ''));
   /* Clamped on read, never written back: a screenshot deleted in the step
      would otherwise leave the index pointing past the end of the list. */
-  const mediaIdx = mediaSrcs.length
-    ? Math.min(Math.max(0, parseInt(state.egsMediaIndex, 10) || 0), mediaSrcs.length - 1)
+  const mediaIdx = media.length
+    ? Math.min(Math.max(0, parseInt(state.egsMediaIndex, 10) || 0), media.length - 1)
     : 0;
   const chevSvg = (d) => `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="${d}"/></svg>`;
+  /* ONE DRAWING FOR THE STAGE AND THE STRIP, so the first thumbnail cannot
+     disagree with the picture above it. `muted` and `playsinline` on the
+     video are what let a browser paint its first frame without being asked
+     to play; nothing here plays, this is a drawing of a store page. */
+  const mediaInner = (it) => {
+    if (it.kind === 'trailer') {
+      const pic = it.poster
+        ? `<img src="${escHtml(it.poster)}" alt="${escHtml(it.name)}">`
+        : `<video src="${escHtml(it.src)}" muted playsinline preload="metadata"></video>`;
+      return `${pic}<span class="egs-sp-car-play">&#9654;</span>`;
+    }
+    if (it.kind === 'trailer-pending') {
+      return `<div class="egs-sp-car-pending">${escHtml(it.name)}</div>`;
+    }
+    return `<img src="${escHtml(it.src)}" alt="">`;
+  };
   const mediaHtml = `
-    <div class="egs-sp-car ${egsHitCls(mediaSrcs.length)}">
+    <div class="egs-sp-car ${egsHitCls(media.length)}">
       <div class="egs-sp-car-stage" data-spp-el="screenshots"
            onclick="openStorePreviewSection('egs','screenshots')"
            title="Open Screenshots">
         <div class="egs-sp-car-viewport">
-          ${mediaSrcs.length
-            ? `<img src="${escHtml(mediaSrcs[mediaIdx])}" alt="">`
-            : `<div class="egs-spp-hero-empty">Key art and screenshots appear here</div>`}
+          ${media.length
+            ? mediaInner(media[mediaIdx])
+            : `<div class="egs-spp-hero-empty">Your trailer and screenshots appear here</div>`}
         </div>
-        ${mediaSrcs.length > 1 ? `
+        ${media.length > 1 ? `
         <div class="egs-sp-car-edge is-prev">
           <button class="egs-sp-car-btn" type="button" aria-label="Previous image"
                   onclick="event.stopPropagation(); stepEgsMedia(-1)">${chevSvg('15 18 9 12 15 6')}</button>
@@ -20728,13 +20731,14 @@ function buildEgsStorePreviewSection() {
                   onclick="event.stopPropagation(); stepEgsMedia(1)">${chevSvg('9 18 15 12 9 6')}</button>
         </div>` : ''}
       </div>
-      ${mediaSrcs.length > 1 ? `
+      ${media.length > 1 ? `
       <div class="egs-sp-car-thumbs">
-        ${mediaSrcs.map((src, i) => `
+        ${media.map((it, i) => `
           <button class="egs-sp-car-thumb${i === mediaIdx ? ' is-current' : ''}" type="button"
-                  aria-label="${i === mediaIdx ? 'Current item' : `Slide ${i + 1}`}"
+                  aria-label="${i === mediaIdx ? 'Current item'
+                                : (it.kind === 'shot' ? `Slide ${i + 1}` : 'Trailer')}"
                   onclick="event.stopPropagation(); setEgsMedia(${i})">
-            <img src="${escHtml(src)}" alt="">
+            ${mediaInner(it)}
           </button>`).join('')}
       </div>` : ''}
     </div>`;
@@ -20884,7 +20888,10 @@ function buildEgsStorePreviewSection() {
              which is this div's own onclick. -->
         <div class="egs-sp-chip-part ${egsHitCls(specTables)}" data-spp-el="specifications"
              onclick="openStepModal('egs','specifications')">
-          ${specTables || `<div class="egs-spp-placeholder">The minimum and recommended machine, per operating system &mdash; set in Specifications.</div>`}
+          <!-- FOUR WORDS (v8.72). The long version explained where the
+               numbers come from; the block is a door into Specifications and
+               says so by opening it. -->
+          ${specTables || `<div class="egs-spp-placeholder">Minimum and recommended specifications</div>`}
         </div>
 
         <div class="egs-sp-chip-part">
@@ -20898,7 +20905,7 @@ function buildEgsStorePreviewSection() {
         <div class="egs-sp-chip-part">
           <div class="egs-sp-foot-sub">Languages Supported</div>
           <div class="egs-sp-langpick">
-            ${egsPreviewPick('audioLanguages', 'Audio')}
+            ${egsPreviewPick('audioLanguages', 'Audio', 'Choose or type (optional)')}
             ${egsPreviewPick('textLanguages', 'Text')}
           </div>
         </div>
@@ -20909,7 +20916,10 @@ function buildEgsStorePreviewSection() {
               placeholder: 'Copyright and trademark lines, shown at the foot of the page.',
               onChange: `setEgsProductText('legalFooter', this.value)` })}
           ${egsSysField({ id: 'egs-sp-privacy', value: a.privacyLink, type: 'url',
-              placeholder: 'https://your-studio.com/privacy',
+              /* "Optional" rather than a specimen URL (v8.72): Epic does not
+                 require a privacy policy on the offer, and a greyed-out
+                 address reads as one already filled in. */
+              placeholder: 'Optional',
               label: 'Privacy Policy',
               onChange: `setEgsProductText('privacyLink', this.value)` })}
         </div>
