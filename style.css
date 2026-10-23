@@ -16115,13 +16115,22 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 /* Three classes, one appearance — the intensity chosen has never changed how
    the pill looks, only which one carries it. Kept as three selectors because
    the markup names them individually. */
+/* `.is-sel-on` is the same pill with no frequency in its name (v8.68) — for a
+   closed list whose options are things rather than amounts, like Epic's
+   DirectX versions. */
 .intensity-btn.is-sel-none,
 .intensity-btn.is-sel-infrequent,
-.intensity-btn.is-sel-frequent {
+.intensity-btn.is-sel-frequent,
+.intensity-btn.is-sel-on {
   background: var(--pill-on-bg);
   border-color: transparent;
   color: var(--pill-on-color);
 }
+
+/* A PROPER NOUN KEEPS ITS CAPITALS (v8.68). `.intensity-btn` lowercases the
+   label and re-capitalises the first letter, which is how "DirectX 12" was
+   being drawn as "Directx 12". */
+.intensity-btn.egs-spec-pill { text-transform: none; }
 
 /* THE FOURTH SELECTED STATE, AND THE ONLY ONE THAT IS NOT BLUE (v7.07).
    Graphic Sexual Content and Nudity, and Prolonged Graphic or Sadistic
@@ -16149,7 +16158,7 @@ textarea.qs-input { resize: vertical; line-height: 1.55; }
 }
 
 /* intensity-btn — amber outline in unanswered row; blue border when selected (matches standard selection) */
-.is-validating .ios-q-row[data-answered="0"] .intensity-btn:not(.is-sel-none):not(.is-sel-infrequent):not(.is-sel-frequent) {
+.is-validating .ios-q-row[data-answered="0"] .intensity-btn:not(.is-sel-none):not(.is-sel-infrequent):not(.is-sel-frequent):not(.is-sel-on) {
   border-width: 1px;
   border-color: rgba(251, 146, 60, 0.4);
   background: rgba(251, 146, 60, 0.03);

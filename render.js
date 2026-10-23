@@ -14087,14 +14087,17 @@ function ynRow(label, value, onYes, onNo,
  *                          - content: optional override HTML inside button
  * @param {string} [tooltip]
  */
-function singleSelectRow(label, value, options, tooltip = '') {
+function singleSelectRow(label, value, options, tooltip = '', pillClass = '') {
   const ttHTML  = tooltip
     ? `<span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">${tooltip}</span></span>`
     : '';
   const answered = value !== null && value !== undefined;
   const btns = options.map(o => {
     const sel = value === o.value;
-    const cls = `intensity-btn${sel && o.selectedClass ? ' ' + o.selectedClass : ''}${sel && o.extraClass ? ' ' + o.extraClass : ''}`;
+    /* `pillClass` rides on EVERY pill, selected or not — `extraClass` only
+       lands on the chosen one, which is no use to a row that needs its type
+       fixed whatever is picked (v8.68). */
+    const cls = `intensity-btn${pillClass ? ' ' + pillClass : ''}${sel && o.selectedClass ? ' ' + o.selectedClass : ''}${sel && o.extraClass ? ' ' + o.extraClass : ''}`;
     return `<button class="${cls}" onclick="${o.onSelect}">${o.content || o.label}</button>`;
   }).join('');
   return `
@@ -20011,10 +20014,29 @@ function buildEgsSpecificationsSection() {
         /* A closed four-option row, as pills rather than a dropdown: swSelect
            takes a bare function name (it embeds the handler inside quotes of
            its own), and four options fit in a row the way the rest of this
-           card's closed questions do. */
+           card's closed questions do.
+
+           TWO THINGS THESE PILLS HAD TO SAY FOR THEMSELVES (v8.68).
+
+           `selectedClass` was missing, and without it singleSelectRow's
+           selected branch adds no class at all — so every DirectX pill drew
+           identically whatever was stored. The click worked and the value
+           was saved the whole time; the row simply never showed it, which
+           from the other side of the screen is exactly "none of these
+           options can be clicked". It is the app's own blue "on" pill, under
+           a name that does not pretend to be a frequency: the three existing
+           `.is-sel-*` classes mean none/infrequent/frequent, and borrowing
+           one of those for "DirectX 12" would have made the stylesheet lie.
+
+           `.intensity-btn` also lowercases its label and re-capitalises the
+           first letter — right for "none / infrequent / frequent", wrong for
+           a proper noun, and the reason the row read "Directx 12". IARC's
+           sentence-case options already opt out of it (`.giarc-pill`); these
+           opt out under their own name. */
         ? singleSelectRow(label, sp[r.id][which] || null,
-            r.options.map(v => ({ value: v, label: v,
-              onSelect: `setEgsSpecField('${o.id}','${r.id}','${which}','${egsJsStr(v)}')` })))
+            r.options.map(v => ({ value: v, label: v, selectedClass: 'is-sel-on',
+              onSelect: `setEgsSpecField('${o.id}','${r.id}','${which}','${egsJsStr(v)}')` })),
+            '', 'egs-spec-pill')
         : egsPortalField({ id: `spec-${o.id}-${r.id}-${which}`, label: label,
             required: which === 'min', value: sp[r.id][which], max: EGS_SPEC_MAX,
             quietLimit: true, placeholder: which === 'min' ? r.hint : '',
