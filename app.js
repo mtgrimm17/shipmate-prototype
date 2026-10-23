@@ -31848,19 +31848,26 @@ function _smGuidePlay(back) {
   const from = { left: win.style.left, top: win.style.top, width: win.style.width, height: win.style.height };
   const to = _smGuideBox(g, card);
   Object.assign(win.style, to);
-  if (back) win.insertBefore(newBox, oldBox); else win.appendChild(newBox);
+  win.appendChild(newBox);
   _smIosRestoreScroll(newBox);
-  const d = Math.round(W * 0.3);
+  /* A CROSSFADE, NOT A SLIDE (v8.76). Jaco: "maybe the checklist updates
+     very fast, it should fade in maybe?" Slid at the step's own 380ms the
+     list was gone before it could be read as changing — a column 289px wide
+     crosses itself in a few frames. So the old list fades out with the push
+     and the new one fades up after it, slower, with a 6px rise; the window
+     still follows the card's height on the push's curve. The step slides,
+     Shippy's list dissolves. */
+  void back; void W;
+  newBox.style.opacity = '0';
   const o = { duration: SM_IOS_MS, easing: SM_IOS_EASE, fill: 'both' };
-  const anims = [win.animate([from, to], o)].concat(back
-    ? [oldBox.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${W}px)` }], o),
-       newBox.animate([{ transform: `translateX(${-d}px)`, filter: 'brightness(.6)' }, { transform: 'translateX(0)', filter: 'brightness(1)' }], o)]
-    : [newBox.animate([{ transform: `translateX(${W}px)` }, { transform: 'translateX(0)' }], o),
-       oldBox.animate([{ transform: 'translateX(0)', filter: 'brightness(1)' }, { transform: `translateX(${-d}px)`, filter: 'brightness(.6)' }], o)]);
+  const anims = [win.animate([from, to], o),
+    oldBox.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-out', fill: 'both' }),
+    newBox.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0)' }],
+                   { duration: 420, delay: 160, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'both' })];
   let over = false;
   const done = () => { if (over) return; over = true; if (_smGuideFrz === f) _smGuideThaw(); };
   Promise.all(anims.map(a => a.finished.catch(() => {}))).then(done);
-  setTimeout(done, SM_IOS_MS + 400);
+  setTimeout(done, 1000);
 }
 /* A page sub-section opened straight from the page re-renders the guide on
    its way to the exit too, so it freezes on the call, not on the exit. */
