@@ -19934,11 +19934,14 @@ function egsTagBox(o) {
               aria-label="Remove ${escHtml(v)}"
               onclick="event.stopPropagation(); ${o.onRemove}('${egsJsStr(v)}')">&times;</button>
     </span>`).join('');
+  /* `bare` drops the form's label row (v8.69): on the Store Page Preview the
+     heading above the box is the page's own, and a second one underneath it
+     saying the same word twice is form chrome on a store page. */
   return `
-    <div class="form-group" data-answered="${vals.length ? '1' : '0'}">
-      <label class="form-label" for="${o.id}">${escHtml(o.label)}${req}
+    <div class="form-group${o.bare ? ' is-bare' : ''}" data-answered="${vals.length ? '1' : '0'}">
+      ${o.bare ? '' : `<label class="form-label" for="${o.id}">${escHtml(o.label)}${req}
         <span class="form-hint-inline">${vals.length} of ${o.max}</span>
-      </label>
+      </label>`}
       <div class="egs-tagbox${full ? ' is-full' : ''}"
            onclick="const i=document.getElementById('${o.id}'); if (i) i.focus();">
         ${chips}
@@ -19970,15 +19973,19 @@ function buildEgsProductDetailsSection() {
          v8.48 and for the same reason: a list is easiest to get right while
          looking at the page it lands on. The lists themselves, their limits
          and their filtered menus are unchanged — only the door moved. -->
+    <!-- EPIC'S OWN WORDS FOR BOTH (v8.69), which are the words its store
+         page prints: "Login Accounts Required" and "Languages Supported".
+         The form said "Login type" and "Supported languages" while the
+         preview beside it already said Epic's — one answer, two names. -->
     <div class="ios-content-step-label">Login requirements</div>
-    ${egsTagBox({ id: 'egs-login-input', label: 'Login type', values: a.loginTypes,
+    ${egsTagBox({ id: 'egs-login-input', label: 'Login Accounts Required', values: a.loginTypes,
         max: EGS_LOGIN_TYPE_MAX, entryMax: EGS_LOGIN_TYPE_ENTRY_MAX,
         placeholder: 'Type a login service and press Enter',
         onKey: 'egsLoginTypeKey', onRemove: 'removeEgsLoginType',
         hint: `Account systems a player needs in order to play. Epic suggests its own and lets you type any other, up to ${EGS_LOGIN_TYPE_MAX} entries of ${EGS_LOGIN_TYPE_ENTRY_MAX} characters.` })}
 
     <div class="ios-q-divider"></div>
-    <div class="ios-content-step-label">Supported languages</div>
+    <div class="ios-content-step-label">Languages Supported</div>
     ${egsPickBox('audioLanguages')}
     ${egsPickBox('textLanguages')}
 
@@ -20241,6 +20248,24 @@ function egsPageField(o) {
    `.tooltip-anchor` and a single fixed bubble (initGlobalTooltip, app.js) —
    so it is not clipped by this card's scroller or shrunk by its zoom. Same
    anchor Epic's Content Questions use (giarcTooltip, further down). */
+/* One field for the chip's legal lines: the page's own well at the foot's
+   own type, with an optional label beside it for the privacy link — Epic
+   prints that one as a labelled link rather than as a line of its own. */
+function egsSysField(o) {
+  const val  = o.value || '';
+  const body = o.multiline
+    ? `<textarea class="egs-sp-sysinput" id="${o.id}" rows="2" data-egs-grow="1"
+                 placeholder="${escHtml(o.placeholder || '')}"
+                 oninput="egsGrowField(this)"
+                 onchange="${o.onChange}">${escHtml(val)}</textarea>`
+    : `<input class="egs-sp-sysinput" id="${o.id}" type="${o.type || 'text'}"
+              placeholder="${escHtml(o.placeholder || '')}" value="${escHtml(val)}"
+              onchange="${o.onChange}">`;
+  return o.label
+    ? `<div class="egs-sp-sysrow"><span class="egs-sp-sysrow-label">${escHtml(o.label)}</span>${body}</div>`
+    : body;
+}
+
 function egsAchTip(text) {
   return `<span class="tooltip-anchor" data-tip="${escHtml(text)}"
                 onclick="event.stopPropagation()"><span class="tooltip-icon">?</span></span>`;
@@ -20831,36 +20856,68 @@ function buildEgsStorePreviewSection() {
       </div>`;
   };
   const specTables = supported.map(specTable).filter(Boolean).join('');
-  const sysHtml = `
-    <div class="egs-sp-foot ${egsHitCls(specTables)}" data-spp-el="specifications"
-         onclick="openStepModal('egs','specifications')">
-      <div class="egs-spp-h2">${title ? escHtml(title) + ' ' : ''}System Requirements</div>
-      ${specTables}
-    </div>`;
 
-  const langList = (label, items) => `
-    <div class="egs-sp-langline">
-      <span>${label}</span>
-      <b>${items.length ? escHtml(items.join(', ')) : '<span class="egs-spp-placeholder">—</span>'}</b>
-    </div>`;
+  /* ── ONE CHIP, WITH ITS HEADING OUTSIDE IT (v8.69) ──────────────────────
+     Measured on store.epicgames.com/p/go-ape-ship-53158b: the H2 sits on its
+     own 20px above a panel of #202024 at radius 12 and 32/56 padding, and the
+     panel holds four things in a flex column 32px apart — the spec tables,
+     Login Accounts Required, Languages Supported, and the legal lines. This
+     card had them as three separate blocks, each with its own rule and its
+     own door into a step.
+
+     THE SPEC TABLE KEEPS ITS DOOR; EVERYTHING ELSE BECAME A FIELD. The table
+     is built per OS from fourteen boxes and belongs in the Specifications
+     step. The other three are one value each, and a value you can see is a
+     value you should be able to type — the rule this preview has followed
+     since v8.48. The door is therefore on the table alone rather than on the
+     chip: a door wrapped around a field eats the click that was meant for
+     the field. */
   const detailsDone = a.loginTypes.length || a.textLanguages.length || a.audioLanguages.length;
-  const loginHtml = `
-    <div class="egs-sp-foot ${egsHitCls(detailsDone)}"
-         onclick="openStepModal('egs','productDetails')">
-      <div class="egs-sp-foot-sub">Login Accounts Required</div>
-      <div class="egs-sp-langline is-plain"><b>${a.loginTypes.length
-        ? escHtml(a.loginTypes.join(', '))
-        : '<span class="egs-spp-placeholder">None declared</span>'}</b></div>
-      <div class="egs-sp-foot-sub">Languages Supported</div>
-      ${langList('Audio:', a.audioLanguages)}
-      ${langList('Text:', a.textLanguages)}
-    </div>`;
+  const sysChipHtml = `
+    <div class="egs-sp-sysgroup">
+      <div class="egs-spp-h2">${title ? escHtml(title) + ' ' : ''}System Requirements</div>
+      <div class="egs-sp-chip">
+        <!-- SHIPPY'S ROW STILL FINDS IT (v8.71). v8.70 put
+             data-spp-el="specifications" on the old .egs-sp-foot; v8.69 (mine)
+             replaced that footer with this part of the chip, so the hook moves
+             here. _smRowAction walks up from the marked element to its opener,
+             which is this div's own onclick. -->
+        <div class="egs-sp-chip-part ${egsHitCls(specTables)}" data-spp-el="specifications"
+             onclick="openStepModal('egs','specifications')">
+          ${specTables || `<div class="egs-spp-placeholder">The minimum and recommended machine, per operating system &mdash; set in Specifications.</div>`}
+        </div>
 
-  const legalHtml = (a.legalFooter || '').trim() || (a.privacyLink || '').trim() ? `
-    <div class="egs-sp-legal ${egsHitCls(true)}" onclick="openStepModal('egs','productDetails')">
-      ${(a.legalFooter || '').trim() ? `<span>${escHtml(a.legalFooter)}</span>` : ''}
-      ${(a.privacyLink || '').trim() ? `<span class="egs-sp-legal-link">Privacy Policy</span>` : ''}
-    </div>` : '';
+        <div class="egs-sp-chip-part">
+          <div class="egs-sp-foot-sub">Login Accounts Required</div>
+          ${egsTagBox({ id: 'egs-login-input', label: '', values: a.loginTypes,
+              max: EGS_LOGIN_TYPE_MAX, entryMax: EGS_LOGIN_TYPE_ENTRY_MAX,
+              placeholder: 'Type a login service and press Enter',
+              onKey: 'egsLoginTypeKey', onRemove: 'removeEgsLoginType', bare: true })}
+        </div>
+
+        <div class="egs-sp-chip-part">
+          <div class="egs-sp-foot-sub">Languages Supported</div>
+          <div class="egs-sp-langpick">
+            ${egsPreviewPick('audioLanguages', 'Audio')}
+            ${egsPreviewPick('textLanguages', 'Text')}
+          </div>
+        </div>
+
+        <div class="egs-sp-chip-part">
+          <div class="egs-sp-foot-sub">Legal</div>
+          ${egsSysField({ id: 'egs-sp-legalfooter', value: a.legalFooter, multiline: true,
+              placeholder: 'Copyright and trademark lines, shown at the foot of the page.',
+              onChange: `setEgsProductText('legalFooter', this.value)` })}
+          ${egsSysField({ id: 'egs-sp-privacy', value: a.privacyLink, type: 'url',
+              placeholder: 'https://your-studio.com/privacy',
+              label: 'Privacy Policy',
+              onChange: `setEgsProductText('privacyLink', this.value)` })}
+        </div>
+      </div>
+    </div>`;
+  const sysHtml = sysChipHtml;
+  const loginHtml = '';
+  const legalHtml = '';
 
   /* NO STATUS BAR AND NO BLURB (v8.52). The bar listed seven things the page
      might be missing — Title, Description, Media, Age Rating, Genres, Specs,

@@ -30296,6 +30296,97 @@ textarea.egs-sp-body {
 .egs-sp .egs-sp-ach-x:focus-visible { opacity: 1; }
 .egs-sp .egs-sp-ach-x:hover { color: #ff2d9b; background: rgba(255, 255, 255, .06); }
 
+/* ── THE FIELDS REACH AS FAR AS THE PICTURE (v8.69) ──────────────────────
+   The short description, headline and body stopped 20px short of the
+   carousel: their row is a flex pair and the counter beside them was taking
+   that 20px out of the field's share. The counter comes out of the flow
+   instead — pinned to the field's bottom-right corner, growing leftwards so
+   the over-limit sentence has somewhere to go — and the field takes the whole
+   row. Out of flow means it still costs no vertical line, which is what v8.54
+   moved it sideways for; it simply stops costing horizontal width too.
+
+   Scoped to the two columns, not to every field: the title's row already
+   spans the whole canvas and has no gutter to put a counter in. */
+.egs-sp .egs-sp-main > .egs-sp-fieldrow,
+.egs-sp .egs-sp-long .egs-sp-fieldrow { position: relative; }
+.egs-sp .egs-sp-main > .egs-sp-fieldrow > .egs-sp-edit,
+.egs-sp .egs-sp-long .egs-sp-fieldrow > .egs-sp-edit { flex: 1 1 100%; width: 100%; }
+.egs-sp .egs-sp-main > .egs-sp-fieldrow > .ias-char-counter-row,
+.egs-sp .egs-sp-long .egs-sp-fieldrow > .ias-char-counter-row {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 3px;
+  justify-content: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+/* ── THE FOOT IS ONE CHIP, WITH ITS HEADING OUTSIDE (v8.69) ──────────────
+   Measured on go-ape-ship: #202024 at radius 12 with 32/56 of padding, a
+   flex column 32px apart, and the H2 on its own 20px above it. */
+.egs-sp .egs-sp-sysgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 48px;
+}
+/* The heading carries its own margin elsewhere on this page; inside the group
+   the 20px gap is the whole measure, and a margin on top of it made 30. */
+.egs-sp .egs-sp-sysgroup > .egs-spp-h2 { margin: 0; }
+.egs-sp .egs-sp-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: 32px 56px;
+  border-radius: 12px;
+  background: #202024;
+}
+.egs-sp .egs-sp-chip-part { display: flex; flex-direction: column; gap: 10px; }
+/* The spec table is the one part that still opens a step, so it alone wears
+   the well — inset, so the chip's own corners stay the only rounded ones. */
+.egs-sp .egs-sp-chip-part.egs-sp-hit {
+  margin: -14px -16px;
+  background: none;
+}
+.egs-sp .egs-sp-chip-part.egs-sp-hit.is-todo { background: none; }
+.egs-sp .egs-sp-chip .egs-sp-foot-sub { margin: 0; }
+.egs-sp .egs-sp-chip .egs-sp-sysos + .egs-sp-sysos { margin-top: 24px; }
+
+/* Audio and Text sit side by side under one heading, as Epic prints them. */
+.egs-sp .egs-sp-langpick { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+.egs-sp .egs-sp-langpick .egs-sp-tagcol > .egs-sp-tagrow-label { padding-left: 0; }
+.egs-sp .egs-sp-chip .egs-tagbox { padding: 8px 12px; }
+.egs-sp .egs-sp-chip .form-group.is-bare { margin: 0; }
+
+/* The legal lines */
+.egs-sp .egs-sp-sysinput {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--epic-well-line);
+  border-radius: var(--epic-well-radius);
+  padding: 8px 12px;
+  color: var(--epic-fg);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 19.6px;
+  letter-spacing: 0.28px;
+  resize: none;
+  overflow: hidden;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.egs-sp .egs-sp-sysinput:hover,
+.egs-sp .egs-sp-sysinput:focus { outline: none; border-color: var(--epic-well-line-hover); }
+.egs-sp .egs-sp-sysinput::placeholder { color: var(--epic-fg-2); }
+.egs-sp .egs-sp-sysrow { display: flex; align-items: center; gap: 16px; }
+.egs-sp .egs-sp-sysrow-label {
+  flex: 0 0 auto;
+  font-size: 14px;
+  letter-spacing: 0.28px;
+  color: var(--epic-accent);
+}
+
 /* The icon wells */
 .egs-sp .egs-ach-icon-well {
   position: relative;
@@ -30692,3 +30783,10 @@ textarea.egs-sp-body {
    they are .egs-sp-hit blocks whose line is an inset ring, so the ring is
    what turns purple. */
 .egs-sp .egs-sp-foot.egs-sp-hit.is-spp-hover { box-shadow: inset 0 0 0 1px var(--purple); }
+/* AND SYSTEM REQUIREMENTS IS NOW A PART OF THE FOOT CHIP (v8.71), not a
+   footer of its own: v8.69 folded it in beside Login Accounts Required,
+   Languages Supported and the legal lines. Same ring, same reason — the
+   part's line is an inset ring, so the ring is what turns purple. Scoped to
+   the part, not the chip, so hovering Shippy's row outlines the spec table
+   rather than all four. */
+.egs-sp .egs-sp-chip-part.egs-sp-hit.is-spp-hover { box-shadow: inset 0 0 0 1px var(--purple); }
