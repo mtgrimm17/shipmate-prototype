@@ -27346,6 +27346,81 @@ function _smRowAction(id) {
   return null;
 }
 
+/* A SHIPPY ROW THAT OPENS SOMETHING SHOWS YOU WHERE FIRST (v8.73). Jaco: "al
+   navegar desde el panel de Shippy está un poco tosco: tocas y te lleva a una
+   nueva capa de modal" — and the shape he asked for: "que siempre hiciera
+   scroll a la zona en la que has seleccionado, dimmeara el resto, y luego
+   animase hacia el modal", with the scroll smooth.
+
+   Three beats, each waiting for the one before:
+     1. POINT — on the press, everything not on the way to the element dims
+        (.sm-door-spot, by structure, so a block nested five deep still
+        stands alone) and the element wears Shippy's purple line.
+     2. TRAVEL — the page scrolls, eased (_smScrollTo, 420ms), already
+        dimmed, until the element sits mid-view; then a 300ms beat (450ms
+        when no travel was needed).
+     3. PUSH — the page slides out left and the step slides in from the
+        right. openStorePreviewSection runs this push itself; the doors that
+        open another step (openStepModal) or a tab get it here.
+   Reduced motion skips the waits and the slide, and just goes. A second press
+   while a sequence is running is ignored rather than queued. */
+let _smDoorBusy = false;
+async function _smDoorGo(id, act) {
+  if (_smDoorBusy) return;
+  const el = document.querySelector('[data-spp-el="' + id + '"]');
+  const oc = (act.getAttribute && act.getAttribute('onclick')) || '';
+  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (!el || still) return act.click();
+  _smDoorBusy = true;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  try {
+    /* 1. POINT, THE MOMENT THE ROW IS PRESSED. Jaco: "que el dimming empiece
+       justo al dar al checklist, de forma que cuando ya estás scrolling está
+       solo resaltado lo importante." Dimming after the travel made the scroll
+       a trip past a page of equally bright things; dimmed first, the page
+       slides by already faded and the one lit block is what the eye follows
+       in. */
+    const host = el.closest('.ios-step-body-content') || el.closest('.submit-modal-scroll');
+    if (host) { host.classList.add('sm-door-spot'); el.classList.add('is-spotlit', 'is-spp-hover'); host.classList.add('is-spotlight'); }
+    // 2. travel, already dimmed
+    const sc = typeof _smNearestScroller === 'function' && _smNearestScroller(el);
+    let travelled = false;
+    if (sc) {
+      const max = Math.max(0, sc.scrollHeight - sc.clientHeight);
+      const r = el.getBoundingClientRect(), s = sc.getBoundingClientRect();
+      const to = Math.max(0, Math.min(max, Math.round(sc.scrollTop + (r.top - s.top) - (sc.clientHeight - r.height) / 2)));
+      if (Math.abs(to - sc.scrollTop) > 2) { _smScrollTo(sc, to); await wait(440); travelled = true; }
+    }
+    // a beat on arrival — shorter after a trip, which already did the pointing
+    await wait(travelled ? 300 : 450);
+    { const mm = document.getElementById('submit-modal');
+      if (mm && typeof _smIosArm === 'function' && _smIosArm()) _smIosPre = { box: _smIosSnap(mm), t: performance.now() }; }
+    // 3. push
+    if (/^\s*(openStorePreviewSection|openStepModal)\s*\(/.test(oc)) {
+      act.click();                                   // both push by themselves
+    } else {
+      const m = document.getElementById('submit-modal');
+      if (m) { m.classList.add('is-flip-exit'); await wait(160); m.classList.remove('is-flip-exit'); }
+      act.click();
+      const m2 = document.getElementById('submit-modal');
+      if (m2) { m2.classList.add('is-flip-enter'); setTimeout(() => m2.classList.remove('is-flip-enter'), 280); }
+    }
+  } finally {
+    /* THE DIM RIDES OUT WITH THE PAGE (Jaco: "que no se quite el dim del
+       resto justo cuando empieza la transición al modal"). Clearing it here
+       ran before the push photographed the page — the door's own handler is
+       async and the photograph is taken a microtask later — so the page
+       flashed back to full brightness as it slid away. The page it dims is
+       replaced by the step's render anyway; the clear only matters if a door
+       left it on screen, so it waits until the push is long over. */
+    setTimeout(() => {
+      document.querySelectorAll('.sm-door-spot').forEach(h => h.classList.remove('sm-door-spot', 'is-spotlight'));
+      document.querySelectorAll('.is-spotlit.is-spp-hover').forEach(e => e.classList.remove('is-spotlit', 'is-spp-hover'));
+    }, 1200);
+    _smDoorBusy = false;
+  }
+}
+
 const _smOrigChkGoStep = window.chkGoStep;
 window.chkGoStep = function (step) {
   if (typeof step === 'string' && step.slice(0, 4) === 'spp:') {
@@ -27357,7 +27432,7 @@ window.chkGoStep = function (step) {
     /* .click() rather than re-implementing the call: the element's handler is
        the definition of what that door does, and a copy here is a second one
        that can drift. */
-    if (act) return act.click();
+    if (act) return _smDoorGo(id, act);
     if (typeof setStorePreviewFocus === 'function') {
       return setStorePreviewFocus(sm.platformId, id);   // a field: go to it
     }
@@ -31532,4 +31607,220 @@ document.addEventListener('pointerdown', e => {
     if (rowId(e.relatedTarget) === id) return;
     paint(id, false);
   });
+})();
+
+/* ══ THE PUSH IS iOS'S PUSH (v8.73) ══════════════════════════════════════════
+   Jaco: "¿se puede hacer que entre/salga el modal con slide, tipo animación de
+   iOS?" iOS moves BOTH screens at once: the new one slides in from the right
+   edge, full width, over the old one, which drifts a third of the way left and
+   darkens; going back runs it in reverse. Ours was two halves in sequence — the
+   old level faded 6% left, THEN the new one faded in from 10% — which is why it
+   read as a cut however long it was made.
+
+   Simultaneity needs both screens on screen at once, and only one exists in
+   the DOM. So the outgoing level is photographed: when the modal starts its
+   exit (`is-flip-exit`, which every in-step navigation already sets — the
+   preview's sub-sections, Shippy's doors, the way back), its non-Shippy
+   children are cloned in place, scroll positions and all. When the new level
+   arrives (`is-flip-enter`), the clone is laid back over the old position and
+   the two move together, 380ms on iOS's own curve.
+
+   EACH LAYER IS CLIPPED TO ITS OWN BOX, because Shippy's column lives inside
+   the same modal: a translate alone would slide the step across him. The clip
+   is animated against the translate (clip-path inset), so a layer is only
+   ever visible inside the box it started in. The incoming layer is painted on
+   the modal's own ground so the photograph does not show through it.
+   Only in the arms where Shippy sits inside the modal; reduced motion skips
+   it, and the CSS push it replaces is switched off in the same arms. */
+/* THE MOVE HAPPENS BEHIND A WINDOW (v8.73, second pass). Jaco: "la parte que
+   se desplaza sale tanto por la izquierda al ir, como por encima del panel de
+   Shippy al volver; trata la parte principal del modal como una máscara."
+   The first pass clipped each sliding layer with an animated clip-path — which
+   is only as reliable as the engine's support for animating clip-path next to
+   a transform, and in practice it let the layers out. So the clip is no longer
+   on the things that move: it is a still window, an overflow:hidden box laid
+   exactly over the step's area (the modal minus Shippy's column, with the
+   modal's own corner radius where it meets the modal's edge). BOTH screens are
+   photographs inside it — the old one taken as the exit starts, the new one
+   the moment it has rendered — and the real layers are hidden underneath for
+   the 380ms. A box with overflow:hidden cannot be escaped, so nothing can
+   cross Shippy or the modal's edge in any engine. */
+const SM_IOS_MS = 380, SM_IOS_EASE = 'cubic-bezier(.22,.8,.2,1)';
+let _smIosGhost = null, _smIosPre = null;
+function _smIosArm() {
+  const b = document.body.classList;
+  return (b.contains('sm-guide-panel') || b.contains('sm-guide-mid') || b.contains('sm-guide-beside'))
+      && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+function _smIosLayers(m) {
+  return [...m.children].filter(c => !c.classList.contains('sm-rail') && !c.classList.contains('sm-ios-window'));
+}
+/* The step's area: the union of its layers, in the modal's coordinates. */
+function _smIosArea(m) {
+  const mr = m.getBoundingClientRect();
+  let L = 1e9, T = 1e9, R = -1e9, B = -1e9;
+  _smIosLayers(m).forEach(c => { const r = c.getBoundingClientRect(); if (!r.width || !r.height) return;
+    L = Math.min(L, r.left); T = Math.min(T, r.top); R = Math.max(R, r.right); B = Math.max(B, r.bottom); });
+  // Never past Shippy's column, even by the pixel a rounded layout can add.
+  const rail = m.querySelector('.sm-rail');
+  if (rail) { const rr = rail.getBoundingClientRect(); if (rr.width && rr.left > L) R = Math.min(R, rr.left); }
+  /* RELATIVE TO THE PADDING EDGE, NOT THE BORDER EDGE. An absolutely placed
+     child is measured from inside the modal's 1px border, so offsets taken
+     from its outer box put the window — and the photographs in it — one pixel
+     low and one right, and the step visibly settled by that pixel when the
+     window came off (Jaco: "un pequeño movimiento vertical al terminar"). */
+  return { mr, left: L - mr.left - m.clientLeft, top: T - mr.top - m.clientTop, width: R - L, height: B - T, abs: { L, T, R, B } };
+}
+/* A photograph of the step's layers, positioned inside an area-sized box. */
+function _smIosSnap(m, area) {
+  area = area || _smIosArea(m);
+  const box = document.createElement('div');
+  Object.assign(box.style, { position: 'absolute', left: '0', top: '0', width: area.width + 'px', height: area.height + 'px' });
+  const scrolls = [];
+  _smIosLayers(m).forEach(c => {
+    const r = c.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const k = c.cloneNode(true);
+    [...c.querySelectorAll('*')].forEach((e, i) => { if (e.scrollTop) scrolls.push([k, i, e.scrollTop]); });
+    if (c.scrollTop) scrolls.push([k, -1, c.scrollTop]);
+    k.removeAttribute('id'); k.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+    Object.assign(k.style, { position: 'absolute', left: (r.left - area.abs.L) + 'px', top: (r.top - area.abs.T) + 'px',
+      width: r.width + 'px', height: r.height + 'px', margin: '0', boxSizing: 'border-box', animation: 'none', transform: 'none' });
+    box.appendChild(k);
+  });
+  box._scrolls = scrolls;
+  return box;
+}
+function _smIosRestoreScroll(box) {
+  (box._scrolls || []).forEach(([k, i, top]) => { const e = i < 0 ? k : k.querySelectorAll('*')[i]; if (e) e.scrollTop = top; });
+}
+/* THE FADES ARE PHOTOGRAPHED IN THEIR FINAL STATE (v8.73). Jaco: "cuando se
+   acaba de asentar el slide, el gradient del bottom se redibuja y hace un
+   glitch raro". The new screen was photographed the instant it rendered,
+   before `at-top` / `at-bottom` had been measured for it, so the photo slid in
+   without its bottom fade and the real one faded up (0.3s transition) the
+   moment the window came off. Measure first, photograph second, and hand the
+   real step back with the transition off for a frame. */
+function _smIosSettleFades(m) {
+  if (typeof _smModalFades === 'function') { try { _smModalFades(); } catch (e) {} }
+  m.querySelectorAll('.submit-modal-body-wrap').forEach(w => {
+    w.classList.add('no-fade-anim'); void w.offsetWidth;
+  });
+}
+function _smIosReleaseFades(m) {
+  requestAnimationFrame(() => requestAnimationFrame(() =>
+    m.querySelectorAll('.submit-modal-body-wrap').forEach(w => w.classList.remove('no-fade-anim'))));
+}
+function _smIosPlay(m, oldBox, back) {
+  _smIosSettleFades(m);
+  const area = _smIosArea(m);
+  const newBox = _smIosSnap(m, area);
+  const bg = getComputedStyle(m).backgroundColor;
+  const R = parseFloat(getComputedStyle(m).borderTopLeftRadius) || 0;
+  const near = (a, b) => Math.abs(a - b) < 2;
+  const mr = area.mr, A = area.abs;
+  const rad = [near(A.T, mr.top) && near(A.L, mr.left) ? R : 0, near(A.T, mr.top) && near(A.R, mr.right) ? R : 0,
+               near(A.B, mr.bottom) && near(A.R, mr.right) ? R : 0, near(A.B, mr.bottom) && near(A.L, mr.left) ? R : 0];
+  const win = document.createElement('div');
+  win.className = 'sm-ios-window'; win.setAttribute('aria-hidden', 'true');
+  Object.assign(win.style, { position: 'absolute', left: area.left + 'px', top: area.top + 'px',
+    width: area.width + 'px', height: area.height + 'px', overflow: 'hidden', zIndex: '5',
+    borderRadius: rad.map(x => x + 'px').join(' '), background: bg, pointerEvents: 'auto' });
+  [oldBox, newBox].forEach(b => { b.style.background = bg; });
+  /* Forward the new screen is on top; back the leaving one is. */
+  win.appendChild(back ? newBox : oldBox);
+  win.appendChild(back ? oldBox : newBox);
+  const posWas = m.style.position;
+  if (getComputedStyle(m).position === 'static') m.style.position = 'relative';
+  m.appendChild(win);
+  _smIosRestoreScroll(oldBox); _smIosRestoreScroll(newBox);
+  const layers = _smIosLayers(m);
+  /* HIDDEN BY OPACITY, NOT VISIBILITY. `visibility` is inherited and the
+     pills carry `transition: all`, so every one of them ran its own
+     hidden→visible transition when the step came back — and that transition
+     spends its first frame at `hidden`. The pills blinked out for a frame
+     exactly as the slide settled (Jaco: "da un flashazo al entrar"). Opacity
+     on the layer itself, with its own transition off, does not cascade. */
+  layers.forEach(k => { k.style.transition = 'none'; k.style.opacity = '0'; });
+  const W = area.width, d = Math.round(W * 0.3);
+  const o = { duration: SM_IOS_MS, easing: SM_IOS_EASE, fill: 'both' };
+  const anims = back
+    ? [oldBox.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${W}px)` }], o),
+       newBox.animate([{ transform: `translateX(${-d}px)`, filter: 'brightness(.6)' }, { transform: 'translateX(0)', filter: 'brightness(1)' }], o)]
+    : [newBox.animate([{ transform: `translateX(${W}px)` }, { transform: 'translateX(0)' }], o),
+       oldBox.animate([{ transform: 'translateX(0)', filter: 'brightness(1)' }, { transform: `translateX(${-d}px)`, filter: 'brightness(.6)' }], o)];
+  let over = false;
+  const done = () => {
+    if (over) return; over = true;
+    _smIosSettleFades(m);
+    layers.forEach(k => { k.style.opacity = ''; });
+    win.remove();
+    requestAnimationFrame(() => layers.forEach(k => { k.style.transition = ''; }));
+    m.style.position = posWas;
+    _smIosReleaseFades(m);
+  };
+  Promise.all(anims.map(a => a.finished.catch(() => {}))).then(done);
+  setTimeout(done, SM_IOS_MS + 400);          // never strand the real step hidden
+}
+if (typeof MutationObserver === 'function') {
+  new MutationObserver(muts => {
+    for (const mu of muts) {
+      const m = mu.target;
+      if (m.id !== 'submit-modal' || !_smIosArm()) continue;
+      const was = mu.oldValue || '';
+      if (m.classList.contains('is-flip-exit') && !/\bis-flip-exit\b/.test(was)) {
+        document.querySelectorAll('.sm-ios-window').forEach(x => x.remove());
+        _smIosLayers(m).forEach(k => { k.style.opacity = ''; k.style.transition = ''; });
+        /* A door from Shippy photographs the page itself, BEFORE the press —
+           the sub-section openers re-render the step on their way to the exit,
+           which throws the dimmed host away, and a photo taken here would slide
+           out undimmed (Jaco: "que no se quite el dim del resto"). */
+        const pre = _smIosPre && performance.now() - _smIosPre.t < 1500 ? _smIosPre.box : null;
+        _smIosPre = null;
+        _smIosGhost = { box: pre || _smIosSnap(m), back: document.body.classList.contains('sm-nav-back'), t: performance.now() };
+      } else if (m.classList.contains('is-flip-enter') && !/\bis-flip-enter\b/.test(was) && _smIosGhost) {
+        const { box, back, t } = _smIosGhost; _smIosGhost = null;
+        if (performance.now() - t < 2500) _smIosPlay(m, box, back || document.body.classList.contains('sm-nav-back'));
+      }
+    }
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'], attributeOldValue: true, subtree: true });
+}
+
+/* GOING BACK TO THE PAGE IS A POP TOO (v8.73). Jaco: "que el slide out,
+   cuando salgo del modal, también se me vea irme." The steps the page opens
+   with openStepModal (System Requirements, Social Media…) come back the same
+   way — their back arrow and Save & Return call openStepModal(pid,
+   'storePreview') — and that re-rendered the page in one cut, because only
+   the preview's own sub-sections (closeStorePreviewSection) ran the exit /
+   enter that the iOS push hangs off. So a return to the page from another
+   step now runs them too: marked as BACK, the modal exits, the page renders,
+   the modal enters — and the window above slides the step off to the right
+   over the page coming back from the left. */
+(() => {
+  const orig = window.openStepModal;
+  if (typeof orig !== 'function') return;
+  window.openStepModal = async function (pid, stepId) {
+    const sm = state.stepModal;
+    const ov = document.getElementById('submit-overlay');
+    const open = ov && !ov.classList.contains('hidden');
+    /* EVERY STEP-TO-STEP CHANGE SLIDES (v8.74). Jaco: "cuando toco al de
+       specifications directamente… salta sin transición. Todos los clicks
+       deben ir con transición slide." This used to cover only the return to
+       the page; the page's own chips (System Requirements, Social Media…)
+       call openStepModal straight, so they cut while the same door from
+       Shippy pushed. Now any change of step inside an open modal pushes:
+       back when it lands on the page, forward otherwise. A re-render of the
+       same step, or a modal opening from closed, is left alone. */
+    const change = open && sm && sm.platformId === pid && sm.stepId && sm.stepId !== stepId
+                && !document.getElementById('submit-modal')?.classList.contains('is-flip-exit')
+                && _smIosArm();
+    if (!change) return orig.apply(this, arguments);
+    if (typeof _smNavDir === 'function') _smNavDir(stepId === 'storePreview');
+    const m = document.getElementById('submit-modal');
+    if (m) { m.classList.add('is-flip-exit'); await new Promise(r => setTimeout(r, 160)); m.classList.remove('is-flip-exit'); }
+    const out = await orig.apply(this, arguments);
+    const m2 = document.getElementById('submit-modal');
+    if (m2) { m2.classList.add('is-flip-enter'); setTimeout(() => m2.classList.remove('is-flip-enter'), 280); }
+    return out;
+  };
 })();

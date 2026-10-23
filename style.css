@@ -26435,19 +26435,19 @@ body.sm-guide-panel   .submit-modal.is-flip-enter {
 body.sm-guide-beside .submit-modal.is-flip-exit  > *:not(.sm-rail),
 body.sm-guide-mid    .submit-modal.is-flip-exit  > *:not(.sm-rail),
 body.sm-guide-panel  .submit-modal.is-flip-exit  > *:not(.sm-rail) {
-  animation: sm-push-exit .08s ease-in forwards; }
+  animation: sm-push-exit .16s ease-in forwards; }
 body.sm-guide-beside .submit-modal.is-flip-enter > *:not(.sm-rail),
 body.sm-guide-mid    .submit-modal.is-flip-enter > *:not(.sm-rail),
 body.sm-guide-panel  .submit-modal.is-flip-enter > *:not(.sm-rail) {
-  animation: sm-push-enter .14s cubic-bezier(.22,.61,.36,1) forwards; }
+  animation: sm-push-enter .26s cubic-bezier(.22,.61,.36,1) forwards; }
 body.sm-guide-beside.sm-nav-back .submit-modal.is-flip-exit  > *:not(.sm-rail),
 body.sm-guide-mid.sm-nav-back    .submit-modal.is-flip-exit  > *:not(.sm-rail),
 body.sm-guide-panel.sm-nav-back  .submit-modal.is-flip-exit  > *:not(.sm-rail) {
-  animation: sm-pop-exit .08s ease-in forwards; }
+  animation: sm-pop-exit .16s ease-in forwards; }
 body.sm-guide-beside.sm-nav-back .submit-modal.is-flip-enter > *:not(.sm-rail),
 body.sm-guide-mid.sm-nav-back    .submit-modal.is-flip-enter > *:not(.sm-rail),
 body.sm-guide-panel.sm-nav-back  .submit-modal.is-flip-enter > *:not(.sm-rail) {
-  animation: sm-pop-enter .14s cubic-bezier(.22,.61,.36,1) forwards; }
+  animation: sm-pop-enter .26s cubic-bezier(.22,.61,.36,1) forwards; }
 
 /* THE FILTER, NOW THAT IT LIVES IN A 254px COLUMN. See app.js's "THE FILTER
    MOVES TO THE PANEL". The node is the step's own, re-parented, so everything
@@ -30916,3 +30916,35 @@ textarea.egs-sp-body {
    the part, not the chip, so hovering Shippy's row outlines the spec table
    rather than all four. */
 .egs-sp .egs-sp-chip-part.egs-sp-hit.is-spp-hover { box-shadow: inset 0 0 0 1px var(--purple); }
+/* Product Details' parts of the System Requirements chip under Shippy's
+   hover or selection (v8.73): a purple ring drawn just outside each part,
+   so nothing in the chip moves. */
+.egs-sp .egs-sp-chip-part[data-spp-el="productDetails"] { border-radius: 8px; }
+.egs-sp .egs-sp-chip-part[data-spp-el="productDetails"].is-spp-hover {
+  outline: 1px solid var(--purple); outline-offset: 10px;
+}
+.egs-sp .egs-sp-chip-part.egs-sp-hit[data-spp-el="specifications"].is-spp-hover { box-shadow: inset 0 0 0 1px var(--purple); }
+
+/* SHIPPY'S DOOR SEQUENCE (v8.73, _smDoorGo in app.js). While a row is
+   pointing at the block it is about to open, everything not on the way to
+   that block dims — by structure: at each level that contains the target,
+   the siblings that do not are faded, so the block stands alone however deep
+   it sits and nothing is faded twice. The pinned bars stay lit.
+   The push itself (.sm-push-*) went from 80/140ms, which read as a cut, to
+   160/260ms — long enough to see the page leave and the step arrive. */
+.sm-door-spot.is-spotlight :has(.is-spotlit) > *:not(.is-spotlit):not(:has(.is-spotlit)):not(.cr-pinned),
+.sm-door-spot.is-spotlight > *:not(.is-spotlit):not(:has(.is-spotlit)):not(.cr-pinned) {
+  opacity: .3; transition: opacity .25s ease;
+}
+
+/* iOS's push replaces the two-step CSS push in the arms where Shippy sits in
+   the modal (v8.73; see THE PUSH IS iOS'S PUSH in app.js). The layers stay
+   put while the modal carries is-flip-*; the script moves them. */
+body.sm-guide-beside .submit-modal.is-flip-exit  > *:not(.sm-rail),
+body.sm-guide-mid    .submit-modal.is-flip-exit  > *:not(.sm-rail),
+body.sm-guide-panel  .submit-modal.is-flip-exit  > *:not(.sm-rail),
+body.sm-guide-beside .submit-modal.is-flip-enter > *:not(.sm-rail),
+body.sm-guide-mid    .submit-modal.is-flip-enter > *:not(.sm-rail),
+body.sm-guide-panel  .submit-modal.is-flip-enter > *:not(.sm-rail) { animation: none !important; }
+.sm-ios-window { pointer-events: auto; }
+

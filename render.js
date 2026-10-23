@@ -10371,6 +10371,12 @@ function sppRequiredElements(pid, lang) {
         done: typeof isEgsSectionComplete === 'function' && isEgsSectionComplete('socialMedia') },
       { id: 'specifications', label: 'System Requirements', required: true,
         done: typeof isEgsSectionComplete === 'function' && isEgsSectionComplete('specifications') },
+      /* LAST, AS IT IS LAST ON THE PAGE (v8.73). Jaco: "pon Product Details
+         como último paso del checklist." Login Accounts, Languages and Legal
+         sit at the foot of the System Requirements chip; the tick is the
+         Product Details step's own. */
+      { id: 'productDetails', label: 'Product Details',   required: true,
+        done: typeof isEgsSectionComplete === 'function' && isEgsSectionComplete('productDetails') },
     ];
   }
   const complete   = pid === 'macos' ? isMacSectionComplete : isIOSSectionComplete;
@@ -20901,7 +20907,11 @@ function buildEgsStorePreviewSection() {
           ${specTables || `<div class="egs-spp-placeholder">Minimum and recommended specifications</div>`}
         </div>
 
-        <div class="egs-sp-chip-part">
+        <!-- Product Details' three parts carry Shippy's last row (v8.73):
+             Login Accounts, Languages and Legal are the Product Details step's
+             own fields, typed here on the page. Hover outlines all three;
+             pressing the row scrolls to the first. -->
+        <div class="egs-sp-chip-part" data-spp-el="productDetails">
           <div class="egs-sp-foot-sub">Login Accounts Required</div>
           ${egsTagBox({ id: 'egs-login-input', label: '', values: a.loginTypes,
               max: EGS_LOGIN_TYPE_MAX, entryMax: EGS_LOGIN_TYPE_ENTRY_MAX,
@@ -20909,7 +20919,7 @@ function buildEgsStorePreviewSection() {
               onKey: 'egsLoginTypeKey', onRemove: 'removeEgsLoginType', bare: true })}
         </div>
 
-        <div class="egs-sp-chip-part">
+        <div class="egs-sp-chip-part" data-spp-el="productDetails">
           <div class="egs-sp-foot-sub">Languages Supported</div>
           <div class="egs-sp-langpick">
             ${egsPreviewPick('audioLanguages', 'Audio', 'Choose or type (optional)')}
@@ -20917,7 +20927,7 @@ function buildEgsStorePreviewSection() {
           </div>
         </div>
 
-        <div class="egs-sp-chip-part">
+        <div class="egs-sp-chip-part" data-spp-el="productDetails">
           <div class="egs-sp-foot-sub">Legal</div>
           ${egsSysField({ id: 'egs-sp-legalfooter', value: a.legalFooter, multiline: true,
               placeholder: 'Copyright and trademark lines, shown at the foot of the page.',
