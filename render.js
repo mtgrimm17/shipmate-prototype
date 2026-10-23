@@ -19020,14 +19020,71 @@ function buildEgsContentRatingSection() {
     'google.content.cryptotypes':         { 1: 'Purchases of digital goods', 2: 'Cash-convertible rewards',
                                             3: 'Transferable digital assets (NFTs)' },
   };
+  /* NO / RARELY / OFTEN ON ONE ROW (v8.78). Jaco: "hay muchas preguntas del
+     content rating que primero son yes/no y luego se despliegan en un often
+     rarely — ¿no sería posible comprimirlas y hacer que fueran
+     NO/RARELY/OFTEN?" Eleven types ask a frequency as their only follow-up
+     (Scary, Horrifying, the five Nudity parts, the four kinds of language).
+     Their YES was never an answer on its own — it only opened the question
+     that was — so the row asks both at once: NO is the type's NO, and RARELY
+     or OFTEN tick the type and answer its frequency in one press
+     (answerGIARCTypeFreq, app.js). Storage is unchanged: the type's tick and
+     the frequency's own index, so inference, the iOS mapping and the summary
+     read it as before. Anything the frequency itself opens (Horrifying, Often
+     → imminent threat) hangs under the row the way a YES's follow-ups do. */
+  function egsFreqChild(child) {
+    const ks = giarcChildKeysForOption(child);
+    if (ks.length !== 1) return null;
+    const c = GOOGLE_IARC_BY_KEY[ks[0]];
+    if (!c || c.data_type !== 'radio') return null;
+    const os = giarcOptionEntries(c);
+    if (os.length !== 2 || !/^rare(ly)?$/i.test(os[0].text) || !/^often$/i.test(os[1].text)) return null;
+    return { ck: ks[0], rare: os[0].index, often: os[1].index };
+  }
+
+  /* A FINISHED TYPE FOLDS AWAY (v8.78). Adam, via Jaco: "cuando has
+     completado todas las sub-subpreguntas, que se colapsen dejando solo la
+     pregunta padre." A type whose follow-ups are all answered keeps only its
+     own row, with a quiet count beside the title that reopens them; the
+     pills do not move. Reopened by hand, it stays open until closed by hand
+     (state.egsTypeOpen). Only type rows fold: a topic is "complete" as soon as
+     one type is, and folding it would hide the types not yet answered. */
+  function egsTypeFoldKey(key, idx) { return key + '#' + idx; }
+
   function buildEgsTypeRows(q, key, depth) {
     const labels = EGS_TYPE_ROWS[key];
     const cur    = Array.isArray(state.cqAnswers[key]) ? state.cqAnswers[key] : [];
     const said   = ((state.egsTypeNo || {})[key]) || [];
     const m      = state.cqAnswerMeta && state.cqAnswerMeta[key];
     const ai     = !!(m && m.source && !m.humanConfirmed && cur.length);
+    const open   = state.egsTypeOpen || (state.egsTypeOpen = new Set());
     return giarcOptionEntries(q).map(o => {
       const yes = cur.includes(o.index);
+      const fq  = egsFreqChild(o.child);
+      if (fq) {
+        const fv  = yes ? state.cqAnswers[fq.ck] : undefined;
+        const no  = !yes && said.includes(o.index);
+        const cm  = state.cqAnswerMeta && state.cqAnswerMeta[fq.ck];
+        const fai = ai || !!(cm && cm.source && !cm.humanConfirmed);
+        const pill = (label, lit, call) => `<button type="button" class="intensity-btn giarc-pill giarc-pill-${egsPillTier(label)}${lit ? ' is-sel-none' + (fai ? ' ai-confident' : '') : ''}"
+                   onclick="${call}">${label}</button>`;
+        return `
+        <div class="giarc-card giarc-depth-${depth} giarc-inline giarc-typerow giarc-freqrow" data-key="${key}" data-opt="${o.index}">
+          <div class="giarc-row">
+            <div class="giarc-row-label"><span class="giarc-title">${egsTitleHTML(labels[o.index] || o.text)}</span>${giarcTooltip(o.text)}</div>
+            <div class="intensity-group">${pill('No', no, `answerGIARCTypeRow('${key}',${o.index},false)`)}${pill('Rarely', fv === fq.rare, `answerGIARCTypeFreq('${key}',${o.index},${fq.rare})`)}${pill('Often', fv === fq.often, `answerGIARCTypeFreq('${key}',${o.index},${fq.often})`)}</div>
+          </div>
+        </div>
+        ${yes ? renderChildren(fq.ck, depth + 1) : ''}`;
+      }
+      const kids = yes ? giarcChildKeysForOption(o.child) : [];
+      const fk   = egsTypeFoldKey(key, o.index);
+      const done = kids.length > 0 && kids.every(giarcIsSubtreeComplete);
+      const folded = done && !open.has(fk);
+      const foldHTML = done
+        ? `<button type="button" class="egs-fold${folded ? ' is-folded' : ''}" onclick="toggleEgsTypeFold('${fk}')"
+                   aria-label="${folded ? 'Show' : 'Hide'} its answers">${kids.length} answered<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
+        : '';
       /* NO IS LIT ONLY WHEN SOMEONE SAID NO (v8.64). Jaco: "al dar yes a
          alguna de las subpreguntas, las otras se ponen en no." They read as
          NO because IARC stores only ticks, so an unticked type WAS treated as
@@ -19040,11 +19097,11 @@ function buildEgsContentRatingSection() {
       return `
         <div class="giarc-card giarc-depth-${depth} giarc-inline giarc-typerow" data-key="${key}" data-opt="${o.index}">
           <div class="giarc-row">
-            <div class="giarc-row-label"><span class="giarc-title">${egsTitleHTML(labels[o.index] || o.text)}</span>${giarcTooltip(o.text)}</div>
+            <div class="giarc-row-label"><span class="giarc-title">${egsTitleHTML(labels[o.index] || o.text)}</span>${giarcTooltip(o.text)}${foldHTML}</div>
             <div class="question-yn">${pill(true, yes)}${pill(false, no)}</div>
           </div>
         </div>
-        ${yes ? renderChildren(key, depth + 1, giarcChildKeysForOption(o.child)) : ''}`;
+        ${yes && !folded ? renderChildren(key, depth + 1, kids) : ''}`;
     }).join('');
   }
 

@@ -30966,3 +30966,16 @@ body.sm-guide-panel  .submit-modal.is-flip-enter > *:not(.sm-rail) { animation: 
    _smGuideFreeze in app.js. The class sits on <body> because the guide is
    rebuilt with innerHTML; the card's frame stays, only its contents hide. */
 body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; transition: none !important; }
+
+/* A finished type's fold (v8.78, buildEgsTypeRows): a quiet count after the
+   title that reopens its follow-ups. In the label, never beside the pills, so
+   folding moves nothing the pointer is on. */
+.egs-fold {
+  display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+  margin-left: 4px; padding: 2px 7px; border: 0; border-radius: 999px;
+  background: rgba(255,255,255,.05); color: var(--text-dim, #8a8a8a);
+  font: 500 11px/1.2 inherit; font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+.egs-fold:hover { background: rgba(255,255,255,.10); color: var(--text); }
+.egs-fold svg { transition: transform .2s ease; transform: rotate(180deg); }
+.egs-fold.is-folded svg { transform: none; }

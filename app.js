@@ -23200,7 +23200,53 @@ function _egsCollapseAuto(key) {
 }
 
 
-['answerGIARCSingle', 'answerGIARCMultiOpt', 'answerGIARCTypeRow'].forEach(name => {
+/* NO / RARELY / OFTEN (v8.78) — see egsFreqChild, render.js. RARELY or OFTEN
+   ticks the type and answers its frequency in one press; pressing the lit one
+   again takes both back; pressing a lit violet one confirms it. NO is
+   answerGIARCTypeRow's own NO, so "every type NO → topic NO" still holds. */
+function answerGIARCTypeFreq(key, idx, fi) {
+  const q = GOOGLE_IARC_BY_KEY[key];
+  if (!q) return;
+  const opt = giarcOptionEntries(q).find(o => o.index === idx);
+  const ck  = opt && giarcChildKeysForOption(opt.child)[0];
+  if (!ck) return;
+  const cur  = Array.isArray(state.cqAnswers[key]) ? state.cqAnswers[key].slice() : [];
+  const isOn = cur.includes(idx);
+  const fv   = state.cqAnswers[ck];
+  const m = state.cqAnswerMeta[key], cm = state.cqAnswerMeta[ck];
+  const violet = (m && m.source && !m.humanConfirmed) || (cm && cm.source && !cm.humanConfirmed);
+  if (!state.egsTypeNo) state.egsTypeNo = {};
+  const no = new Set(state.egsTypeNo[key] || []);
+  if (isOn && fv === fi && violet) {
+    // confirm, change nothing
+  } else if (isOn && fv === fi) {
+    cur.splice(cur.indexOf(idx), 1);
+    giarcClearAnswersRecursively(ck);
+  } else {
+    if (!isOn) { cur.push(idx); no.delete(idx); }
+    if (fv != null && fv !== fi) {
+      const prev = giarcOptionEntries(GOOGLE_IARC_BY_KEY[ck] || {}).find(o => o.index === fv);
+      if (prev) giarcChildKeysForOption(prev.child).forEach(giarcClearAnswersRecursively);
+    }
+    state.cqAnswers[ck] = fi;
+  }
+  state.cqAnswers[key]    = cur.sort((a, b) => a - b);
+  state.egsTypeNo[key]    = [...no];
+  state.cqAnswerMeta[key] = { ...(m || {}), humanConfirmed: true };
+  if (state.cqAnswers[ck] != null) state.cqAnswerMeta[ck] = { ...(cm || {}), humanConfirmed: true };
+  reRenderAndroidStepModal();
+  updateAndroidCard();
+}
+
+/* A finished type's follow-ups fold under its row (v8.78) — see
+   egsTypeFoldKey, render.js. The step keeps its scroll across the render. */
+function toggleEgsTypeFold(fk) {
+  if (!state.egsTypeOpen) state.egsTypeOpen = new Set();
+  if (state.egsTypeOpen.has(fk)) state.egsTypeOpen.delete(fk); else state.egsTypeOpen.add(fk);
+  reRenderAndroidStepModal();
+}
+
+['answerGIARCSingle', 'answerGIARCMultiOpt', 'answerGIARCTypeRow', 'answerGIARCTypeFreq'].forEach(name => {
   const orig = window[name];
   if (typeof orig !== 'function') return;
   window[name] = function (key, idx) {
@@ -23213,7 +23259,7 @@ function _egsCollapseAuto(key) {
     const before = giarcActiveChildKeys(key);
     const out = orig.apply(this, arguments);
     if (egs && _egsCollapseAuto(key)) { reRenderAndroidStepModal(); updateAndroidCard(); }
-    _egsRevealNew(key, before, name === 'answerGIARCTypeRow' ? idx : null);
+    _egsRevealNew(key, before, /^answerGIARCType/.test(name) ? idx : null);
     return out;
   };
 });
