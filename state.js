@@ -3546,6 +3546,17 @@ function egsAchievements() {
       };
     });
   }
+  return egsSteamAchievements();
+}
+
+/* ── WHAT STEAM GAVE US, WHOEVER IS ASKING (v8.67) ────────────────────────
+   Split out of egsAchievements so a re-scrape can rebuild Epic's list from
+   the import. It could not before: the adoption read egsAchievements(), which
+   returns Epic's OWN list as soon as there is one, so a second scrape handed
+   the adopter back the very records it was supposed to replace. Separating
+   "what Steam says" from "what this page shows" is what makes the overwrite
+   expressible at all. */
+function egsSteamAchievements() {
   const gc = (state.macGameCenterAchievements || [])
     .filter(x => x && ((x.displayName || '').trim() || (x.refName || '').trim()));
   let out;

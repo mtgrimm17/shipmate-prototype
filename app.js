@@ -11430,12 +11430,12 @@ async function _applySteamAchievements(appId, expectedTitle) {
      Preview's Achievements tab can be seeded without a render having to
      mutate state to do it. A no-op if Epic's list already has anything in
      it, so re-importing never overwrites edited rows. */
-  /* AND IT REPAINTS IF THE TAB IS ALREADY OPEN. The scrape is async: a
-     developer can be looking at an empty Achievements tab when it lands, and
-     adopting into state without redrawing would leave them looking at the
-     empty state over a list that now exists. Only when it actually adopted,
-     and only while this card's preview is the open step. */
-  if (typeof _egsEnsureAchievements === 'function' && _egsEnsureAchievements()
+  /* REPLACE, NOT TOP UP (v8.67) — see replaceEgsAchievementsFromSteam.
+     And repaint if the tab is already open: the scrape is async, so a
+     developer can be looking at this list when it lands, and rebuilding it in
+     state without redrawing would leave them reading the old one. */
+  if (typeof replaceEgsAchievementsFromSteam === 'function'
+      && replaceEgsAchievementsFromSteam()
       && state.stepModal && state.stepModal.platformId === 'egs'
       && state.stepModal.stepId === 'storePreview'
       && typeof reRenderStepModal === 'function') {
@@ -23825,12 +23825,14 @@ function _egsGrowAll(root) {
    achievements it was showing a moment ago and the developer would have to
    retype them. So the first Add copies them in first, with their names,
    descriptions and Steam's own icons, and from then on there is one list. */
-function adoptEgsAchievements() {
-  if (!state.egsAchievements) state.egsAchievements = [];
-  if (state.egsAchievements.length) return;
-  const shown = (typeof egsAchievements === 'function') ? egsAchievements() : [];
-  if (!shown.length) return;
-  state.egsAchievements = shown.map(x => {
+/* ONE MAPPER, TWO CALLERS (v8.67): the first look at an import, and a
+   re-scrape that replaces one. It reads egsSteamAchievements (state.js)
+   rather than egsAchievements, because the latter answers with Epic's own
+   list the moment there is one — which is exactly why a second scrape used
+   to copy the records it was meant to overwrite back over themselves. */
+function _egsAchievementsFromSteam() {
+  const shown = (typeof egsSteamAchievements === 'function') ? egsSteamAchievements() : [];
+  return shown.map(x => {
     const a = makeBlankEgsAchievement();
     a.open = false;
     a.visibility          = x.hidden ? 'hidden' : 'shown';
@@ -23853,6 +23855,30 @@ function adoptEgsAchievements() {
     a.xp                  = x.xp ? String(x.xp) : '';
     return a;
   });
+}
+
+function adoptEgsAchievements() {
+  if (!state.egsAchievements) state.egsAchievements = [];
+  if (state.egsAchievements.length) return;
+  const made = _egsAchievementsFromSteam();
+  if (made.length) state.egsAchievements = made;
+}
+
+/* A SCRAPE REPLACES THE LIST (v8.67), including anything added by hand.
+   Before this, a scrape that arrived after the developer had added even one
+   achievement did nothing at all: adoption was a no-op once a list existed,
+   so eleven imported achievements landed in the Game Center arrays and never
+   reached this card — the bug this fixes. Asked for as an overwrite rather
+   than a merge, and a merge would be the wrong answer anyway: there is no key
+   to match a hand-written achievement against a Steam one, so "merge" would
+   mean guessing by name and silently keeping duplicates of everything it
+   guessed wrong. The scrape is a deliberate act with one obvious meaning —
+   take what Steam has — so it takes it. */
+function replaceEgsAchievementsFromSteam() {
+  const made = _egsAchievementsFromSteam();
+  if (!made.length) return false;
+  state.egsAchievements = made;
+  return true;
 }
 
 /* EDITABLE THE MOMENT THEY LAND (v8.61). Until now the Steam import was a

@@ -30112,13 +30112,29 @@ textarea.egs-sp-body {
 .egs-sp .egs-sp-ach-row.is-editable { cursor: pointer; }
 .egs-sp .egs-sp-ach-row { flex-direction: column; }
 .egs-sp .egs-sp-ach-rowhead { display: flex; width: 100%; }
-.egs-sp .egs-sp-ach-row.is-open { background: var(--epic-well-fill); }
+/* ── THE OPEN ROW IS A CHIP, AND A CHIP HAS EDGES (v8.67) ────────────────
+   Opening a row fills it, which draws a box around content that was laid out
+   with no horizontal padding at all — so every field, every icon well and the
+   rule under the header ran flush into the fill's edge. The padding is the
+   blocks' own 16px, and 20px at the foot so the last field is not sitting on
+   the bottom edge either; the negative margin keeps the collapsed rows' text
+   where it was, so opening one does not shunt the list sideways. Rounded and
+   ringed because it is now a thing with a boundary rather than a tinted
+   stretch of list. */
+.egs-sp .egs-sp-ach-row.is-open {
+  background: var(--epic-well-fill);
+  box-shadow: inset 0 0 0 1px var(--epic-well-line);
+  border-bottom-color: transparent;
+  border-radius: var(--epic-well-radius);
+  padding: 20px 16px;
+  margin: 0 -16px;
+}
 
 /* The editor itself */
 .egs-sp .egs-ach-editor {
   width: 100%;
   margin-top: 20px;
-  padding: 20px 0 4px;
+  padding: 20px 0 0;
   border-top: 1px solid var(--epic-well-line);
   cursor: default;
   display: flex;

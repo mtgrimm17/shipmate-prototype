@@ -20239,15 +20239,13 @@ function buildEgsAchEditor(a) {
      than paraphrased: it is the only place that says what Hidden does to a
      player, and a paraphrase of a rule is how a prototype teaches a rule
      wrong. */
-  /* BOTH HALVES, ALWAYS, because this is a tooltip on the word "Visibility"
-     now rather than a line under the control: it has to explain the choice
-     rather than narrate the one already made. Epic's own (i) says both. */
-  const visNote = 'Shown achievements are visible to players. For locked and unlocked '
-    + 'achievements, their titles and descriptions are available to edit. '
-    + 'Hidden achievements are presented to the user without a title and description '
-    + 'until they are unlocked. In a locked state, they are presented to users as a '
-    + '"Hidden Achievement" with the icon that was uploaded for them. Only unlocked '
-    + 'title and description are available to edit for Hidden Achievements.';
+  /* BOTH HALVES, SHORT (v8.67). Epic's own (i) runs to three paragraphs,
+     two of which describe what the form does rather than what the choice
+     means — and the form is right here saying those two itself: the locked
+     fields grey out, and the row shows "Hidden Achievement". A tooltip is for
+     the part the controls cannot show. */
+  const visNote = 'Shown achievements are visible to players. Hidden achievements are '
+    + 'presented to the user without a title and description until they are unlocked.';
   const xpNote = `Each product must total exactly ${EGS_ACH_XP.total} XP. A single `
     + `achievement is a multiple of ${EGS_ACH_XP.step}, from ${EGS_ACH_XP.min} to `
     + `${EGS_ACH_XP.max} XP. Bronze ${EGS_ACH_TIERS[0].min}\u2013${EGS_ACH_TIERS[0].max}, `
