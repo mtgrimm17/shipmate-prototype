@@ -19032,14 +19032,26 @@ function buildEgsContentRatingSection() {
      the frequency's own index, so inference, the iOS mapping and the summary
      read it as before. Anything the frequency itself opens (Horrifying, Often
      → imminent threat) hangs under the row the way a YES's follow-ups do. */
+  /* AND THE SAME FOR ANY SHORT "HOW MUCH" (v8.79). Jaco: "do the first
+     three" — Gory images without a violent act (No · Limited · Moderate ·
+     Graphic), Blood unrelated to violence (No · Small · Large) and Sexual
+     violence (No · Depicted · Referred to). Same shape: a type whose only
+     follow-up is one short radio. The follow-up's short words come from
+     EGS_ROW_OVERRIDES, where its own row already had them; Rarely/Often is
+     the case with no override. A Yes/No follow-up never qualifies — that is a
+     second question, not a degree of the first. */
   function egsFreqChild(child) {
     const ks = giarcChildKeysForOption(child);
     if (ks.length !== 1) return null;
     const c = GOOGLE_IARC_BY_KEY[ks[0]];
     if (!c || c.data_type !== 'radio') return null;
     const os = giarcOptionEntries(c);
-    if (os.length !== 2 || !/^rare(ly)?$/i.test(os[0].text) || !/^often$/i.test(os[1].text)) return null;
-    return { ck: ks[0], rare: os[0].index, often: os[1].index };
+    const ovr = EGS_ROW_OVERRIDES[ks[0]];
+    if (os.length === 2 && /^rare(ly)?$/i.test(os[0].text) && /^often$/i.test(os[1].text))
+      return { ck: ks[0], opts: [{ index: os[0].index, label: 'Rarely' }, { index: os[1].index, label: 'Often' }] };
+    if (ovr && !ovr.order && os.length >= 2 && os.length <= 3 && !os.some(o => /^(yes|no)$/i.test(o.text)) && os.every(o => ovr.opts[o.index]))
+      return { ck: ks[0], opts: os.map(o => ({ index: o.index, label: ovr.opts[o.index], hint: o.text })) };
+    return null;
   }
 
   /* A FINISHED TYPE FOLDS AWAY (v8.78). Adam, via Jaco: "cuando has
@@ -19066,13 +19078,13 @@ function buildEgsContentRatingSection() {
         const no  = !yes && said.includes(o.index);
         const cm  = state.cqAnswerMeta && state.cqAnswerMeta[fq.ck];
         const fai = ai || !!(cm && cm.source && !cm.humanConfirmed);
-        const pill = (label, lit, call) => `<button type="button" class="intensity-btn giarc-pill giarc-pill-${egsPillTier(label)}${lit ? ' is-sel-none' + (fai ? ' ai-confident' : '') : ''}"
-                   onclick="${call}">${label}</button>`;
+        const pill = (label, lit, call, hint) => `<button type="button" class="intensity-btn giarc-pill giarc-pill-${egsPillTier(label)}${lit ? ' is-sel-none' + (fai ? ' ai-confident' : '') : ''}"${hint ? ` data-tip="${escHtml(hint)}"` : ''}
+                   onclick="${call}">${escHtml(label)}</button>`;
         return `
         <div class="giarc-card giarc-depth-${depth} giarc-inline giarc-typerow giarc-freqrow" data-key="${key}" data-opt="${o.index}">
           <div class="giarc-row">
             <div class="giarc-row-label"><span class="giarc-title">${egsTitleHTML(labels[o.index] || o.text)}</span>${giarcTooltip(o.text)}</div>
-            <div class="intensity-group">${pill('No', no, `answerGIARCTypeRow('${key}',${o.index},false)`)}${pill('Rarely', fv === fq.rare, `answerGIARCTypeFreq('${key}',${o.index},${fq.rare})`)}${pill('Often', fv === fq.often, `answerGIARCTypeFreq('${key}',${o.index},${fq.often})`)}</div>
+            <div class="intensity-group">${pill('No', no, `answerGIARCTypeRow('${key}',${o.index},false)`)}${fq.opts.map(f => pill(f.label, fv === f.index, `answerGIARCTypeFreq('${key}',${o.index},${f.index})`, f.hint)).join('')}</div>
           </div>
         </div>
         ${yes ? renderChildren(fq.ck, depth + 1) : ''}`;
