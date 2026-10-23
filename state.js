@@ -1690,6 +1690,12 @@ const PLATFORM_OFF_CARD_STEPS = {
        door (openStorePreviewSection's `needsInference`, app.js) as well, but
        the flag belongs to the step either way. */
     { id: 'contentRating',  label: 'Content Rating', hasInference: true  },
+    /* OFF THE CARD LIKE ITS THREE NEIGHBOURS (v8.82). The logo is reached
+       by pressing the thing it draws, at the top of the store page's own
+       panel — the same door Specifications, Social Media and Content Rating
+       took in v8.57, and for the same reason: a step whose whole subject is
+       visible on the preview does not also need a row on the card. */
+    { id: 'logo',           label: 'Logo'                                },
   ],
 };
 
@@ -3812,6 +3818,14 @@ function isEgsSectionComplete(sectionId) {
      — red while correct. */
   if (sectionId === 'socialMedia') return !!a.socialMediaSeen;
 
+  /* THE LOGO IS DONE WHEN THERE IS ONE (v8.82). Unlike Social Media, which
+     Epic files under Optional Information and which is therefore a visit,
+     the panel has a hole in it until this is answered — and a hole on the
+     store page is the one thing this preview is for showing. */
+  if (sectionId === 'logo') {
+    return typeof egsFeaturedLogo === 'function' && !!egsFeaturedLogo();
+  }
+
   /* NO 'technical' ARM (v8.42). Technical Requirements was removed from this
      card; Epic Games Store Full keeps the step, the section and this arm's
      twin below. Nothing asks this function about 'technical' for 'egs' any
@@ -3881,6 +3895,40 @@ function isEgsSectionComplete(sectionId) {
    Counts only top-level (depth 1) questions — follow-ups are implicitly
    covered since a top-level question can't be "complete" while a follow-up
    it revealed is still unanswered (see giarcIsSubtreeComplete). */
+/* ── WHAT THE LOGO STEP OFFERS (v8.82) ───────────────────────────────────
+   The scrape's own key art and logotypes, plus anything uploaded here,
+   minus anything removed here. "Key art and logotypes" is literally what
+   the asset pool calls them: `logo` is a logotype, `art-land` and
+   `art-port` are key art, and smAssetKind (assets.js) is what decided
+   which is which on the way in. Screenshots and icons are not offered —
+   a screenshot in a 16:9 contain-fit slot is a screenshot with bars. */
+const EGS_LOGO_KINDS = ['logo', 'art-land', 'art-port'];
+
+function egsLogoCandidates() {
+  const pool = (typeof smPool === 'function') ? smPool() : [];
+  const gone = state.egsLogoRemoved || [];
+  const out  = [];
+  const push = (a) => {
+    if (!a || !a.src || gone.indexOf(a.id) >= 0) return;
+    if (out.some(x => x.id === a.id)) return;
+    out.push(a);
+  };
+  /* Logotypes first within the scrape: a logotype IS the thing Epic asks
+     for, and key art is the fallback a developer crops down. */
+  EGS_LOGO_KINDS.forEach(k => pool.filter(a => a.kind === k).forEach(push));
+  (state.egsLogos || []).forEach(push);
+  return out;
+}
+
+/* The one the page draws: the chosen one if it is still there, else the
+   first candidate. Same shape as smAppTrailer's own fallback, and for the
+   same reason — a choice that has been removed must not blank the page. */
+function egsFeaturedLogo() {
+  const all = egsLogoCandidates();
+  if (!all.length) return null;
+  return all.find(a => a.id === state.egsLogoFeatured) || all[0];
+}
+
 function androidCqProgress() {
   const answered = GOOGLE_IARC_TOP_LEVEL_KEYS.filter(giarcIsAnswered).length;
   return { total: GOOGLE_IARC_TOP_LEVEL_KEYS.length, answered };
@@ -6064,6 +6112,31 @@ const state = {
      picker above — the tab strip was always drawn and never pressable, so
      half the page Epic publishes had no preview at all. */
   egsPreviewTab: 'overview',
+
+  /* ── EPIC'S PRODUCT LOGO (v8.82) ────────────────────────────────────────
+     Epic's panel opens on the product logo, above the rating card, and the
+     slot it sits in is 16:9 with the artwork CONTAINED in it — measured on
+     store.epicgames.com, where `_sidebarLogo_` computes to `aspect-ratio:
+     16 / 9` and the served file is 854x480. SM_REQS.epic already carried
+     the upload spec (960x540, PNG, max 1MB, "legible on a dark
+     background", marked official), and the two agree, so the table stays
+     the single statement of it and nothing here repeats the numbers.
+
+     A LIST AND A CHOICE, not one slot. The ask is Mac App Store's media
+     carousel: several candidates, any of them removable, more uploadable,
+     and one of them featured. So `egsLogos` is the candidates and
+     `egsLogoFeatured` is the id of the one the page draws — a separate
+     field rather than an order, because "which one is on the store page"
+     is a decision and not a side effect of sorting.
+
+     SEEDED FROM THE SCRAPE, NOT COPIED INTO IT. egsLogoCandidates (below)
+     reads the asset pool every time instead of writing the pool's images
+     in here on import: a logo the developer has not touched should follow
+     the pool when a later scrape improves it, and only a real edit — an
+     upload, a removal, a choice — puts anything in these two fields. */
+  egsLogos: [],
+  egsLogoRemoved: [],
+  egsLogoFeatured: null,
 
   /* WHICH ITEM THE MEDIA CAROUSEL IS SHOWING (v8.56). Epic's carousel is one
      list seen two ways — a stage and a strip of thumbnails under it — so the

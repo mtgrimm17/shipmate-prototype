@@ -23841,6 +23841,113 @@ function _egsGrowAll(root) {
   const scope = root && root.querySelectorAll ? root : document;
   scope.querySelectorAll('textarea[data-egs-grow]').forEach(egsGrowField);
 }
+/* ══ THE PANEL'S TRAVEL IS OURS, NOT THE BROWSER'S (v8.82) ═══════════════
+   Epic's right panel is `position: sticky`, read off its own stylesheet:
+
+     @media (min-width: 768px) {
+       ._sidebar_ { position: sticky; align-self: start; grid-column: 2;
+                    top: calc(var(--egs-sticky-header-height) + 3.75rem); }
+     }
+
+   The CSS here says the same thing and the browser honours all of it EXCEPT
+   the offset. `.egs-sp` carries `zoom: 0.6803` — the whole preview is drawn
+   at Epic's real pixel sizes and scaled to fit the modal (scale851) — and a
+   sticky element under a zoomed ancestor resolves its constraint against a
+   scrollport it cannot see properly. Measured rather than assumed: with the
+   panel's `top` set to 16px, 100px and 300px in turn, it pinned at exactly
+   the same place all three times, 237px above the scroller's top edge. The
+   offset is inert; what the panel is actually doing is running to the end
+   of its grid area and stopping, which is the one part of sticky that does
+   not need the offset.
+
+   So the travel is done here, in the engine's own units, and the CSS keeps
+   `position: sticky` for the day the engine fixes it — the rule and this
+   agree about where the panel should be, so nothing fights.
+
+   THE ARITHMETIC IS IN SCREEN PIXELS AND THE TRANSFORM IS NOT. translateY
+   applies inside the zoomed box, so a y measured on screen is divided by
+   the zoom on the way out. Everything else — where the panel starts, how
+   far it may go — is read once per arm, because reading it per scroll
+   event would be a layout flush on every frame of a drag. */
+const EGS_PANEL_PIN_PAD = 16;   // screen px below the scroller's top edge
+
+function _egsPinPanel(root) {
+  /* The caller hands us the preview itself, and querySelector does not match
+     its own root — so ask the node first and only then look inside it. */
+  const sp = (root && root.classList && root.classList.contains('egs-sp'))
+    ? root
+    : (root || document).querySelector('.egs-sp');
+  if (!sp) return;
+  const side = sp.querySelector('.egs-sp-side');
+  const cols = sp.querySelector('.egs-sp-cols');
+  const sc   = sp.closest('.submit-modal-scroll');
+  if (!side || !cols || !sc) return;
+  if (getComputedStyle(side).position !== 'sticky') return;  // one-column layout
+
+  /* ── ONE UNIT SYSTEM, AND IT IS THE LAYOUT'S ───────────────────────────
+     Four passes tried to do this arithmetic in screen pixels and convert at
+     the end, and every one of them was wrong by a clean factor somewhere:
+     a rect read inside the zoomed box, a scrollTop read outside it, and a
+     transform applied in a third space are three different units that all
+     print as "px". The error was never the conversion, it was having three.
+
+     So nothing here reads a rect except once, to find where the preview
+     begins inside the scroller. Everything else is offsetTop / offsetHeight,
+     which are the zoomed box's own layout units — the same units translateY
+     takes, so the value goes out unconverted. The scroller's scrollTop is
+     the one number from outside, and it is divided by the zoom on the way
+     in, where there is exactly one place to get it wrong. */
+  const z = parseFloat(getComputedStyle(sp).zoom) || 1;
+  const paint = () => {
+    /* Cleared first, so every reading below is of where the panel BELONGS
+       rather than where the last frame put it. offsetTop was tried instead
+       and is the wrong tool here: .egs-sp-side's offsetParent is the modal,
+       not the preview, so walking that chain leaves the zoomed box without
+       noticing and the sum means nothing. */
+    side.style.transform = '';
+    const spb = sp.getBoundingClientRect();
+    const scb = sc.getBoundingClientRect();
+    /* How far the preview's top has gone past the scroller's, and where the
+       panel sits inside the preview — both in the preview's own units, which
+       is what translateY will take back unconverted. */
+    const gone = (scb.top - spb.top) / z;
+    const nat  = (side.getBoundingClientRect().top - spb.top) / z;
+    /* How far it may travel: to the bottom of the column it shares with the
+       page, never past it. That is sticky's own second constraint, so this
+       and the CSS agree — and it is why the panel lets go once the
+       two-column block has gone by, as Epic's does when its grid ends.
+
+       MEASURED FROM WHERE THE PANEL ACTUALLY STARTS, not from the column's
+       top. `cols.offsetHeight - side.offsetHeight` assumes the two begin on
+       the same line; the panel begins a little below it, and the difference
+       is how far past the bottom of its own column the panel was being
+       carried — 254px at the foot of a long page. */
+    const colsTop = (cols.getBoundingClientRect().top - spb.top) / z;
+    const room = Math.max(0, (colsTop + cols.offsetHeight) - (nat + side.offsetHeight));
+    const y    = Math.max(0, Math.min(gone + (EGS_PANEL_PIN_PAD / z) - nat, room));
+    if (y > 0.5) side.style.transform = `translateY(${y.toFixed(2)}px)`;
+  };
+  const measure = () => { paint(); };
+  if (side._egsPinned) { measure(); return; }
+  side._egsPinned = true;
+  sc.addEventListener('scroll', paint, { passive: true });
+  window.addEventListener('resize', measure, { passive: true });
+  measure();
+}
+
+(function _armEgsPin() {
+  const arm = () => {
+    if (window._egsPinArmed) return;
+    window._egsPinArmed = true;
+    new MutationObserver(() => {
+      const sp = document.querySelector('.submit-modal .egs-sp');
+      if (sp) _egsPinPanel(sp);
+    }).observe(document.body, { childList: true, subtree: true });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arm);
+  else arm();
+})();
+
 (function _armEgsGrow() {
   const arm = () => {
     if (window._egsGrowArmed) return;
@@ -25520,6 +25627,67 @@ function removeSteamKeyArtHeaderImage() {
    would otherwise land straight back in the bin it had never been in), it
    appends to `order` so the new shot lands at the END where a new one belongs,
    and it opens it in the stage — you added it to look at it. */
+/* ── THE LOGO STEP'S FOUR HANDLERS (v8.82) ───────────────────────────────
+   Featuring, removing, restoring and uploading. All four write to
+   state.egsLogos / egsLogoRemoved / egsLogoFeatured and then repaint,
+   because the step and the panel behind it draw the same list and have to
+   agree. */
+function featureEgsLogo(id) {
+  state.egsLogoFeatured = id;
+  _egsProductRepaint();
+  renderDashboard();
+}
+
+/* Removing is a LISTING decision, not a deletion: the asset stays in the
+   pool and every other store page keeps it, exactly as a screenshot
+   removed from one platform's listing does (platformScreenshots.removed).
+   That is also why it is reversible. */
+function removeEgsLogo(id) {
+  state.egsLogoRemoved = state.egsLogoRemoved || [];
+  if (state.egsLogoRemoved.indexOf(id) < 0) state.egsLogoRemoved.push(id);
+  state.egsLogos = (state.egsLogos || []).filter(a => a.id !== id);
+  if (state.egsLogoFeatured === id) state.egsLogoFeatured = null;
+  _egsProductRepaint();
+  renderDashboard();
+}
+
+function restoreEgsLogos() {
+  state.egsLogoRemoved = [];
+  _egsProductRepaint();
+  renderDashboard();
+}
+
+/* An upload goes straight into egsLogos rather than into the asset pool:
+   the pool is the project's media library and a logo chosen for ONE
+   storefront is not a project-wide asset. (A developer who wants it
+   everywhere drops it in Assets, where it arrives as a logotype and shows
+   up here on its own through egsLogoCandidates.) */
+function handleEgsLogoFiles(files) {
+  if (!files || !files.length) return;
+  const list = Array.from(files).filter(f => f.type.startsWith('image/'));
+  if (!list.length) return;
+  let pending = list.length, lastId = null;
+  list.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const id = 'egslogo-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+      state.egsLogos = state.egsLogos || [];
+      state.egsLogos.push({ id, kind: 'logo', name: file.name, src: ev.target.result,
+                            origin: 'upload' });
+      lastId = id;
+      if (--pending === 0) {
+        /* The first thing uploaded into an empty step is plainly the one
+           meant for the page; a later one is a candidate until chosen. */
+        if (!state.egsLogoFeatured) state.egsLogoFeatured = lastId;
+        _egsProductRepaint();
+        renderDashboard();
+      }
+    };
+    reader.onerror = () => { if (--pending === 0) _egsProductRepaint(); };
+    reader.readAsDataURL(file);
+  });
+}
+
 function handlePlatformScreenshotFiles(pid, files) {
   if (!files || !files.length) return;
   const ps = _shotEdPs(pid);

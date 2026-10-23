@@ -7531,6 +7531,7 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
     else if (stepId === 'productDetails')     body = buildEgsProductDetailsSection();
     else if (stepId === 'specifications')     body = buildEgsSpecificationsSection();
     else if (stepId === 'socialMedia')        body = buildEgsSocialMediaSection();
+    else if (stepId === 'logo')               body = buildEgsLogoSection();
     else if (stepId === 'localizations')      body = buildEgsLocalizationsSection();
     else if (stepId === 'screenshots')        body = buildScreenshotsSection(platformId);
     else if (stepId === 'improveSubmission')  body = buildImproveSubmissionSection(platformId);
@@ -20207,6 +20208,62 @@ function buildEgsSpecificationsSection() {
         onChange: `setEgsProductText('specsNotes', this.value)` })}`;
 }
 
+/* ── EPIC'S PRODUCT LOGO (v8.82) ──────────────────────────────────────────
+   Mac App Store's media carousel is the model, as asked, and the three
+   things it does are the three this does: a strip of candidates with the
+   chosen one marked, a × on each to take it out, and a + slot that opens
+   the file picker. What it does NOT take from that section is the cropper.
+   Epic's slot is `object-fit: contain` — the artwork is letterboxed into
+   16:9, never cut — so there is no crop to decide and a zoom slider beside
+   a picture that is plainly whole would be the interface describing itself
+   (buildScreenshotsSection's own words about the trailer).
+
+   The strip's tiles are drawn ON THE SLOT'S OWN SHAPE and ground: 16:9,
+   contained, over the page's dark panel. A logotype is usually a
+   transparent PNG, and a transparent PNG on a white tile is a different
+   picture from the one the store will show. */
+function buildEgsLogoSection() {
+  const all      = (typeof egsLogoCandidates === 'function') ? egsLogoCandidates() : [];
+  const featured = (typeof egsFeaturedLogo === 'function') ? egsFeaturedLogo() : null;
+  const req      = (typeof SM_REQS !== 'undefined' && (SM_REQS.epic || []).find(r => r.k === 'logo')) || null;
+  const delSVG   = (typeof smCrossSVG === 'function') ? smCrossSVG() : '&times;';
+
+  const tiles = all.map(a => `
+    <div class="egs-logo-tile${featured && a.id === featured.id ? ' is-featured' : ''}"
+         data-logo-id="${escHtml(a.id)}"
+         title="${escHtml(a.name || 'Logo')}"
+         onclick="featureEgsLogo('${egsJsStr(a.id)}')">
+      <img src="${escHtml(a.src)}" alt="" draggable="false">
+      <button class="egs-logo-del" title="Remove from this listing"
+              onclick="event.stopPropagation(); removeEgsLogo('${egsJsStr(a.id)}')">${delSVG}</button>
+      ${featured && a.id === featured.id
+        ? `<span class="egs-logo-badge">On the page</span>` : ''}
+    </div>`).join('');
+
+  const addSlot = `
+    <label class="egs-logo-add" title="Upload a logo">
+      <span class="egs-logo-add-plus">+</span>
+      <input type="file" accept="image/*" multiple hidden
+             onchange="handleEgsLogoFiles(this.files)">
+    </label>`;
+
+  const restore = (state.egsLogoRemoved || []).length
+    ? `<button type="button" class="egs-logo-restore"
+               onclick="restoreEgsLogos()">Restore ${(state.egsLogoRemoved || []).length} removed</button>`
+    : '';
+
+  return `
+    <p class="ios-section-desc">Epic prints one of these at the top of the
+      panel on your product home page. Pick the one it should use; the rest
+      stay here.${req ? ` Epic asks for <b>${req.w} &times; ${req.h}</b>${
+        req.note ? ' &mdash; ' + escHtml(req.note) : ''}` : ''}</p>
+    <div class="egs-logo-strip">${tiles}${addSlot}</div>
+    ${all.length ? '' : `<div class="form-hint" style="margin-top:10px;">Nothing yet.
+      Key art and logotypes picked up from Steam land here on their own, or
+      upload one above.</div>`}
+    ${restore}`;
+}
+
 function buildEgsSocialMediaSection() {
   const a    = state.egsSubmitAnswers;
   const soc  = a.social || {};
@@ -20778,8 +20835,30 @@ function buildEgsStorePreviewSection() {
   const platforms = EGS_SPEC_OS.filter(o => a.specs[o.id].supported === 'yes')
                                .map(o => o.id === 'mac' ? 'macOS' : o.label);
 
+  /* ── THE PANEL OPENS ON THE LOGO (v8.82) ────────────────────────────
+     Epic's own panel does, above the rating card, in a slot measured on
+     store.epicgames.com: `aspect-ratio: 16 / 9` with the artwork
+     `object-fit: contain`. Contained and not covered, because a logotype
+     is a shape on transparency — cropping one to fill a box cuts the
+     wordmark, which is the one thing it cannot survive.
+
+     IT IS A DOOR LIKE THE REST OF THIS PAGE. Filled or empty it opens the
+     Logo step, and it wears the same well every other editable region here
+     wears, through egsHitCls — so an empty slot reads as something to
+     answer rather than as a gap. */
+  const logoPick = (typeof egsFeaturedLogo === 'function') ? egsFeaturedLogo() : null;
+  const logoHtml = `
+    <div class="egs-sp-logo ${egsHitCls(!!logoPick)}" data-spp-el="logo"
+         onclick="openStepModal('egs','logo')"
+         title="${logoPick ? 'Edit the product logo' : 'Add a product logo'}">
+      ${logoPick
+        ? `<img src="${escHtml(logoPick.src)}" alt="">`
+        : `<span class="egs-spp-placeholder">Product logo</span>`}
+    </div>`;
+
   const sideHtml = `
     <aside class="egs-sp-side">
+      ${logoHtml}
       ${ratingHtml}
       <div class="egs-sp-biz${(state.storePreviewFocus || {}).egs === 'business' ? ' is-focus' : ''}" data-spp-el="business">
       <span class="egs-sp-basegame">Base Game</span>

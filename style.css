@@ -29421,14 +29421,42 @@ textarea.egs-sp-body {
   /* The 48 the carousel used to take from .egs-sp-main's own gap (v8.73). */
   row-gap: 48px;
   grid-template-columns: minmax(0, 1fr) 300px;
-  /* TOP AND BOTTOM TOGETHER (v8.73). The carousel and the panel are the two
-     cells of row 1, so the row is as tall as the taller of them and `stretch`
-     gives that height to both — the carousel's ring and the panel's frame
-     start and end on the same two lines whatever either contains. */
-  align-items: stretch;
+  /* TOPS TOGETHER, BOTTOMS FREE (v8.82). v8.73 stretched both cells of row
+     1 so the carousel's ring and the panel's frame ended on one line, and
+     v8.77 paid 13px of padding to put the frame exactly there. Both go:
+     Epic's panel does not end where the carousel ends, it STICKS, and a
+     stretched cell can never stick — sticky positions an element inside its
+     containing block, and a cell stretched to the row's full height has no
+     room left to move in. `start` is what Epic sets for the same reason. */
+  align-items: start;
 }
 .egs-sp .egs-sp-cols > .egs-sp-car  { grid-column: 1; grid-row: 1; }
-.egs-sp .egs-sp-cols > .egs-sp-side { grid-column: 2; grid-row: 1; }
+/* ── EPIC'S PANEL IS STICKY, AND THIS IS EPIC'S OWN RULE (v8.82) ─────────
+   Read off store.epicgames.com's stylesheet rather than guessed:
+
+     @media (min-width: 768px) {
+       ._sidebar_ { position: sticky; grid-column: 2; align-self: start;
+                    top: calc(var(--egs-sticky-header-height) + 3.75rem); }
+     }
+
+   Three things in it and all three are load-bearing. `grid-column: 2` with
+   no row, so the panel's containing block is the WHOLE column and not the
+   first row of it — that is the track it slides along. `align-self: start`,
+   so it keeps its own height and has somewhere to slide. And a `top` offset
+   that on Epic clears its two sticky navs (80px + 60px); this modal has no
+   navs over the page, so the offset is the preview's own top padding —
+   copying Epic's 140 would park the panel a third of the way down a box
+   that starts at the top of the scroller.
+
+   The row the panel shares with the carousel still sets where it STARTS,
+   which is what keeps their two tops level. */
+.egs-sp .egs-sp-cols > .egs-sp-side {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
+  position: sticky;
+  top: 16px;
+}
 .egs-sp .egs-sp-cols > .egs-sp-main { grid-column: 1; grid-row: 2; }
 /* Under 820px the grid is one column (the base rule below), so the explicit
    cells have to go or all three would be stacked into row 1. DOM order is
@@ -29438,26 +29466,22 @@ textarea.egs-sp-body {
   .egs-sp .egs-sp-cols > .egs-sp-car,
   .egs-sp .egs-sp-cols > .egs-sp-side,
   .egs-sp .egs-sp-cols > .egs-sp-main { grid-column: 1; grid-row: auto; }
+  /* One column means the panel is a block in the flow, and a sticky block
+     with nothing beside it just pins itself over the text below. Epic scopes
+     its own sticky to min-width 768 for the same reason. */
+  .egs-sp .egs-sp-cols > .egs-sp-side { position: static; }
 }
-/* THE PANEL'S OWN FRAME REACHES THE BOTTOM LINE. .egs-sp-side is a flex
-   column and the Base Game frame is its last child, so without this a row
-   made taller by the carousel would leave the frame's bottom edge short of
-   the carousel's while the cell itself stretched — aligned boxes, unaligned
-   lines, which is the only part anyone can see. */
-.egs-sp .egs-sp-side > .egs-sp-biz { flex: 1 1 auto; }
-/* AND THE LINE IT HAS TO REACH IS 13px LOWER THAN ITS BOX (v8.77). Jaco:
-   "el fondo de la caja del carrusel queda un poco más alto que el de Base
-   Game." Base Game's visible frame is not its border — it is a ::before
-   laid over it at `inset: -13px`, so the frame is painted 13px outside the
-   element on every side and its bottom edge falls 13px BELOW the box that
-   v8.73 lined the carousel up with. Both boxes ended on 860.52 and the two
-   edges a reader sees were 13px apart; a measurement of the boxes could
-   never have caught it, which is why align873 now reads the ::before.
-
-   The column pays that 13px as padding, so the box stops 13px short of the
-   row's bottom line and the frame drawn around it lands exactly on it —
-   where the carousel's own ring, which IS its edge, already is. */
-.egs-sp .egs-sp-cols > .egs-sp-side { padding-bottom: 13px; }
+/* v8.73's `flex: 1 1 auto` on the Base Game frame is GONE (v8.82). It
+   existed to push the frame's bottom edge down to a stretched cell's bottom
+   line; there is no stretched cell any more, and left in place it would grow
+   the frame to fill a panel whose height is now its own content. */
+/* v8.77's 13px of bottom padding is GONE TOO (v8.82), and for the same
+   reason as the flex above: it existed so Base Game's ::before frame — which
+   is painted at inset -13px, 13px outside its own box — would land on the
+   stretched cell's bottom line. Nothing is stretched now and nothing has to
+   meet that line, so the padding would only be a gap under the panel. The
+   ::before's offset is still a fact about this page, and align873 still
+   reads it; it simply has nothing left to line up with. */
 /* The picture sits in the middle of whatever height the row hands over,
    rather than at the top with the slack below it. 16:9 is untouched: the
    stage is still sized from the column's width (car856 owns that). */
@@ -29470,7 +29494,16 @@ textarea.egs-sp-body {
    go-ape-ship: 367px each of a 750px row. */
 .egs-sp .egs-sp-tagcols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 24px; }
 .egs-sp .egs-sp-sysgrid { grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr); }
-.egs-sp .egs-sp-main { gap: 48px; }
+.egs-sp .egs-sp-main {
+  gap: 48px;
+  /* AND THE BODY'S COUNTER HANGS OUT OF THE BOTTOM OF IT (v8.82), the same
+     way the headline's hangs into the headline block's own margin. Without
+     this the number sat across the top of the Social Media block — 17px of
+     room for something that needs 27. It takes the gap from the long
+     description to that block to 48, which is Epic's one vertical measure
+     and what the three blocks above already use. */
+  padding-bottom: 31px;
+}
 .egs-sp .egs-sp-side { gap: 12px; }
 
 /* Prose — short description and body alike: 16 / 400 / 0.16px / 26.4px, and
@@ -29553,6 +29586,26 @@ textarea.egs-sp-body {
    Measured on Epic's own pages. Unrated the card is one line and centres on
    it; rated it is three or four, so the mark goes to the top and the text
    column carries the rest. */
+/* ── THE PRODUCT LOGO SLOT (v8.82) ───────────────────────────────────────
+   16:9 and contained, measured on Epic's own `_sidebarLogo_`. The box keeps
+   its shape whether or not there is art in it, so adding a logo never moves
+   the panel under it — and the carousel's top, which is lined up with this
+   box's top, never moves either. */
+.egs-sp .egs-sp-logo {
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 12px;
+  margin-bottom: 4px;
+}
+.egs-sp .egs-sp-logo img {
+  max-width: 100%; max-height: 100%;
+  width: auto; height: auto;
+  object-fit: contain;
+  display: block;
+}
 .egs-sp .egs-sp-rating.is-rated { align-items: flex-start; }
 .egs-sp .egs-sp-rating-text { gap: 4px; flex: 1 1 auto; }
 .egs-sp .egs-sp-rating-desc {
@@ -29816,8 +29869,15 @@ textarea.egs-sp-body {
    the headline/body pair became one block in render.js rather than two
    siblings that each bought 48px. */
 .egs-sp .egs-sp-long { display: block; }
-/* The headline is an h2 with 20px under it, measured on the same page. */
-.egs-sp .egs-sp-long .egs-sp-headline-wrap { margin: 0 0 20px; }
+/* The headline is an h2 with 20px under it, measured on the same page —
+   and since v8.82 it pays for the line its counter stands on as well. The
+   counter is out of flow, so it costs no LINE, but it still occupies space
+   a reader can see, and in 20px it sat across the top of the body box. 6px
+   of clearance, the number's own ~16, and 6 before the body: 48, of which
+   the 20 Epic measures is the part below the counter. Nothing else in the
+   column needs this — the other two counters hang in gaps that are already
+   48. */
+.egs-sp .egs-sp-long .egs-sp-headline-wrap { margin: 0 0 48px; }
 .egs-sp .egs-sp-locrow { display: flex; justify-content: flex-end; margin-bottom: 8px; }
 
 /* ── EPIC'S MEDIA CAROUSEL (v8.56) ───────────────────────────────────────
@@ -30446,43 +30506,57 @@ textarea.egs-sp-body {
 .egs-sp .egs-sp-long .egs-sp-fieldrow { position: relative; }
 .egs-sp .egs-sp-main > .egs-sp-fieldrow > .egs-sp-edit,
 .egs-sp .egs-sp-long .egs-sp-fieldrow > .egs-sp-edit { flex: 1 1 100%; width: 100%; }
-/* ── BESIDE THE CORNER, NOT UNDER IT (v8.73) ─────────────────────────────
-   Under the box was never free, and the headline is where that showed: its
-   block pays 20px to the body below it, the counter wanted 20 of its own in
-   the same place, and the body's row — also positioned, and later in the
-   tree — painted straight over it. The number had been drawn correctly and
-   invisibly since v8.69.
+/* ── BENEATH THE CORNER, WITH ROOM TO BE THERE (v8.82) ───────────────────
+   Third placement and the first that is both. v8.54 put the number beside
+   the box to stop it costing a line; v8.73 moved it into the gutter because
+   beneath was where the headline's counter had been invisible since v8.69 —
+   painted correctly into the 20px the headline pays the body, and then
+   painted OVER by the body's own row, which is positioned too and later in
+   the tree.
 
-   The gutter is where the room actually is. Column 1 is 700 wide and these
-   fields are 732 (they bleed 16 each side to line up with the blocks), so
-   the field's right edge stops 40px short of the panel's column. A 34px
-   number 6px clear of the field fits in that 40 exactly, and the panel's
-   own content ends above the first of the three in any case.
+   Beneath is what was actually wanted, so beneath it goes, with the two
+   things that were missing the first time:
 
-   The over-limit sentence does NOT follow it there: 160px of prose has
-   nowhere to go in a 40px gutter, so it keeps the line under the field's
-   right-hand end, which is empty except when something is wrong. */
+     - z-index. The counter and the next field's row are both positioned
+       with `z-index: auto`, so tree order decided which one a reader saw.
+       A number that is drawn and then covered is the worst of both.
+     - somewhere to be. Out of flow it costs no line, but it still occupies
+       space a reader can see, and in a 20px gap it sat across the top of
+       the body box. The headline block's own margin is what pays for it,
+       below — and only the headline's, because the other two sit in the
+       48px gaps Epic's column already has. */
+.egs-sp .egs-sp-main > .egs-sp-fieldrow,
+.egs-sp .egs-sp-long .egs-sp-fieldrow { position: relative; }
+.egs-sp .egs-sp-main > .egs-sp-fieldrow > .egs-sp-edit,
+.egs-sp .egs-sp-long .egs-sp-fieldrow > .egs-sp-edit { flex: 1 1 100%; width: 100%; }
 .egs-sp .egs-sp-main > .egs-sp-fieldrow > .ias-char-counter-row,
 .egs-sp .egs-sp-long .egs-sp-fieldrow > .ias-char-counter-row {
   position: absolute;
-  left: 100%;
-  /* -7px, NOT 0. These fields carry `margin: -7px 0` so their line sits on
-     the blocks' line, which means the row's own box ends 7px ABOVE the
-     field's painted bottom edge — and `bottom: 0` put the number that far
-     up the side of the box instead of level with its corner. */
-  bottom: -7px;
-  width: 34px;
-  margin: 0 0 0 6px;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
+  /* The fields pull their line 7px up with `margin: -7px 0`, so the row's
+     own box ends 7px above the field's painted edge — v8.73's note. 100%
+     plus that, and the gap below is measured from the edge a reader sees. */
+  top: calc(100% + 7px);
+  right: 0;
+  width: auto;
+  margin: 6px 0 0;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 10px;
   pointer-events: none;
+  z-index: 1;
 }
-/* The headline is the one field that zeroes that bottom margin (its wrap
-   pays Epic's 20px to the body instead), so its row already ends on the
-   field's edge and it takes none of the correction above. */
+/* The headline's input zeroes that bottom margin (its wrap pays Epic's 20px
+   to the body instead), so its row already ends on the field's edge. */
 .egs-sp .egs-sp-long .egs-sp-headline-wrap .egs-sp-fieldrow > .ias-char-counter-row {
-  bottom: 0;
+  top: 100%;
+}
+.egs-sp .egs-sp-main > .egs-sp-fieldrow > .ias-char-counter-row .ias-char-error,
+.egs-sp .egs-sp-long .egs-sp-fieldrow > .ias-char-counter-row .ias-char-error {
+  position: static;
+  max-width: 220px;
+  text-align: right;
+  line-height: 1.35;
 }
 .egs-sp .egs-sp-main > .egs-sp-fieldrow > .ias-char-counter-row > .ias-char-error,
 .egs-sp .egs-sp-long .egs-sp-fieldrow > .ias-char-counter-row > .ias-char-error {
@@ -31023,3 +31097,78 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .egs-fold:hover { background: rgba(255,255,255,.10); color: var(--text); }
 .egs-fold svg { transition: transform .2s ease; transform: rotate(180deg); }
 .egs-fold.is-folded svg { transform: none; }
+
+
+/* ── THE LOGO STEP'S STRIP (v8.82) ───────────────────────────────────────
+   Mac App Store's media carousel, minus the cropper: tiles on the slot's own
+   shape and ground, the featured one ringed, a × on each and a + at the end.
+   The 16:9 and the dark tile are not decoration — a transparent logotype on
+   a light tile is a different picture from the one the store will draw. */
+.egs-logo-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+.egs-logo-tile,
+.egs-logo-add {
+  position: relative;
+  flex: 0 0 auto;
+  width: 176px;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: var(--bg, #0d0d10);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+  cursor: pointer;
+  transition: box-shadow .12s ease, border-color .12s ease;
+}
+.egs-logo-tile img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.egs-logo-tile:hover { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .34); }
+.egs-logo-tile.is-featured { border-color: var(--pill-on-color, #52BAFF); }
+.egs-logo-badge {
+  position: absolute; left: 6px; bottom: 6px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--pill-on-color, #52BAFF);
+  color: #06131d;
+  font-size: 10px; font-weight: 700; letter-spacing: .3px;
+}
+.egs-logo-del {
+  position: absolute; top: 5px; right: 5px;
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .66);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.egs-logo-del svg { width: 9px; height: 9px; }
+.egs-logo-tile:hover .egs-logo-del,
+.egs-logo-del:focus-visible { opacity: 1; }
+.egs-logo-add {
+  border: 1px dashed rgba(255, 255, 255, .22);
+  box-shadow: none;
+  color: var(--text-faint);
+}
+.egs-logo-add:hover { border-color: rgba(255, 255, 255, .44); color: var(--text); }
+.egs-logo-add-plus { font-size: 24px; line-height: 1; }
+.egs-logo-restore {
+  margin-top: 12px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.egs-logo-restore:hover { color: var(--text); }
