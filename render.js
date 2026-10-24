@@ -22762,20 +22762,19 @@ function buildSteamStorePreviewPrototypeSection() {
   // Release Date — the exact same state.webSite.releaseDate field the
   // preview website's own "About" > Release Date sub-section reads (see its
   // comment in buildWebSitePreviewSection above, and webSite.releaseDate's
-  // own comment in state.js): free text, auto-populated once from Steam's
-  // appdetails 'release_date' when the linked title has one
-  // (_applySteamAboutData, app.js), otherwise "Coming soon" — but unlike
-  // that read-only display, editable inline here the same way
-  // Developer/Publisher are (an <input>, not a flip-to-a-panel field), per
-  // request. Falls back to the literal string for its VALUE (not just a
-  // placeholder) so the field always shows real, editable text rather than
-  // ever looking blank. releaseDateSet tracks whether that's a REAL answer
-  // or still just the "Coming soon" filler, so the field can carry the same
-  // unanswered mark every other field here does (.steam-spp-edit.is-todo
-  // since v8.89; Developer/Publisher just above follow the identical
-  // "raw value" vs. "decorated fallback" split).
-  const releaseDateSet = !!(ws.releaseDate && ws.releaseDate.trim());
-  const releaseDateRaw = releaseDateSet ? ws.releaseDate.trim() : 'Coming soon';
+  // own comment in state.js): auto-populated from /game's own releaseDate
+  // when the linked title has one (_applySteamAboutData, app.js),
+  // otherwise "Coming soon".
+  //
+  // READ ONLY SINCE v8.92, by request, which reverses the version that
+  // made it an <input> "the same way Developer/Publisher are". The two
+  // are not the same: a developer writes their studio name, and nobody
+  // writes a release date onto a store page — Steam prints whatever the
+  // release plan says. It is rendered like All Reviews above it, and the
+  // string is steamReleaseDateText's, not this function's.
+  /* steamReleaseDateText (state.js) owns the empty case and the one
+     reformat, so this is the string either way. */
+  const releaseDateText = steamReleaseDateText(ws.releaseDate);
 
   // Media carousel — up to two trailers first (the Steam-fetched one with a
   // real playable asset, then the general Assets-tab upload, which has none
@@ -22896,7 +22895,13 @@ function buildSteamStorePreviewPrototypeSection() {
      without a full reRenderStepModal() call. */
   const headerHtml = `
     <div class="steam-spp-apphub">
-      <div class="steam-spp-fieldrow steam-spp-titlerow">
+      <!-- THE NUMBER SITS BESIDE THE TITLE (v8.92). In the gutter it was
+           painted into the top of the header image below, which is the
+           one place on this page with no room under a field: the title
+           row is the last thing before the highlights. Beside it, in the
+           row it already shares with Community Hub, it costs no vertical
+           space at all and the field gives up the width instead. -->
+      <div class="steam-spp-titlerow">
         <input type="text" class="steam-spp-apphub-name steam-spp-edit${titleRaw ? '' : ' is-todo'}${
                  titleRaw.length > STEAM_PAGE_LIMITS.name ? ' is-over-limit' : ''}" id="steam-spp-title-input"
                value="${escHtml(titleRaw)}" placeholder="Your Game Title"
@@ -23056,24 +23061,33 @@ function buildSteamStorePreviewPrototypeSection() {
         <span class="steam-spp-label">All Reviews:</span>
         <span class="steam-spp-muted">No user reviews</span>
       </div>
+      <!-- RELEASE DATE IS PRINTED, NOT TYPED (v8.92), by request. It is
+           the one row here that is not a developer's sentence: Steam
+           publishes whatever the release plan says, and /game hands it
+           back already written ("Feb 19, 2026", "Q1 2026", or nothing at
+           all, which prints as Coming soon). A box with a counter invited
+           a developer to edit a value that is not theirs to write on this
+           page, and the counter then had nothing real to count. Rendered
+           like All Reviews above it, which is the other printed row. -->
       <div class="steam-spp-devrow"><span class="steam-spp-label">Release Date:</span>
-        <input type="text" class="steam-spp-inline-input steam-spp-edit${releaseDateSet ? '' : ' is-todo'}${
-                 releaseDateRaw.length > STEAM_PAGE_LIMITS.releaseDate ? ' is-over-limit' : ''}" id="steam-spp-releasedate-input" value="${escHtml(releaseDateRaw)}"
-               oninput="_steamSppSetField('releaseDate', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.releaseDate}); this.classList.toggle('is-todo', !this.value)">
-        ${_steamSppCounter(releaseDateRaw, STEAM_PAGE_LIMITS.releaseDate)}</div>
+        <span class="steam-spp-printed" id="steam-spp-releasedate">${escHtml(releaseDateText)}</span></div>
       <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span>
-        <input type="text" class="steam-spp-inline-input steam-spp-edit${devRaw ? '' : ' is-todo'}${
-                 devRaw.length > STEAM_PAGE_LIMITS.developer ? ' is-over-limit' : ''}" id="steam-spp-dev-input" value="${escHtml(devRaw)}"
-               placeholder="Developer Name"
-               oninput="_steamSppDevPubInput('developer', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.developer})">
-        ${_steamSppCounter(devRaw, STEAM_PAGE_LIMITS.developer)}</div>
+        <div class="steam-spp-fieldrow steam-spp-devfield">
+          <input type="text" class="steam-spp-inline-input steam-spp-edit${devRaw ? '' : ' is-todo'}${
+                   devRaw.length > STEAM_PAGE_LIMITS.developer ? ' is-over-limit' : ''}" id="steam-spp-dev-input" value="${escHtml(devRaw)}"
+                 placeholder="Developer Name"
+                 oninput="_steamSppDevPubInput('developer', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.developer})">
+          ${_steamSppCounter(devRaw, STEAM_PAGE_LIMITS.developer)}
+        </div></div>
       ${devStatusHtml}
       <div class="steam-spp-devrow steam-spp-devrow-close"><span class="steam-spp-label">Publisher:</span>
-        <input type="text" class="steam-spp-inline-input steam-spp-edit${pubRaw ? '' : ' is-todo'}${
-                 pubRaw.length > STEAM_PAGE_LIMITS.publisher ? ' is-over-limit' : ''}" id="steam-spp-pub-input" value="${escHtml(pubRaw)}"
-               placeholder="Publisher Name"
-               oninput="_steamSppDevPubInput('publisher', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.publisher})">
-        ${_steamSppCounter(pubRaw, STEAM_PAGE_LIMITS.publisher)}</div>
+        <div class="steam-spp-fieldrow steam-spp-devfield">
+          <input type="text" class="steam-spp-inline-input steam-spp-edit${pubRaw ? '' : ' is-todo'}${
+                   pubRaw.length > STEAM_PAGE_LIMITS.publisher ? ' is-over-limit' : ''}" id="steam-spp-pub-input" value="${escHtml(pubRaw)}"
+                 placeholder="Publisher Name"
+                 oninput="_steamSppDevPubInput('publisher', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.publisher})">
+          ${_steamSppCounter(pubRaw, STEAM_PAGE_LIMITS.publisher)}
+        </div></div>
       ${pubStatusHtml}
       <div class="steam-spp-tags">
         <div class="steam-spp-tags-inner steam-spp-hit${hasTags ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','tags')">

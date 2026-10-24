@@ -18484,6 +18484,12 @@ function _steamSppTitleInput(value) {
    same as before. */
 function _steamSppSetField(field, value) {
   if (!state.webSite) return;
+  /* 'releaseDate' no longer arrives here (v8.92): the preview prints that
+     row rather than offering a box, so the field's one writer is the
+     scrape. The arm stays because this helper is the preview's general
+     way into webSite and releaseDate is not a localized field — routing
+     it through _steamSetFieldValue would give it a per-language copy it
+     has no use for. */
   if (field === 'releaseDate') { state.webSite.releaseDate = value; return; }
   const key = field === 'shortDesc' ? 'description' : field;
   const lang = _steamEffectivePreviewLang();

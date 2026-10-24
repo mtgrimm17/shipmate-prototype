@@ -5572,8 +5572,38 @@ const STEAM_PAGE_LIMITS = {
   name:        100,   /* longest store names run to about 80 */
   developer:   128,   /* a list, not a name: "Sound Games, Lightfox Games" */
   publisher:   128,
-  releaseDate:  40,   /* "Feb 19, 2026", "Coming soon", "Q1 2026" */
+  /* RELEASE DATE IS NOT HERE (v8.92). It had a limit for one version,
+     because it had a box to type in. It no longer does: the field is read
+     only and its one writer is the scrape, so there is nothing for a
+     developer to run past and nothing to count. */
 };
+
+/* ══ THE RELEASE DATE, AS THE PAGE PRINTS IT (v8.92) ════════════════
+   /game returns releaseDate as { comingSoon, date }, and `date` is already
+   a display string in English — "Feb 19, 2026" for a dated title, a window
+   like "Q1 2026" for an announced one, and an empty string for a title
+   with no date at all. Steam prints whichever of those it has, so mostly
+   this passes the string through.
+
+   THE ONE THING IT REFORMATS is an ISO date. The endpoint does not send
+   one, but Shipmate's own date picker stores YYYY-MM-DD
+   (state.formData.releaseDate), and a page that printed "2026-02-19"
+   where Steam prints "19 Feb, 2026" would be showing a developer a date
+   format their store page will never use. Empty becomes "Coming soon",
+   which is what Steam shows and what this field already defaulted to. */
+const STEAM_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun',
+                      'Jul','Aug','Sep','Oct','Nov','Dec'];
+function steamReleaseDateText(raw) {
+  const v = (raw == null ? '' : String(raw)).trim();
+  if (!v) return 'Coming soon';
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (iso) {
+    const m = STEAM_MONTHS[parseInt(iso[2], 10) - 1];
+    /* Steam's own order on a store page: "19 Feb, 2026". */
+    if (m) return parseInt(iso[3], 10) + ' ' + m + ', ' + iso[1];
+  }
+  return v;
+}
 
 
 /* ── Application State ───────────────────────────────── */

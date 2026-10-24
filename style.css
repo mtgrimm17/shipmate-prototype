@@ -31881,3 +31881,59 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 /* The title's number goes in the gutter under the field, like the long
    ones: the row it shares is the Community Hub button's too. */
 .steam-spp-proto .steam-spp-titlerow > .ias-char-counter-row { margin-top: 0; }
+
+/* ══ THREE PLACEMENTS ON THE GLANCE COLUMN (v8.92) ═══════════════════════
+
+   THE TITLE'S NUMBER SITS BESIDE THE FIELD. Every other counter on this
+   page hangs in the gutter below its box, which works because every other
+   field has something forgiving under it. The title does not: the next
+   thing down is the header image, and the number was painted into it. So
+   this one row puts the count at the end of the row instead, and the
+   field gives up the width — it no longer touches either the number or
+   the Community Hub button beside it. */
+.steam-spp-proto .steam-spp-titlerow {
+  display: flex; align-items: baseline; gap: 12px;
+  flex: 1; min-width: 0;
+}
+.steam-spp-proto .steam-spp-titlerow > .steam-spp-apphub-name {
+  flex: 1 1 auto; min-width: 0;
+}
+.steam-spp-proto .steam-spp-titlerow > .ias-char-counter-row {
+  position: static; flex: 0 0 auto; width: auto;
+  margin: 0; padding: 0; gap: 0; justify-content: flex-end;
+}
+
+/* RELEASE DATE IS A PRINTED ROW. Same type as the value beside All
+   Reviews, which is the other row on this page that states a fact rather
+   than asking for one. */
+.steam-spp-proto .steam-spp-printed {
+  font-size: 13px; line-height: 18px; color: #c6d4df;
+}
+
+/* DEVELOPER AND PUBLISHER REACH THE COLUMN'S EDGE, and their numbers go
+   underneath the bottom-right corner. Taking the count off the row is
+   what frees the width: the field now ends where Short Description ends.
+   The row then has to PAY for the number it pushed below itself, or the
+   count lands on the next row's label — the mistake Epic's headline
+   counter made twice before v8.82 settled it. 14px is the counter's own
+   line plus the 2px it sits below the box. */
+.steam-spp-proto .steam-spp-devrow > .steam-spp-devfield {
+  flex: 1 1 auto; min-width: 0;
+  position: relative;
+  /* The number's own line plus the 2px it sits below the box, so it lives
+     INSIDE this row's box. Anchored to the row's bottom rather than hung
+     off top:100%, which measures from the far side of this very padding
+     and put Developer's count straight through Publisher's field. */
+  padding-bottom: 20px;
+}
+.steam-spp-proto .steam-spp-devfield > .steam-spp-inline-input { width: 100%; }
+.steam-spp-proto .steam-spp-devfield > .ias-char-counter-row {
+  position: absolute; top: auto; bottom: 0; right: 0; width: auto;
+  margin: 0; padding: 0; gap: 10px;
+  flex-direction: row; align-items: baseline; justify-content: flex-end;
+  pointer-events: none; z-index: 1;
+}
+/* Publisher used to sit 8px INTO Developer's row to close the gap Steam
+   has no gap in. Developer's row now ends with a number in that space,
+   so the pull-up would put the two on top of each other. */
+.steam-spp-proto .steam-spp-devrow-close { margin-top: 0; }
