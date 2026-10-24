@@ -11286,6 +11286,27 @@ function _applySteamSocialLinks(links) {
   if (!clean.length) return;
   if (!state.webSite) state.webSite = {};
   state.webSite.links = clean;
+  _applyEgsSocialFromSteam(clean);
+}
+
+/* The same links onto Epic's Social Links (v8.88). Epic asks for twelve
+   named services and the marketing page above asks for a free list, so
+   this is a match rather than a copy — egsSocialFromSteamLinks (state.js)
+   owns which link is which service.
+
+   BOX BY BOX, not all-or-nothing. Epic's twelve are twelve separate
+   questions, so a developer who has typed their Discord invite keeps it
+   and still gets their YouTube filled in; the alternative skips the whole
+   form over one answered field. */
+function _applyEgsSocialFromSteam(links) {
+  const e = state.egsSubmitAnswers;
+  if (!e || !e.social) return;
+  const found = egsSocialFromSteamLinks(links);
+  EGS_SOCIAL_LINKS.forEach(row => {
+    if (!found[row.id]) return;
+    if ((e.social[row.id] || '').trim()) return;     // already answered
+    e.social[row.id] = found[row.id];
+  });
 }
 
 /* Pre-populates Mac App Store's Game Center > Achievements section
@@ -23788,17 +23809,55 @@ function _egsFocusLoginInput() {
    developer who ticks Mac, fills it in, then unticks it while deciding has
    not asked to lose the work, and the completeness check already ignores an
    OS that is switched off. */
-function answerEgsSpecSupported(osId, value) {
-  const sp = state.egsSubmitAnswers.specs[osId];
+/* ── THE SPECIFICATIONS FORM'S HANDLERS (v8.88) ───────────────────
+   answerEgsSpecSupported is gone with the Yes/No row it served. The
+   portal's control is a switch, so this takes the state it is moving TO
+   rather than toggling a three-state, and nothing it switches off is
+   erased: turning Mac back on has to find what was typed before, the same
+   promise Steam's own per-OS switch makes next door. */
+function setEgsSpecSupported(osId, on) {
+  const sp = _egsSpecs()[osId];
   if (!sp) return;
-  sp.supported = (sp.supported === value) ? null : value;
+  sp.supported = !!on;
   _egsProductRepaint();
+}
+
+function setEgsSpecTab(osId) {
+  if (!EGS_SPEC_OS.some(o => o.id === osId)) return;
+  state.egsSpecTab = osId;
+  _egsProductRepaint();
+}
+
+function toggleEgsSpecInputDevice(osId, device, on) {
+  const sp = _egsSpecs()[osId];
+  if (!sp) return;
+  if (!Array.isArray(sp.inputDevices)) sp.inputDevices = [];
+  const i = sp.inputDevices.indexOf(device);
+  if (on && i < 0) sp.inputDevices.push(device);
+  if (!on && i >= 0) sp.inputDevices.splice(i, 1);
+  _egsProductRepaint();
+}
+
+function setEgsSpecNotes(osId, value) {
+  const sp = _egsSpecs()[osId];
+  if (!sp) return;
+  sp.notes = (value || '').slice(0, EGS_SPEC_NOTES_MAX);
+  _egsProductRepaint();
+}
+
+/* The counter is on the LABEL row, not below the box, so it cannot be
+   found as the input's next sibling the way updateIapCharCounter finds
+   its own. Same job, one hop further up. */
+function egsSpecCount(inputEl, max) {
+  const cell = inputEl.closest('.egs-spec-cell');
+  const out  = cell && cell.querySelector('.egs-spec-count');
+  if (out) out.textContent = String(max - inputEl.value.length);
 }
 
 /* One spec box: OS version / CPU / Memory / GPU / DirectX / Storage / Sound
    card, minimum or recommended, for one operating system. */
 function setEgsSpecField(osId, rowId, which, value) {
-  const sp = state.egsSubmitAnswers.specs[osId];
+  const sp = _egsSpecs()[osId];
   if (!sp || !sp[rowId]) return;
   const v = (value || '').trim();
   /* DirectX is a closed list of pills, so pressing the chosen one again
@@ -25742,29 +25801,34 @@ function _applySteamRequirements(reqs) {
    translation rather than a copy — egsSpecOsFromSteamTab (state.js) owns
    the row-by-row part and hands back whatever would not fit. */
 function _applyEgsSpecsFromSteam(reqs, map) {
-  const e = state.egsSubmitAnswers;
-  if (!e || !e.specs) return;
-  const leftovers = [];
+  const specs = _egsSpecs();
   EGS_SPEC_OS.forEach(o => {
     /* Windows and Mac only. Steam's Linux column has no tab here and is
        dropped rather than relabelled as something a developer would then
        have to notice and correct. */
     const tab = steamReqTabFromApi(reqs[map[o.id]]);
     if (!tab) return;
-    /* Same rule as Steam's own tabs: an OS the developer has answered —
-       including answered No — is a decision and is left alone. */
-    if (e.specs[o.id].supported !== null) return;
+    /* A TAB IS UNTOUCHED OR IT IS LEFT ALONE. v8.88 turned `supported`
+       into the portal's switch, and a switch cannot say "not yet asked"
+       — off and unanswered are one position. So the test is the whole
+       tab: a switch left off with every box still blank is a form nobody
+       has filled in, and anything else is a developer's work. */
+    const cur = specs[o.id];
+    const touched = cur.supported
+      || EGS_SPEC_ROWS.some(r => (cur[r.id].min || '').trim() || (cur[r.id].rec || '').trim())
+      || (cur.notes || '').trim()
+      || (cur.inputDevices || []).length;
+    if (touched) return;
     const out = egsSpecOsFromSteamTab(tab, o.label);
     if (!out) return;
-    e.specs[o.id] = out.spec;
-    out.leftovers.forEach(l => leftovers.push(l));
+    /* The rows Epic has no home for go into THIS tab's own notes box —
+       one per operating system in the portal, so Windows' network line no
+       longer has to announce that it is Windows'. */
+    if (out.leftovers.length) {
+      out.spec.notes = out.leftovers.join('. ').slice(0, EGS_SPEC_NOTES_MAX);
+    }
+    specs[o.id] = out.spec;
   });
-  /* Epic's Additional notes is one box for the whole section, so the rows
-     Epic has no home for only go in while it is still empty — appending to
-     a developer's own paragraph would be editing their sentence. */
-  if (leftovers.length && !(e.specsNotes || '').trim()) {
-    e.specsNotes = leftovers.join('. ').slice(0, 260);
-  }
 }
 
 /* Steam's categories describe four unrelated things at once — play modes,

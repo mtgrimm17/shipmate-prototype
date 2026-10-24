@@ -3278,18 +3278,27 @@ const EGS_SPEC_OS = [
 
 /* One row per heading on the Specifications form, each a Minimum and a
    Recommended box of 140 characters. `winOnly` marks the DirectX pair, which
-   is the only row the Mac tab drops. `hint` is what the portal's own example
-   text leads a developer to write. */
+   is the only row the Mac tab drops.
+
+   `required` AND `hint` BOTH READ OFF THE PORTAL (v8.88). Measured on
+   dev.epicgames.com's own Specifications form for a real product: the
+   first four headings carry a yellow asterisk on BOTH columns — not just
+   the minimum, which is what this file assumed until now — and DirectX,
+   Storage and Sound card carry none. The portal's boxes have no
+   placeholder text at all, so the example strings that used to live here
+   are gone: a greyed-out "8 GB RAM" reads as an answer already given, and
+   the portal does not show one. */
 const EGS_SPEC_ROWS = [
-  { id: 'os',      label: 'OS version',  hint: 'Windows 10 64-bit' },
-  { id: 'cpu',     label: 'CPU',         hint: 'Intel Core i5-8400 / AMD Ryzen 5 2600' },
-  { id: 'memory',  label: 'Memory',      hint: '8 GB RAM' },
-  { id: 'gpu',     label: 'GPU',         hint: 'NVIDIA GTX 1060 / AMD RX 580' },
-  { id: 'directx', label: 'DirectX',     hint: '', winOnly: true, options: EGS_DIRECTX_VERSIONS },
-  { id: 'storage', label: 'Storage',     hint: '20 GB available space' },
-  { id: 'sound',   label: 'Sound card',  hint: 'DirectX compatible' },
+  { id: 'os',      label: 'OS version',  required: true },
+  { id: 'cpu',     label: 'CPU',         required: true },
+  { id: 'memory',  label: 'Memory',      required: true },
+  { id: 'gpu',     label: 'GPU',         required: true },
+  { id: 'directx', label: 'DirectX',     winOnly: true, options: EGS_DIRECTX_VERSIONS },
+  { id: 'storage', label: 'Storage' },
+  { id: 'sound',   label: 'Sound card' },
 ];
 const EGS_SPEC_MAX = 140;
+const EGS_SPEC_NOTES_MAX = 260;
 
 /* Epic's Social Links, in the portal's order. Every box is a 260-character
    URL and every one is optional. The ids are ours; the labels are the
@@ -3730,9 +3739,24 @@ function makeBlankEgsAnswers() {
    and the recommended box are free text in the portal (140 characters each)
    rather than a parsed number — Epic prints them verbatim on the store page,
    so "8 GB RAM" and "16 GB" are both things a developer really types. */
+/* ══ ONE OPERATING SYSTEM'S TAB (v8.88) ══════════════════════════
+   `supported` IS A BOOLEAN NOW, not the three-state it was. The portal's
+   control is a switch, off by default, and a switch has no unanswered
+   position — so neither does this. What that costs is the old
+   completeness rule's "every OS has been answered", which only made sense
+   while there was something to answer; isEgsSectionComplete now asks what
+   the portal asks, which is whether at least one OS is on and filled in.
+   _egsSpecs() below carries an older project's 'yes'/'no'/null across.
+
+   `inputDevices` AND `notes` MOVED IN HERE from the section, also from the
+   portal: the form's fields are named windows_additionalNotes and
+   macos_additionalNotes, so a product can say "SSD required" of Windows
+   without saying it of Mac. */
 function makeBlankEgsSpecOs() {
   return {
-    supported: null,                 // 'yes' / 'no'
+    supported: false,                // the portal's switch, off by default
+    inputDevices: [],                // from EGS_INPUT_DEVICES, per OS
+    notes:   '',                     // Additional notes, per OS, 260 chars
     os:      { min: '', rec: '' },
     cpu:     { min: '', rec: '' },
     memory:  { min: '', rec: '' },
@@ -3742,6 +3766,43 @@ function makeBlankEgsSpecOs() {
     directx: { min: '', rec: '' },   // Windows only; Mac's tab has no DirectX
   };
 }
+/* THE ANSWERS, NORMALISED ON READ (v8.88). A project saved before v8.88
+   has `supported: 'yes' | 'no' | null` and keeps its input devices and
+   notes on the section rather than on each tab. Rather than a migration
+   that has to run exactly once, every read comes through here — the same
+   pattern _steamSysreq uses next door, and for the same reason: a preview
+   that throws on an old save is worse than one that fills the gap. */
+function _egsSpecs() {
+  const a = state.egsSubmitAnswers;
+  if (!a) return { windows: makeBlankEgsSpecOs(), mac: makeBlankEgsSpecOs() };
+  if (!a.specs) a.specs = { windows: makeBlankEgsSpecOs(), mac: makeBlankEgsSpecOs() };
+  EGS_SPEC_OS.forEach(o => {
+    let sp = a.specs[o.id];
+    if (!sp) { sp = a.specs[o.id] = makeBlankEgsSpecOs(); return; }
+    /* 'yes' becomes on; 'no' and the old unanswered null both become off,
+       because the switch has nowhere else to put them. */
+    if (typeof sp.supported !== 'boolean') sp.supported = (sp.supported === 'yes');
+    if (!Array.isArray(sp.inputDevices)) {
+      sp.inputDevices = Array.isArray(a.inputDevices) ? a.inputDevices.slice() : [];
+    }
+    if (typeof sp.notes !== 'string') sp.notes = a.specsNotes || '';
+    EGS_SPEC_ROWS.forEach(r => {
+      if (!sp[r.id] || typeof sp[r.id] !== 'object') sp[r.id] = { min: '', rec: '' };
+    });
+  });
+  return a.specs;
+}
+
+/* One tab's required headings, both columns — what the portal's own
+   asterisks ask for. An OS switched off is not asked. */
+function egsSpecOsFilled(osId) {
+  const sp = _egsSpecs()[osId];
+  if (!sp) return false;
+  return EGS_SPEC_ROWS
+    .filter(r => r.required && (!r.winOnly || (EGS_SPEC_OS.find(o => o.id === osId) || {}).directx))
+    .every(r => (sp[r.id].min || '').trim() && (sp[r.id].rec || '').trim());
+}
+
 /* The twelve Social Links boxes, keyed by EGS_SOCIAL_LINKS' ids. Built from
    the table rather than typed out, so the two cannot drift. */
 function makeBlankEgsSocial() {
@@ -3797,19 +3858,23 @@ function isEgsSectionComplete(sectionId) {
         && a.nftBlockchain !== null
         && a.promotionalContent !== null;
   }
-  /* SPECIFICATIONS NEEDS A DECISION ON EVERY OS AND MINIMUMS FOR THE ONES
-     YOU SHIP ON. "No" to an OS is an answer, not a gap — a Windows-only
-     product is finished the moment it has said so and filled Windows in.
-     Only the minimum column is required: Epic's recommended boxes are
-     optional, and a store page with minimums and no recommendations is a
-     real, shippable page. DirectX is skipped for an OS whose tab has none. */
+  /* SPECIFICATIONS IS FINISHED WHEN THE PORTAL'S OWN SAVE WOULD TAKE IT
+     (v8.88): at least one operating system switched on, and every switched-on
+     one with its four required headings filled in on BOTH columns.
+
+     TWO THINGS THIS USED TO GET WRONG, both read off the portal's form.
+     It required a decision on every OS, which a switch cannot express —
+     off and unanswered are the same position, and a Mac-less product is
+     not an unfinished one. And it required only the minimum column, while
+     the portal asterisks both: a product whose CPU minimum is filled and
+     whose recommended is blank cannot be saved there, so calling it done
+     here would be Shipmate telling a developer they were finished when
+     Epic was about to disagree. DirectX, Storage and Sound card carry no
+     asterisk and are not counted. */
   if (sectionId === 'specifications') {
-    const rows = EGS_SPEC_ROWS;
-    return EGS_SPEC_OS.every(o => a.specs[o.id].supported !== null)
-        && EGS_SPEC_OS.some(o => a.specs[o.id].supported === 'yes')
-        && EGS_SPEC_OS.filter(o => a.specs[o.id].supported === 'yes').every(o =>
-             rows.filter(r => !r.winOnly || o.directx)
-                 .every(r => !!(a.specs[o.id][r.id].min || '').trim()));
+    const sp = _egsSpecs();
+    return EGS_SPEC_OS.some(o => sp[o.id].supported)
+        && EGS_SPEC_OS.filter(o => sp[o.id].supported).every(o => egsSpecOsFilled(o.id));
   }
   /* A VISIT IS THE HONEST CLAIM FOR AN OPTIONAL SECTION. Epic files Social
      media under "Optional Information", so there is no field whose absence
@@ -6193,6 +6258,11 @@ const state = {
      half the page Epic publishes had no preview at all. */
   egsPreviewTab: 'overview',
 
+  /* WHICH OPERATING SYSTEM'S TAB THE SPECIFICATIONS FORM IS SHOWING
+     (v8.88). Surface state, like egsPreviewTab above: the portal opens on
+     Windows and remembers nothing about it between visits. */
+  egsSpecTab: 'windows',
+
   /* ── EPIC'S PRODUCT LOGO (v8.82) ────────────────────────────────────────
      Epic's panel opens on the product logo, above the rating card, and the
      slot it sits in is 16:9 with the artwork CONTAINED in it — measured on
@@ -7254,11 +7324,12 @@ function steamReqTabFromApi(platformValue) {
      - Epic has TWO operating systems, Windows and Mac. Steam has three,
        and a game's Linux requirements have nowhere to land here, so they
        are dropped rather than crammed into a tab that means Mac.
-     - Epic has no Network row and no Additional Notes row PER OS — it has
-       one Additional notes box for the whole section. Steam's network
-       line, its own notes and anything it labelled with a heading Epic
-       does not have all collect there, prefixed with the OS they came
-       from so the box does not read as one machine's spec.
+     - Epic has no Network row. Steam's network line, its own notes and
+       anything it labelled with a heading Epic does not have all collect
+       in that operating system's OWN Additional notes box, each prefixed
+       with the column it came from. (Until v8.88 Epic kept one notes box
+       for the whole section and a leftover had to name its OS as well;
+       the portal's form has one per tab, so they no longer do.)
      - Epic's DirectX is a closed set of four pills, not a text box, so
        "Version 12" has to become "DirectX 12" or it cannot be stored at
        all — a value outside the four would draw no pill and look like a
@@ -7290,7 +7361,7 @@ function egsDirectxFromSteam(value) {
 function egsSpecOsFromSteamTab(tab, osLabel) {
   if (!tab) return null;
   const spec = makeBlankEgsSpecOs();
-  spec.supported = 'yes';
+  spec.supported = true;
   const leftovers = [];
   [['minimum', 'min'], ['recommended', 'rec']].forEach(([from, to]) => {
     const col = tab[from] || {};
@@ -7303,14 +7374,14 @@ function egsSpecOsFromSteamTab(tab, osLabel) {
            does not. Named by OS and column so the notes box reads as a
            list of leftovers rather than one contradictory machine. */
         const row = STEAM_SYSREQ_ROWS.find(r => r.id === sid);
-        leftovers.push(osLabel + ' ' + (to === 'min' ? 'minimum' : 'recommended')
+        leftovers.push((to === 'min' ? 'Minimum' : 'Recommended')
                        + ' — ' + ((row && row.label) || sid) + ': ' + raw);
         return;
       }
       if (eid === 'directx') {
         const dx = egsDirectxFromSteam(raw);
         if (dx) spec.directx[to] = dx;
-        else leftovers.push(osLabel + ' DirectX: ' + raw);
+        else leftovers.push('DirectX: ' + raw);
         return;
       }
       spec[eid][to] = raw.slice(0, EGS_SPEC_MAX);
@@ -7325,11 +7396,13 @@ function egsSpecOsFromSteamTab(tab, osLabel) {
    and Competitive), and several Steam categories have no Epic answer at
    all. Two judgement calls worth naming, since neither is forced:
 
-     - LAN COUNTS AS LOCAL. Epic offers Online Multiplayer or Local
-       Multiplayer and nothing in between; a LAN game is not played over
-       the internet, so Local is the nearer of the two. A developer who
-       disagrees unticks it — which is the point of seeding rather than
-       linking.
+     - LAN IS NEITHER (changed in v8.88, by request). v8.87 read a LAN
+       game as Local Multiplayer on the grounds that it is not played over
+       the internet. Epic's Local Multiplayer means players at one machine,
+       which a LAN game is not, so the two Steam LAN rows now answer only
+       the question they really do answer — whether the play is
+       competitive or cooperative — and leave the where to the rows that
+       state it.
      - A BARE "Multi-player" SEEDS NOTHING. It says there is more than one
        player without saying where they are, and Epic has no feature that
        means only that. Steam almost always ships the breakdown alongside
@@ -7339,8 +7412,8 @@ const STEAM_CATEGORY_TO_EGS_FEATURES = {
   'Online PvP':                 ['Online Multiplayer', 'Competitive'],
   'Online Co-op':               ['Online Multiplayer', 'Co-op'],
   'Online Multi-Player':        ['Online Multiplayer'],
-  'LAN PvP':                    ['Local Multiplayer', 'Competitive'],
-  'LAN Co-op':                  ['Local Multiplayer', 'Co-op'],
+  'LAN PvP':                    ['Competitive'],
+  'LAN Co-op':                  ['Co-op'],
   'Local Multi-Player':         ['Local Multiplayer'],
   'Local Co-op':                ['Local Multiplayer', 'Co-op'],
   'Shared/Split Screen':        ['Local Multiplayer'],
@@ -7357,6 +7430,99 @@ const STEAM_CATEGORY_TO_EGS_FEATURES = {
   'VR Only':                    ['VR'],
   'VR Support':                 ['VR'],
 };
+
+/* ── Steam's links onto Epic's Social Links (v8.88) ──────────────────
+   /game returns the row of links Steam prints beside the store page as
+   [{name, url}] — the same array _applySteamSocialLinks already puts on
+   the marketing page — and Epic asks for twelve of the same services by
+   name on its Social Links form.
+
+   MATCHED ON THE HOST, NOT THE NAME. A link's name is whatever the
+   developer typed into Steamworks ("Official Site", "Our Discord", "公式
+   サイト"), and Steam does not constrain it; the host is set by the
+   service and is the same for everyone. The name is still read, but only
+   as a fallback for a host this table does not know.
+
+   THE WEBSITE BOX IS THE LEFTOVER, deliberately. Anything whose host is
+   none of the eleven services is the game's own site far more often than
+   it is anything else, and Epic's first box is exactly that — but only
+   the FIRST such link takes it, because a page with three unrecognised
+   links has not told us which one is the home page. */
+const STEAM_LINK_HOST_TO_EGS = {
+  'x.com': 'twitter', 'twitter.com': 'twitter',
+  'facebook.com': 'facebook', 'fb.com': 'facebook',
+  'instagram.com': 'instagram',
+  'twitch.tv': 'twitch',
+  'discord.gg': 'discord', 'discord.com': 'discord', 'discordapp.com': 'discord',
+  'vk.com': 'vkontakte', 'vkontakte.ru': 'vkontakte',
+  'youtube.com': 'youtube', 'youtu.be': 'youtube',
+  'reddit.com': 'reddit',
+  'naver.com': 'naver',
+  'youku.com': 'youku',
+  'weibo.com': 'weibo', 'weibo.cn': 'weibo',
+};
+/* Only for a host the table above missed. Tested against the LOWERCASED
+   name, as a word, so "Our Discord server" matches and "Discordant
+   Soundtrack" does not. */
+const STEAM_LINK_NAME_TO_EGS = [
+  [/\b(x|twitter)\b/,            'twitter'],
+  [/\bfacebook\b/,               'facebook'],
+  [/\binstagram\b/,              'instagram'],
+  [/\btwitch\b/,                 'twitch'],
+  [/\bdiscord\b/,                'discord'],
+  [/\b(vk|vkontakte)\b/,         'vkontakte'],
+  [/\byoutube\b/,                'youtube'],
+  [/\breddit\b/,                 'reddit'],
+  [/\bnaver\b/,                  'naver'],
+  [/\byouku\b/,                  'youku'],
+  [/\bweibo\b/,                  'weibo'],
+  [/\b(website|home\s*page|official\s*site)\b/, 'website'],
+];
+
+/* "www.youtube.com" and "m.youtube.com" are youtube.com; "cafe.naver.com"
+   is naver.com. Everything is matched on the last two labels, which is
+   what makes one row in the table cover a service's subdomains. */
+function steamLinkHost(url) {
+  let h = '';
+  try { h = new URL(String(url)).hostname.toLowerCase(); }
+  catch (e) {
+    const m = /^(?:[a-z]+:)?\/\/([^\/?#]+)/i.exec(String(url || ''));
+    h = m ? m[1].toLowerCase() : '';
+  }
+  h = h.replace(/^www\./, '');
+  const parts = h.split('.');
+  /* co.uk and com.br would otherwise collapse to the registry itself. */
+  if (parts.length > 2) {
+    const last2 = parts.slice(-2).join('.');
+    const last3 = parts.slice(-3).join('.');
+    return /^(co|com|net|org|ac|gov)\.[a-z]{2}$/.test(last2) ? last3 : last2;
+  }
+  return h;
+}
+
+function egsSocialFromSteamLinks(links) {
+  const out = {};
+  let tookWebsite = false;
+  (Array.isArray(links) ? links : []).forEach(l => {
+    const url = l && String(l.url || '').trim();
+    if (!url) return;
+    const name = String((l && l.name) || '').toLowerCase();
+    let id = STEAM_LINK_HOST_TO_EGS[steamLinkHost(url)] || null;
+    if (!id) {
+      const hit = STEAM_LINK_NAME_TO_EGS.find(([re]) => re.test(name));
+      id = hit ? hit[1] : null;
+    }
+    if (!id) {
+      if (tookWebsite) return;
+      id = 'website';
+      tookWebsite = true;
+    }
+    /* First one wins: Steam lets a page carry two YouTube links and Epic
+       has one box, and the first is the one the developer put first. */
+    if (!out[id]) out[id] = url;
+  });
+  return out;
+}
 
 /* Epic's own order, not Steam's: the Features picker lists EGS_FEATURES
    alphabetically and a seeded set that arrived in Steam's order would read
