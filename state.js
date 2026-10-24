@@ -7319,52 +7319,75 @@ const STEAM_INFO_GENRES = [
   'Tutorial', '360 Video',
 ];
 
-/* ── Tag Wizard constants (PDF 9) ───────────────────── */
+/* ══ THE TAG WIZARD'S OWN THREE TIERS (v8.94) ═══════════════════
+   Read straight out of the wizard: it ships its hierarchy to the browser
+   as `genreHierarchy`, three tiers of tag ids, with `tagNames` to resolve
+   them. v8.93 could only check that each name this file carried was a
+   real Steam tag — which tier it belonged in had to wait for the wizard
+   to open, and here it is.
+
+   WHAT THAT CHANGED is more than three names. The top tier is SEVEN, not
+   nine: Arcade and Survival are top-level and Casual, Racing, Software
+   and Sports are not — Racing and Sports sit a tier down, and Casual and
+   Software are not tags in this hierarchy at all. The lower tiers are 69
+   and 82 against the 89 and 52 this file had, so a quarter of the second
+   tier was in the wrong place and about forty tags were missing outright.
+
+   THE TIERS OVERLAP, which is not a mistake here: Steam lists Racing,
+   Battle Royale, Metroidvania and twenty-odd others in both the second
+   and third tier, because each is a genre in its own right and also a
+   sub-genre of something else.
+
+   STILL NOT MODELLED: the wizard narrows the third tier to the children
+   of whichever second-tier tag you picked (`m_rgGenresToParents`). This
+   card offers all three tiers in full, as it always has. The lists are
+   now Steam's; the narrowing is a behaviour change nobody asked for yet.
+   The wizard also caps a title at twenty tags in total. */
 const STEAM_TOP_GENRES = [
-  'Action','Adventure','Casual','Racing','RPG','Simulation','Software','Sports','Strategy',
+  'Action', 'Adventure', 'Arcade', 'RPG', 'Simulation', 'Strategy',
+  'Survival',
 ];
 
-/* CHECKED AGAINST STEAM'S OWN VOCABULARY (v8.93). All 150 names in these
-   three tiers were tested against the 429 tags Steam publishes at
-   store.steampowered.com/tag/browse, and three were not tags at all:
-   "Clicker" is Steam's "Incremental", and "Football"/"Soccer" are its
-   "Football (American)"/"Football (Soccer)". A tag Steam does not have
-   is a tag a developer cannot actually apply.
-
-   WHAT THAT CHECK DOES NOT COVER is which tier each tag belongs in. The
-   Tag Wizard would say, and it would not open for reading — its URL
-   wants a session token the page mints on click — so the three tiers
-   below are still the ones this file already had. */
 const STEAM_GENRES = [
-  '2D Fighter','3D Fighter','4X','Action Roguelike','Action RPG','Action-Adventure',
-  'Animation & Modeling','Arcade','Audio Production','Auto Battler','Automobile Sim',
-  'Base Building','Baseball','Basketball','Battle Royale',"Beat 'em up",'BMX',
-  'Board Game','Bowling','Building','Card Game','City Builder','Colony Sim',
-  'Character Action Game','Chess','Incremental','Cycling','Dating Sim',
-  'Design & Illustration','Diplomacy','Education','eSports','Experimental',
-  'Exploration','Farming Sim','Fighting','Football (American)','God Game','Golf',
-  'Grand Strategy','Hacking','Hidden Object','Hockey','Idler','Interactive Fiction',
-  'JRPG','Life Sim','Management','Match 3','Medical Sim','Mini Golf','Mining',
-  'MMORPG','MOBA','Motocross','Open World','Outbreak Sim','Party Game',
-  'Party-Based RPG','Photo Editing','Pinball','Platformer','Point & Click',
-  'Puzzle','Rhythm','Roguelike','RTS','Sandbox','Shooter','Skateboarding',
-  'Skating','Skiing','Snowboarding','Football (Soccer)','Space Sim','Stealth','Strategy RPG',
-  'Survival','Tabletop','Tennis','Tower Defense','Trivia','Turn-Based Strategy',
-  'Utilities','Video Production','Visual Novel','Walking Simulator','Word Game','Wrestling',
+  '4X', 'Action RPG', 'Action-Adventure', 'Auto Battler', 'Automobile Sim',
+  'Battle Royale', "Beat 'em up", 'Board Game', 'Bullet Heaven',
+  'Bullet Hell', 'Card Battler', 'Card Game', 'Character Action Game',
+  'Choose Your Own Adventure', 'City Builder', 'Collectathon',
+  'Colony Sim', 'Cooking', 'Creature Collector', 'CRPG', 'Dating Sim',
+  'Dungeon Crawler', 'Farming Sim', 'Fighting', 'God Game',
+  'Grand Strategy', 'Hobby Sim', 'Immersive Sim', 'Interactive Fiction',
+  'Job Simulator', 'JRPG', 'Life Sim', 'Medical Sim', 'Metroidvania',
+  'MMORPG', 'MOBA', 'Musou', 'On-Rails Shooter',
+  'Open World Survival Craft', 'Outbreak Sim', 'Party Game',
+  'Party-Based RPG', 'Pinball', 'Platformer', 'Political Sim', 'Racing',
+  'Real Time Tactics', 'Rhythm', 'Roguelike', 'Roguelite', 'RTS',
+  "Shoot 'Em Up", 'Shooter', 'Shop Keeper', 'Souls-like', 'Space Sim',
+  'Sports', 'Strategy RPG', 'Survival Horror', 'Tactical', 'Tactical RPG',
+  'Top-Down Shooter', 'Tower Defense', 'Trading Card Game',
+  'Turn-Based Strategy', 'Twin Stick Shooter', 'Visual Novel',
+  'Walking Simulator', 'Wargame',
 ];
 
 const STEAM_SUB_GENRES = [
-  '2D Platformer','3D Platformer','Action RTS','Arena Shooter','Boomer Shooter',
-  'Bullet Hell','Card Battler','Choose Your Own Adventure','Collectathon',
-  'Combat Racing','Creature Collector','CRPG','Dungeon Crawler','Flight','FPS',
-  'Hack and Slash','Heist','Hero Shooter','Horror','Idler','Immersive Sim',
-  'Investigation','Looter Shooter','Mahjong','Metroidvania','Mystery Dungeon',
-  'On-Rails Shooter','Open World Survival Craft','Outbreak Sim','Political Sim',
-  'Precision Platformer','Puzzle Platformer','Real Time Tactics','Roguelite',
-  'Runner',"Shoot 'Em Up",'Shop Keeper','Side Scroller','Sokoban','Solitaire',
-  'Souls-like','Spectacle Fighter','Survival Horror','Tactical RPG',
-  'Third-Person Shooter','Time Management','Top-Down Shooter','Traditional Roguelike',
-  'Turn-Based Tactics','Twin Stick Shooter','Typing','Wargame',
+  '2D Fighter', '2D Platformer', '3D Fighter', '3D Platformer',
+  'Action Roguelike', 'Archery', 'Arena Shooter', 'Auto Battler',
+  'Automobile Sim', 'Baseball', 'Basketball', 'Battle Royale',
+  "Beat 'em up", 'Billiards', 'BMX', 'Boomer Shooter', 'Bowling', 'Boxing',
+  'Bullet Heaven', 'Bullet Hell', 'Card Battler', 'Character Action Game',
+  'Chess', 'Collectathon', 'Combat Racing', 'Cricket', 'Cycling',
+  'Deckbuilding', 'Driving', 'Dungeon Crawler', 'eSports',
+  'Extraction Shooter', 'Farming Sim', 'Fishing', 'Football (American)',
+  'Football (Soccer)', 'FPS', 'Golf', 'Hack and Slash', 'Hero Shooter',
+  'Hockey', 'Hunting', 'Looter Shooter', 'Mahjong', 'Martial Arts',
+  'Metroidvania', 'Mini Golf', 'MOBA', 'Motocross', 'Mystery Dungeon',
+  'On-Rails Shooter', 'Open World Survival Craft', 'Parkour', 'Party Game',
+  'Poker', 'Precision Platformer', 'Puzzle Platformer', 'Racing',
+  'Roguelike Deckbuilder', 'Roguelite', 'Rugby', 'Runner', 'Sailing',
+  "Shoot 'Em Up", 'Skateboarding', 'Skating', 'Skiing', 'Snowboarding',
+  'Solitaire', 'Souls-like', 'Spectacle fighter', 'Survival Horror',
+  'Tabletop', 'Tennis', 'Third-Person Shooter', 'Top-Down Shooter',
+  'Tower Defense', 'Trading Card Game', 'Traditional Roguelike',
+  'Twin Stick Shooter', 'Volleyball', 'Wrestling',
 ];
 
 const STEAM_AI_LIVE_TYPES = ['Code','Text','Textures','3D Models','Sound Effects','Music','Voice','Other'];
