@@ -1014,26 +1014,33 @@ const PLATFORMS = {
     id: 'steam', label: 'Steam', color: '#4c6b8a',
     steps: [
       { id: 'uploadBuild',            label: 'Upload Build'                            },
-      { id: 'contentRating',          label: 'Content Rating',        hasInference: true },
-      /* DATA SAFETY AND LOCALIZATIONS ARE STUBS HERE, and deliberately so —
-         see buildSteamDataSafetySection / buildSteamLocalizationsSection
-         (render.js), which render a heading and a Shipmate Tip through the
-         shared buildStepStubSection and nothing else.
+      /* CONTENT RATING AND DATA SAFETY ARE NOT ROWS HERE (v8.89), by
+         request, and the two go for different reasons.
 
-         They exist as STEPS rather than as nothing because the row is the
-         thing being asked for: every other store in this prototype walks
-         ratings -> data -> localizations -> store page, and Steam walking
-         ratings -> store page made it the one platform whose checklist
-         silently skipped two of the four questions a submission has to
-         answer. A stub row states the question and admits it has no answer
-         yet; an absent row states neither.
+         CONTENT RATING STILL EXISTS, just not as a row. Its questions are
+         reached from the Store Page Preview's own Content block
+         (openStorePreviewSection('steam','content')), which is exactly
+         where Epic's live and why Epic has no row either: the preview is
+         the page these answers appear on, so the page is the door. The
+         visit gate (STEP_REQUIRES_VISIT) still stamps contentRating when
+         that door opens, so the Shippy rating row keeps working.
 
-         Both mark complete on first visit (isSteamSectionComplete, below),
-         which is the same visit-based gate storePreviewPrototype and
-         improveSubmission already use — honest for a placeholder, because
-         "you have seen this" is the only claim a stub can truthfully make.
-         When either grows real questions, that arm is what changes. */
-      { id: 'dataSafety',             label: 'Data Safety'                             },
+         DATA SAFETY IS GONE OUTRIGHT. It was a stub — a heading and a
+         Shipmate Tip, marked done by being looked at — and the argument
+         for keeping it was that every other store walks ratings -> data ->
+         localizations -> store page, so an absent row would make Steam the
+         one platform whose checklist silently skipped a question. That
+         argument was about Steam's checklist matching the others'. It does
+         not survive being asked to take the row out: a row that states a
+         question, has no answer, and goes green for being opened is worth
+         less than the space it occupies. _chkDataSafetyDone drops Steam
+         with it (render.js), so a Steam-only project gets no data row
+         rather than one it can never satisfy.
+
+         LOCALIZATIONS IS STILL A STUB and still a row: it was not in the
+         request, and unlike Data Safety it has somewhere to go — the
+         preview's own Localizations button already opens a real
+         side-by-side review. */
       { id: 'localizations',          label: 'Localizations'                           },
       { id: 'storePreviewPrototype',  label: 'Store Page Preview'                      },
       { id: 'improveSubmission',      label: 'Improve Your Submission'                 },
@@ -1633,9 +1640,6 @@ function _markStepVisited(pid, stepId) {
          here would tick the APP STORE's Localizations step. */
     else if (pid === 'egs')        state.egsSubmitAnswers.localizationsSeen     = true;
     else                           state.iosLocalizationsSeen     = true;
-  }
-  if (stepId === 'dataSafety' && pid === 'steam') {
-    state.steamSubmitAnswers.dataSafetySeen = true;
   }
   /* Epic's three Product Configuration steps (v8.44). Only socialMedia's flag
      decides a done state; the other two are recorded because every other
@@ -5529,6 +5533,27 @@ function makeBlankSteamSysreq() {
    so the cap here is generous rather than measured. */
 const STEAM_LEGAL_MAX = 8000;
 
+/* ══ WHAT THE STORE PAGE PREVIEW'S FIELDS COUNT AGAINST (v8.89) ════════
+   Only the two long-form fields get a counter, because only they have a
+   length worth watching. Title, Developer, Publisher and Release Date are
+   single-line boxes with no published cap, and a number beside each would
+   be four numbers on a page that is trying to look like a store page.
+
+   THE SHORT DESCRIPTION'S 300 IS STEAMWORKS' OWN EDITOR COUNTER, not
+   Valve's documentation: the published page
+   (partner.steamgames.com/doc/store/page/description) says only that the
+   section "is limited to a few hundred characters", which was checked
+   while writing this and is as precise as Valve gets in public. If the
+   editor has moved, this constant is the one line to change.
+
+   THE ABOUT CAP IS GENEROUS RATHER THAN MEASURED, the same admission
+   STEAM_LEGAL_MAX makes above. Valve publishes no limit for About This
+   Game and calls it a "longer-form section"; 10,000 is Epic's body limit,
+   borrowed so the two previews behave alike rather than invented to look
+   authoritative. Neither field is hard-capped — see _steamSppCounter. */
+const STEAM_SHORTDESC_MAX = 300;
+const STEAM_ABOUT_MAX     = 10000;
+
 
 /* ── Application State ───────────────────────────────── */
 
@@ -7605,9 +7630,9 @@ function makeBlankSteamAnswers() {
     // this prototype — so edits/removals made in
     // buildSteamLanguagesEditSection (render.js) stick.
     languages:          null,
-    // Data Safety and Localizations — stub steps, complete on first view.
-    // See PLATFORMS.steam.steps for why they are rows rather than nothing.
-    dataSafetySeen:     false,
+    // Localizations — a stub step, complete on first view. See
+    // PLATFORMS.steam.steps for why it is a row rather than nothing, and
+    // why Data Safety's flag went with its row in v8.89.
     localizationsSeen:  false,
     // Improve Your Submission — marks complete on first view
     improveSubmissionSeen: false,
@@ -7623,11 +7648,11 @@ function isSteamSectionComplete(sectionId) {
   }
   if (sectionId === 'improveSubmission') return !!state.steamSubmitAnswers.improveSubmissionSeen;
   if (sectionId === 'storePreviewPrototype') return !!state.steamSubmitAnswers.storePreviewPrototypeSeen;
-  /* Both visit-based, because both are stubs — see PLATFORMS.steam.steps for
-     why the rows exist at all, and why "you have seen this" is the only claim
-     either can honestly make yet. Kept out of the questionnaire roll-up below
-     for isAndroidSectionComplete's own stated reason. */
-  if (sectionId === 'dataSafety')    return !!state.steamSubmitAnswers.dataSafetySeen;
+  /* Visit-based, because it is a stub — see PLATFORMS.steam.steps for why
+     the row exists at all, and why "you have seen this" is the only claim a
+     stub can honestly make yet. Kept out of the questionnaire roll-up below
+     for isAndroidSectionComplete's own stated reason.
+     (Data Safety was the other one and went in v8.89 with its row.) */
   if (sectionId === 'localizations') return !!state.steamSubmitAnswers.localizationsSeen;
 
   if (sectionId === 'questionnaire') {

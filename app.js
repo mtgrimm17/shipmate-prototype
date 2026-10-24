@@ -18454,10 +18454,10 @@ function _steamSppTitleInput(value) {
   if (info)     info.textContent = shown;
   // Same empty-field pulse the App Store Product Page Preview's own
   // selectable Title/Subtitle carry while blank (.ias-placeholder) — see
-  // .steam-spp-glow-empty in style.css and the comment above headerHtml in
+  // .steam-spp-edit / .is-todo in style.css and the comment above headerHtml in
   // render.js.
   const titleInput = document.getElementById('steam-spp-title-input');
-  if (titleInput) titleInput.classList.toggle('steam-spp-glow-empty', !value);
+  if (titleInput) titleInput.classList.toggle('is-todo', !value);
 }
 
 /* Short Description and About This Game are each entirely local to this
@@ -18503,11 +18503,11 @@ function _steamSppDevPubInput(field, value) {
   const infoId = field === 'developer' ? 'steam-spp-devname-info' : 'steam-spp-pubname-info';
   const el = document.getElementById(infoId);
   if (el) el.textContent = value || (field === 'developer' ? 'Developer Name' : 'Publisher Name');
-  // Same empty-field pulse as Title above (.steam-spp-glow-empty) — see the
+  // Same empty-field mark as Title above (.steam-spp-edit.is-todo) — see the
   // comment above headerHtml in render.js.
   const inputId = field === 'developer' ? 'steam-spp-dev-input' : 'steam-spp-pub-input';
   const input = document.getElementById(inputId);
-  if (input) input.classList.toggle('steam-spp-glow-empty', !value);
+  if (input) input.classList.toggle('is-todo', !value);
 }
 
 /* Grows a textarea to fit its content, no ceiling — About This Game can
@@ -22367,7 +22367,6 @@ function confirmCreateRelease() {
   // reason. See PLATFORMS.steam.steps (state.js).
   state.androidSubmitAnswers.localizationsSeen     = false;
   state.steamSubmitAnswers.localizationsSeen       = false;
-  state.steamSubmitAnswers.dataSafetySeen          = false;
 
   closeNewReleaseModal();
   renderDashboard();
