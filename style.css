@@ -31596,7 +31596,7 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .steam-spp-proto {
   --steam-page-w: 1200px;
   width: var(--steam-page-w);
-  zoom: 0.6258;                       /* 751 / 1200 */
+  zoom: 0.6018;                       /* 751 / (1200 + 2x24) */
   /* Steam ships Motiva Sans and falls back to a plain sans; the font is
      not ours to load, so the fallback IS what a developer sees, and it is
      Steam's own fallback rather than a third choice. */
@@ -31606,7 +31606,15 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   font-size: 13px;
   line-height: normal;
   border-radius: 0;
-  padding: 0 0 24px;
+  /* A GUTTER INSIDE THE GROUND (v8.91). The 1200 above is the page's
+     CONTENT width, which is what Steam's own columns are measured against,
+     so the buffer is paid outside it: the box is 1200 + 2x24 and the
+     columns keep every number they were measured at. Steam does the same
+     thing at a far larger scale — .page_content is 1200 centred in a 1512
+     viewport, 156px of ground each side — and 24 is that idea at a width
+     that has 751px to spend rather than a monitor. */
+  padding: 16px 24px 24px;
+  box-sizing: content-box;
 }
 
 /* ── The two splits ──────────────────────────────────────────────────── */
@@ -31768,3 +31776,108 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   background-image: linear-gradient(90deg, rgba(0, 0, 0, .5) 5%, rgba(0, 0, 0, .65) 95%);
   background-color: transparent;
 }
+
+/* ══ EPIC'S HOVER, WHICH IS THE BORDER AND ONLY THE BORDER (v8.91) ═══════
+   Asked for directly, and it was already the rule Epic's page follows:
+   .egs-sp-edit names the SAME background at rest and on hover and moves
+   border-color alone. v8.89 ported the marks but not that discipline —
+   an empty field sat on the page's own ground and gained a fill on hover,
+   and the blocks kept this file's older cyan wash underneath the ring. A
+   box that changes colour under the pointer reads as a button; a box
+   whose line brightens reads as a box you can type in, which is what
+   these are.
+
+   The ground is the same one at rest, empty, hovered and focused. Only
+   --steam-well-line-* moves. */
+.steam-spp-proto .steam-spp-edit,
+.steam-spp-proto .steam-spp-edit.is-todo,
+.steam-spp-proto .steam-spp-edit:hover,
+.steam-spp-proto .steam-spp-edit.is-todo:hover,
+.steam-spp-proto .steam-spp-edit:focus,
+.steam-spp-proto .steam-spp-edit.is-todo:focus {
+  background: var(--steam-well-fill);
+}
+.steam-spp-proto .steam-spp-edit            { border-color: var(--steam-well-line); }
+.steam-spp-proto .steam-spp-edit.is-todo    { border-color: var(--steam-well-line-todo); }
+.steam-spp-proto .steam-spp-edit:hover,
+.steam-spp-proto .steam-spp-edit.is-todo:hover,
+.steam-spp-proto .steam-spp-edit:focus,
+.steam-spp-proto .steam-spp-edit.is-todo:focus {
+  border-color: var(--steam-well-line-hover);
+  border-bottom-color: var(--steam-well-line-hover);
+  outline: none;
+}
+
+/* The same for a block that opens a step: the wash it sits on does not
+   change, the ring does. These override this file's older per-block
+   `:hover { background: rgba(103,193,245,.12) }` rules, which are what
+   actually painted the page cyan under the pointer. */
+.steam-spp-proto .steam-spp-hit:hover,
+.steam-spp-proto .steam-spp-hit.is-todo:hover,
+.steam-spp-proto .steam-spp-tags-inner.steam-spp-hit:hover,
+.steam-spp-proto .steam-spp-content-block:hover,
+.steam-spp-proto .steam-spp-features-block:hover,
+.steam-spp-proto .steam-spp-languages-block:hover,
+.steam-spp-proto .steam-spp-info-block:hover {
+  background-color: transparent;
+}
+.steam-spp-proto .steam-spp-side-block.steam-spp-hit:hover,
+.steam-spp-proto .steam-spp-side-block.steam-spp-hit.is-todo:hover {
+  background-image: linear-gradient(90deg, rgba(0, 0, 0, .5) 5%, rgba(0, 0, 0, .65) 95%);
+}
+.steam-spp-proto .steam-spp-hit:hover,
+.steam-spp-proto .steam-spp-hit.is-todo:hover {
+  box-shadow: inset 0 0 0 1px var(--steam-well-line-hover);
+}
+
+/* ══ NOTHING LEANS OUT OF THE PAGE, AND THE FOUR BOXES AGREE (v8.91) ═════
+   One cause behind both. Every inline field and the tags block carried a
+   negative horizontal margin so the old hover WASH could bleed a few
+   pixels past the text. With the wash gone there is nothing to bleed, and
+   what the margins were still doing was starting the title 4px, About 4px
+   and System Requirements 10px left of the column — outside the page's
+   ground on one side, and out of line with Buy and the legal footer on
+   the other. They go, and the four boxes in the description column become
+   one 780px column with one left edge. */
+.steam-spp-proto .steam-spp-apphub-name,
+.steam-spp-proto .steam-spp-shortdesc,
+.steam-spp-proto .steam-spp-about-textarea,
+.steam-spp-proto .steam-spp-inline-input {
+  margin-left: 0; margin-right: 0;
+  box-sizing: border-box; width: 100%;
+}
+.steam-spp-proto .steam-spp-col-main > .steam-spp-section,
+.steam-spp-proto .steam-spp-col-main > .steam-spp-legal-wrap,
+.steam-spp-proto .steam-spp-purchase.steam-spp-hit {
+  margin-left: 0; margin-right: 0;
+  width: 100%; box-sizing: border-box;
+}
+/* The ring on a description-column block is paid inside its own width, so
+   System Requirements ends on the same line as Buy above it. */
+.steam-spp-proto .steam-spp-col-main .steam-spp-hit {
+  margin-left: 0; margin-right: 0;
+}
+.steam-spp-proto .steam-spp-tags-inner.steam-spp-hit { margin-left: 0; margin-right: 0; }
+
+/* The title row is a field and its number, so the Community Hub button
+   beside it sizes to itself rather than to half the row. */
+.steam-spp-proto .steam-spp-titlerow { flex: 1; min-width: 0; }
+
+/* ── The glance rows carry their number on the row (v8.91) ───────────────
+   Release Date, Developer and Publisher are one line each: a fixed label
+   column, the field, and the count at the end of the row. The long
+   fields' counters hang in the gutter below the box because the box is
+   the width of the column and there is nowhere beside it; these are
+   short, so the room is already there and a second line would cost the
+   glance three of them. */
+.steam-spp-proto .steam-spp-devrow {
+  display: flex; align-items: baseline; gap: 6px;
+}
+.steam-spp-proto .steam-spp-devrow > .steam-spp-edit { flex: 1 1 auto; min-width: 0; }
+.steam-spp-proto .steam-spp-devrow > .ias-char-counter-row {
+  position: static; flex: 0 0 auto; width: auto;
+  margin: 0; padding: 0; gap: 0; justify-content: flex-end;
+}
+/* The title's number goes in the gutter under the field, like the long
+   ones: the row it shares is the Community Hub button's too. */
+.steam-spp-proto .steam-spp-titlerow > .ias-char-counter-row { margin-top: 0; }

@@ -22093,7 +22093,8 @@ function computeSteamPlayerBadges() {
    page prints Minimum and Recommended side by side, and a form that stacks
    them makes you scroll to compare the two numbers you are deciding
    between. */
-/* The counter beside a Store Page Preview field (v8.89). Epic's
+/* The counter beside a Store Page Preview field (v8.89; every box on the
+   page carries one since v8.91). Epic's
    egsPageField settled the two decisions this copies:
 
      IT SITS IN THE GUTTER, beside the box rather than under it, because
@@ -22895,9 +22896,13 @@ function buildSteamStorePreviewPrototypeSection() {
      without a full reRenderStepModal() call. */
   const headerHtml = `
     <div class="steam-spp-apphub">
-      <input type="text" class="steam-spp-apphub-name steam-spp-edit${titleRaw ? '' : ' is-todo'}" id="steam-spp-title-input"
-             value="${escHtml(titleRaw)}" placeholder="Your Game Title"
-             oninput="_steamSppTitleInput(this.value)">
+      <div class="steam-spp-fieldrow steam-spp-titlerow">
+        <input type="text" class="steam-spp-apphub-name steam-spp-edit${titleRaw ? '' : ' is-todo'}${
+                 titleRaw.length > STEAM_PAGE_LIMITS.name ? ' is-over-limit' : ''}" id="steam-spp-title-input"
+               value="${escHtml(titleRaw)}" placeholder="Your Game Title"
+               oninput="_steamSppTitleInput(this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.name})">
+        ${_steamSppCounter(titleRaw, STEAM_PAGE_LIMITS.name)}
+      </div>
       <button class="steam-spp-hub-btn steam-spp-hub-btn-fixed" type="button">Community Hub</button>
     </div>`;
 
@@ -23052,15 +23057,23 @@ function buildSteamStorePreviewPrototypeSection() {
         <span class="steam-spp-muted">No user reviews</span>
       </div>
       <div class="steam-spp-devrow"><span class="steam-spp-label">Release Date:</span>
-        <input type="text" class="steam-spp-inline-input steam-spp-edit${releaseDateSet ? '' : ' is-todo'}" id="steam-spp-releasedate-input" value="${escHtml(releaseDateRaw)}"
-               oninput="_steamSppSetField('releaseDate', this.value); this.classList.toggle('is-todo', !this.value)"></div>
+        <input type="text" class="steam-spp-inline-input steam-spp-edit${releaseDateSet ? '' : ' is-todo'}${
+                 releaseDateRaw.length > STEAM_PAGE_LIMITS.releaseDate ? ' is-over-limit' : ''}" id="steam-spp-releasedate-input" value="${escHtml(releaseDateRaw)}"
+               oninput="_steamSppSetField('releaseDate', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.releaseDate}); this.classList.toggle('is-todo', !this.value)">
+        ${_steamSppCounter(releaseDateRaw, STEAM_PAGE_LIMITS.releaseDate)}</div>
       <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span>
-        <input type="text" class="steam-spp-inline-input steam-spp-edit${devRaw ? '' : ' is-todo'}" id="steam-spp-dev-input" value="${escHtml(devRaw)}"
-               placeholder="Developer Name" oninput="_steamSppDevPubInput('developer', this.value)"></div>
+        <input type="text" class="steam-spp-inline-input steam-spp-edit${devRaw ? '' : ' is-todo'}${
+                 devRaw.length > STEAM_PAGE_LIMITS.developer ? ' is-over-limit' : ''}" id="steam-spp-dev-input" value="${escHtml(devRaw)}"
+               placeholder="Developer Name"
+               oninput="_steamSppDevPubInput('developer', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.developer})">
+        ${_steamSppCounter(devRaw, STEAM_PAGE_LIMITS.developer)}</div>
       ${devStatusHtml}
       <div class="steam-spp-devrow steam-spp-devrow-close"><span class="steam-spp-label">Publisher:</span>
-        <input type="text" class="steam-spp-inline-input steam-spp-edit${pubRaw ? '' : ' is-todo'}" id="steam-spp-pub-input" value="${escHtml(pubRaw)}"
-               placeholder="Publisher Name" oninput="_steamSppDevPubInput('publisher', this.value)"></div>
+        <input type="text" class="steam-spp-inline-input steam-spp-edit${pubRaw ? '' : ' is-todo'}${
+                 pubRaw.length > STEAM_PAGE_LIMITS.publisher ? ' is-over-limit' : ''}" id="steam-spp-pub-input" value="${escHtml(pubRaw)}"
+               placeholder="Publisher Name"
+               oninput="_steamSppDevPubInput('publisher', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.publisher})">
+        ${_steamSppCounter(pubRaw, STEAM_PAGE_LIMITS.publisher)}</div>
       ${pubStatusHtml}
       <div class="steam-spp-tags">
         <div class="steam-spp-tags-inner steam-spp-hit${hasTags ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','tags')">

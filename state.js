@@ -5554,6 +5554,27 @@ const STEAM_LEGAL_MAX = 8000;
 const STEAM_SHORTDESC_MAX = 300;
 const STEAM_ABOUT_MAX     = 10000;
 
+/* THE REST OF THE PAGE'S OWN BOXES (v8.91). v8.89 counted the two long
+   fields on the argument that only they had a length worth watching, and
+   left Title, Developer, Publisher and Release Date bare. By request every
+   box a developer types in on this page now carries a number: a counted
+   field and an uncounted one sitting in the same column read as two
+   different KINDS of field, which is a distinction this page does not
+   have.
+
+   NONE OF THESE FOUR IS VALVE'S PUBLISHED FIGURE, and none is the editor's
+   either — Steamworks does not show a counter on them. They are Shipmate's
+   own, picked to sit well clear of any real answer, which is the same
+   admission STEAM_LEGAL_MAX and STEAM_ABOUT_MAX make above. They are here
+   so the boxes behave alike, not to assert a rule Steam enforces; a real
+   limit, when one is found, replaces the number and nothing else. */
+const STEAM_PAGE_LIMITS = {
+  name:        100,   /* longest store names run to about 80 */
+  developer:   128,   /* a list, not a name: "Sound Games, Lightfox Games" */
+  publisher:   128,
+  releaseDate:  40,   /* "Feb 19, 2026", "Coming soon", "Q1 2026" */
+};
+
 
 /* ── Application State ───────────────────────────────── */
 
