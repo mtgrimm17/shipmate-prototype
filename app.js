@@ -25696,13 +25696,21 @@ function _applySteamLegalNotice(notice) {
   const text = (typeof notice === 'string') ? notice.trim() : '';
   if (!text) return;
   const a = state.steamSubmitAnswers;
-  if ((a.legalNotice || '').trim()) return;          // already answered
-  a.legalNotice = text.slice(0, STEAM_LEGAL_MAX);
-  /* Epic prints a legal footer on its own page and asks the same question,
-     so a notice found once answers both — seeded, not linked, so editing
-     one afterwards does not rewrite the other. */
+  if (a && !(a.legalNotice || '').trim()) {
+    a.legalNotice = text.slice(0, STEAM_LEGAL_MAX);
+  }
+  /* EPIC IS ASKED SEPARATELY, NOT DOWNSTREAM OF STEAM (fixed in v8.87).
+     Epic prints a legal footer on its own page and asks the same question,
+     so a notice found once answers both — but until v8.87 Epic's copy was
+     made inside the branch above, which meant a project whose Steam notice
+     was already answered returned early and Epic's footer never got
+     anything at all. Each store's field is now judged by its own
+     emptiness. Seeded, not linked: editing one afterwards does not rewrite
+     the other. */
   const e = state.egsSubmitAnswers;
-  if (e && !(e.legalFooter || '').trim()) e.legalFooter = a.legalNotice;
+  if (e && !(e.legalFooter || '').trim()) {
+    e.legalFooter = text.slice(0, STEAM_LEGAL_MAX);
+  }
 }
 
 function _applySteamRequirements(reqs) {
@@ -25725,6 +25733,38 @@ function _applySteamRequirements(reqs) {
     }
     sr[o.id] = tab;
   });
+
+  _applyEgsSpecsFromSteam(reqs, map);
+}
+
+/* The same requirements onto Epic's Specifications (v8.87). Epic has two
+   operating systems to Steam's three and no per-OS notes row, so this is a
+   translation rather than a copy — egsSpecOsFromSteamTab (state.js) owns
+   the row-by-row part and hands back whatever would not fit. */
+function _applyEgsSpecsFromSteam(reqs, map) {
+  const e = state.egsSubmitAnswers;
+  if (!e || !e.specs) return;
+  const leftovers = [];
+  EGS_SPEC_OS.forEach(o => {
+    /* Windows and Mac only. Steam's Linux column has no tab here and is
+       dropped rather than relabelled as something a developer would then
+       have to notice and correct. */
+    const tab = steamReqTabFromApi(reqs[map[o.id]]);
+    if (!tab) return;
+    /* Same rule as Steam's own tabs: an OS the developer has answered —
+       including answered No — is a decision and is left alone. */
+    if (e.specs[o.id].supported !== null) return;
+    const out = egsSpecOsFromSteamTab(tab, o.label);
+    if (!out) return;
+    e.specs[o.id] = out.spec;
+    out.leftovers.forEach(l => leftovers.push(l));
+  });
+  /* Epic's Additional notes is one box for the whole section, so the rows
+     Epic has no home for only go in while it is still empty — appending to
+     a developer's own paragraph would be editing their sentence. */
+  if (leftovers.length && !(e.specsNotes || '').trim()) {
+    e.specsNotes = leftovers.join('. ').slice(0, 260);
+  }
 }
 
 /* Steam's categories describe four unrelated things at once — play modes,
@@ -25797,6 +25837,16 @@ function _applySteamCategories(categories) {
   if (!a.inputSupport) {
     if (names.indexOf('Full controller support') >= 0) a.inputSupport = 'gamepad_preferred';
     else if (names.indexOf('Partial Controller Support') >= 0) a.inputSupport = 'keyboard_plus';
+  }
+
+  /* EPIC'S FEATURES, from the same list (v8.87). Unlike Steam's players
+     tree this one has a real empty — features starts as [] and a developer
+     who has picked any is visibly done picking — so the test is the array
+     itself rather than "has anything here been touched". */
+  const e = state.egsSubmitAnswers;
+  if (e && Array.isArray(e.features) && !e.features.length) {
+    const feats = egsFeaturesFromSteamCategories(names);
+    if (feats.length) e.features = feats;
   }
 }
 

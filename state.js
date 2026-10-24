@@ -7241,6 +7241,136 @@ function steamReqTabFromApi(platformValue) {
            minimum: col(min), recommended: col(rec) };
 }
 
+/* ══ THE SAME SCRAPE, READ ONTO EPIC'S FORMS (v8.87) ═══════════════
+   v8.86 taught Shipmate to read /game's requirements, categories and legal
+   notice onto Steam's own sections. Epic asks three of the same questions
+   on its Store Page Preview — Specifications, Features and Legal — and a
+   developer who has already picked their Steam title should not type the
+   answers a second time.
+
+   THE TWO FORMS ARE NOT THE SAME SHAPE, and the gaps below are why these
+   are translators rather than copies:
+
+     - Epic has TWO operating systems, Windows and Mac. Steam has three,
+       and a game's Linux requirements have nowhere to land here, so they
+       are dropped rather than crammed into a tab that means Mac.
+     - Epic has no Network row and no Additional Notes row PER OS — it has
+       one Additional notes box for the whole section. Steam's network
+       line, its own notes and anything it labelled with a heading Epic
+       does not have all collect there, prefixed with the OS they came
+       from so the box does not read as one machine's spec.
+     - Epic's DirectX is a closed set of four pills, not a text box, so
+       "Version 12" has to become "DirectX 12" or it cannot be stored at
+       all — a value outside the four would draw no pill and look like a
+       row nobody filled in.
+     - Steam's bare 64-bit line is a convention of Steam's own page
+       furniture, not a field. Epic's OS box carries the bitness inside the
+       string a developer types ("Windows 10 64-bit" is the portal's own
+       example), so the flag is dropped rather than invented into a row. */
+const STEAM_TO_EGS_SPEC_ROW = {
+  os: 'os', cpu: 'cpu', memory: 'memory', gpu: 'gpu',
+  directx: 'directx', storage: 'storage', sound: 'sound',
+};
+
+/* "Version 12", "Version 9.0c", "DirectX 11" → one of EGS_DIRECTX_VERSIONS,
+   or null when the major version is not one Epic offers. Null rather than a
+   guess: an unmatched pill row is honestly empty, and a wrong one is a
+   claim the developer never made. */
+function egsDirectxFromSteam(value) {
+  const m = /(\d+)/.exec(String(value || ''));
+  if (!m) return null;
+  const want = 'DirectX ' + m[1];
+  return EGS_DIRECTX_VERSIONS.indexOf(want) >= 0 ? want : null;
+}
+
+/* One Steam tab (as steamReqTabFromApi returns it) onto one Epic OS block.
+   Returns { spec, leftovers } — the caller folds the leftovers into the
+   section's single Additional notes box, because this function cannot know
+   what the other operating system is about to add to it. */
+function egsSpecOsFromSteamTab(tab, osLabel) {
+  if (!tab) return null;
+  const spec = makeBlankEgsSpecOs();
+  spec.supported = 'yes';
+  const leftovers = [];
+  [['minimum', 'min'], ['recommended', 'rec']].forEach(([from, to]) => {
+    const col = tab[from] || {};
+    Object.keys(col).forEach(sid => {
+      const raw = (col[sid] || '').trim();
+      if (!raw) return;
+      const eid = STEAM_TO_EGS_SPEC_ROW[sid];
+      if (!eid) {
+        /* Network and Additional Notes, the two rows Steam has and Epic
+           does not. Named by OS and column so the notes box reads as a
+           list of leftovers rather than one contradictory machine. */
+        const row = STEAM_SYSREQ_ROWS.find(r => r.id === sid);
+        leftovers.push(osLabel + ' ' + (to === 'min' ? 'minimum' : 'recommended')
+                       + ' — ' + ((row && row.label) || sid) + ': ' + raw);
+        return;
+      }
+      if (eid === 'directx') {
+        const dx = egsDirectxFromSteam(raw);
+        if (dx) spec.directx[to] = dx;
+        else leftovers.push(osLabel + ' DirectX: ' + raw);
+        return;
+      }
+      spec[eid][to] = raw.slice(0, EGS_SPEC_MAX);
+    });
+  });
+  return { spec, leftovers };
+}
+
+/* ── Steam's categories onto Epic's ten Features ─────────────────────
+   Epic's list is closed and short, so this is many-to-few: one Steam
+   category can answer two of Epic's (Online PvP is both Online Multiplayer
+   and Competitive), and several Steam categories have no Epic answer at
+   all. Two judgement calls worth naming, since neither is forced:
+
+     - LAN COUNTS AS LOCAL. Epic offers Online Multiplayer or Local
+       Multiplayer and nothing in between; a LAN game is not played over
+       the internet, so Local is the nearer of the two. A developer who
+       disagrees unticks it — which is the point of seeding rather than
+       linking.
+     - A BARE "Multi-player" SEEDS NOTHING. It says there is more than one
+       player without saying where they are, and Epic has no feature that
+       means only that. Steam almost always ships the breakdown alongside
+       it, and those rows are the ones that answer the question. */
+const STEAM_CATEGORY_TO_EGS_FEATURES = {
+  'Single-player':              ['Single Player'],
+  'Online PvP':                 ['Online Multiplayer', 'Competitive'],
+  'Online Co-op':               ['Online Multiplayer', 'Co-op'],
+  'Online Multi-Player':        ['Online Multiplayer'],
+  'LAN PvP':                    ['Local Multiplayer', 'Competitive'],
+  'LAN Co-op':                  ['Local Multiplayer', 'Co-op'],
+  'Local Multi-Player':         ['Local Multiplayer'],
+  'Local Co-op':                ['Local Multiplayer', 'Co-op'],
+  'Shared/Split Screen':        ['Local Multiplayer'],
+  'Shared/Split Screen PvP':    ['Local Multiplayer', 'Competitive'],
+  'Shared/Split Screen Co-op':  ['Local Multiplayer', 'Co-op'],
+  'PvP':                        ['Competitive'],
+  'Co-op':                      ['Co-op'],
+  'MMO':                        ['MMO'],
+  'Cross-Platform Multiplayer': ['Cross Platform'],
+  'Full controller support':    ['Controller Support'],
+  'Partial Controller Support': ['Controller Support'],
+  'Tracked Controller Support': ['VR'],
+  'VR Supported':               ['VR'],
+  'VR Only':                    ['VR'],
+  'VR Support':                 ['VR'],
+};
+
+/* Epic's own order, not Steam's: the Features picker lists EGS_FEATURES
+   alphabetically and a seeded set that arrived in Steam's order would read
+   as shuffled next to it. */
+function egsFeaturesFromSteamCategories(names) {
+  const out = [];
+  (names || []).forEach(n => {
+    (STEAM_CATEGORY_TO_EGS_FEATURES[n] || []).forEach(f => {
+      if (EGS_FEATURES.indexOf(f) >= 0 && out.indexOf(f) < 0) out.push(f);
+    });
+  });
+  return EGS_FEATURES.filter(f => out.indexOf(f) >= 0);
+}
+
 function makeBlankSteamAnswers() {
   return {
     /* System requirements and the legal notice (v8.86). Both are printed on
