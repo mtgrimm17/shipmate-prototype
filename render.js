@@ -22119,6 +22119,18 @@ function _steamSppCounter(value, max) {
       </div>`;
 }
 
+/* ══ STEAMWORKS' OWN REQUIREMENTS FORM (v8.93) ══════════════════
+   Rebuilt against partner.steamgames.com rather than against the store
+   page it prints to, which is what the earlier version was built from.
+   Three tabs — Windows, Mac, Linux + SteamOS — and no Android, which the
+   portal does offer and which is left out by request.
+
+   The controls are the portal's: Memory and Disk Space are an amount and
+   an MB/GB unit, Network is a single tick reading "Broadband internet
+   connection", DirectX is a closed list of twenty-one versions, and VR
+   Devices and Support is a row Mac's tab does not have. Not one box on
+   the portal's form carries placeholder text, so none here does either.
+   The paragraph that used to head this section is gone, by request. */
 function buildSteamSysreqSection() {
   const sr  = _steamSysreq();
   const tab = STEAM_SYSREQ_OS.find(o => o.id === state.steamSysreqTab) || STEAM_SYSREQ_OS[0];
@@ -22131,16 +22143,56 @@ function buildSteamSysreqSection() {
       done ? ' is-done' : ''}" onclick="setSteamSysreqTab('${o.id}')">${escHtml(o.tab)}</button>`;
   }).join('');
 
-  const rowsHtml = STEAM_SYSREQ_ROWS.filter(r => !r.winOnly || tab.directx).map(r => `
+  /* One cell, drawn as whatever control the portal uses for that row. */
+  const cell = (r, which) => {
+    const v = os[which][r.id];
+    if (r.kind === 'size') {
+      const amt = (v && v.amount) || '';
+      const un  = (v && v.units)  || 'GB';
+      return `
+        <div class="steam-sysreq-cell steam-sysreq-size">
+          <input class="form-input" type="text" inputmode="numeric" value="${escHtml(amt)}"
+                 aria-label="${escHtml(tab.tab + ' ' + r.label + ' ' + which)}"
+                 onchange="setSteamSysreqSize('${tab.id}','${which}','${r.id}','amount', this.value)">
+          <select class="form-input steam-sysreq-units"
+                  aria-label="${escHtml(r.label + ' units')}"
+                  onchange="setSteamSysreqSize('${tab.id}','${which}','${r.id}','units', this.value)">
+            ${STEAM_SIZE_UNITS.map(u => `<option${u === un ? ' selected' : ''}>${u}</option>`).join('')}
+          </select>
+        </div>`;
+    }
+    if (r.kind === 'check') {
+      return `
+        <label class="steam-sysreq-cell steam-sysreq-check">
+          <input type="checkbox" ${v ? 'checked' : ''}
+                 onchange="setSteamSysreqField('${tab.id}','${which}','${r.id}', this.checked)">
+          <span>${escHtml(r.check)}</span>
+        </label>`;
+    }
+    if (r.kind === 'select') {
+      return `
+        <div class="steam-sysreq-cell">
+          <select class="form-input"
+                  aria-label="${escHtml(tab.tab + ' ' + r.label + ' ' + which)}"
+                  onchange="setSteamSysreqField('${tab.id}','${which}','${r.id}', this.value)">
+            ${r.options.map(o => `<option${(v || 'N/A') === o ? ' selected' : ''}>${escHtml(o)}</option>`).join('')}
+          </select>
+        </div>`;
+    }
+    return `
+      <label class="steam-sysreq-cell">
+        <input class="form-input" type="text" maxlength="${STEAM_SYSREQ_MAX}"
+               value="${escHtml(v || '')}"
+               aria-label="${escHtml(tab.tab + ' ' + r.label + ' ' + which)}"
+               onchange="setSteamSysreqField('${tab.id}','${which}','${r.id}', this.value)">
+      </label>`;
+  };
+
+  const rowsHtml = steamSysreqRowsFor(tab.id).map(r => `
     <div class="steam-sysreq-row">
-      <div class="steam-sysreq-label">${escHtml(r.label)}</div>
-      ${['minimum', 'recommended'].map(which => `
-        <label class="steam-sysreq-cell">
-          <input class="form-input" type="text" maxlength="${STEAM_SYSREQ_MAX}"
-                 value="${escHtml(os[which][r.id] || '')}"
-                 placeholder="${which === 'minimum' ? escHtml(r.hint) : ''}"
-                 onchange="setSteamSysreqField('${tab.id}','${which}','${r.id}', this.value)">
-        </label>`).join('')}
+      <div class="steam-sysreq-label">${escHtml(r.label)}:</div>
+      ${cell(r, 'minimum')}
+      ${cell(r, 'recommended')}
     </div>`).join('');
 
   const body = os.supported === 'yes' ? `
@@ -22164,9 +22216,6 @@ function buildSteamSysreqSection() {
            escHtml(tab.tab)} and the fields appear.</div>`;
 
   return `
-    <p class="ios-section-desc">Steam prints these under your description, one
-      tab per operating system and two columns per tab. Fill in the ones you
-      ship on; an operating system answered No is an answer, not a gap.</p>
     <div class="steam-sysreq-tabs">${tabsHtml}</div>
     ${ynRow(`Runs on ${tab.tab}`,
         os.supported,
@@ -22175,6 +22224,7 @@ function buildSteamSysreqSection() {
         'Only an operating system you ship on gets a tab on the store page.')}
     ${body}`;
 }
+
 
 /* The answers, created on first read rather than in makeBlankSteamAnswers
    alone — a project saved before v8.86 has no `sysreq` key, and a preview
@@ -22193,7 +22243,9 @@ function _steamSysreq() {
 function _steamSysreqOsFilled(osId) {
   const os = _steamSysreq()[osId];
   if (!os || os.supported !== 'yes') return false;
-  return STEAM_SYSREQ_ROWS.some(r => (os.minimum[r.id] || '').trim());
+  /* Through steamSysreqText since v8.93, because "filled in" now means a
+     ticked box or a number and a unit as well as a typed line. */
+  return steamSysreqRowsFor(osId).some(r => steamSysreqText(r.id, os.minimum[r.id]));
 }
 
 function steamSysreqDone() {
@@ -22261,67 +22313,109 @@ function buildSteamTechnicalSection() {
     ${playersPreviewHtml}
     <div class="ios-q-divider"></div>`;
 
+  /* ══ THE CONTROLLER SUPPORT WIZARD, STEP BY STEP (v8.93) ══════════
+     Read off Steamworks' own wizard: five steps, named General Input
+     Support, Xbox Controller Support, PlayStation Controller Support,
+     Steam Input API Integration and Summary. This card already stored all
+     four answers — what it did not have was the portal's shape: one
+     section called "Input Support" with the rest hanging off it as a
+     reveal. The questions and the option wording below are the wizard's
+     own, down to "Gamepad Required; No support for mouse and keyboard".
+
+     The Summary is Steam's own promise about what a customer will see,
+     which is the whole reason a developer answers the other four, so it
+     is a step here too rather than something left implied. */
   const INPUT_OPTS = [
     { id: 'keyboard_only',     label: 'Mouse and keyboard only' },
     { id: 'keyboard_plus',     label: 'Mouse and keyboard, plus gamepads' },
     { id: 'gamepad_preferred', label: 'Mouse and keyboard, but gamepad is preferred' },
-    { id: 'gamepad_required',  label: 'Gamepad required; no support for mouse and keyboard' },
+    { id: 'gamepad_required',  label: 'Gamepad Required; No support for mouse and keyboard' },
   ];
 
   const inputHtml = singleSelectRow(
-    'Input devices',
+    'What kind of devices can be used to comfortably play your game?',
     a.inputSupport,
     INPUT_OPTS.map(o => ({
       value: o.id, label: o.label,
       selectedClass: 'is-sel-none',
       onSelect: `answerSteamField('inputSupport','${o.id}')`,
     })),
-    'What kind of devices can be used to comfortably play your game?'
+    'Note that any VR devices, including input devices, that your game supports should be described in the system requirements.'
   );
 
+  const psOpts = [
+    { id: 'ps_dualshock_usb', label: 'DualShock Controller (USB)' },
+    { id: 'ps_dualshock_bt',  label: 'DualShock Controller (USB + Bluetooth)' },
+    { id: 'ps_dualsense_usb', label: 'DualSense Controller (USB)' },
+    { id: 'ps_dualsense_bt',  label: 'DualSense Controller (USB + Bluetooth)' },
+    { id: 'ps_none',          label: "No, my game doesn\u2019t support any PlayStation Controllers" },
+  ];
+
+  /* Steps 2–4 only apply once Step 1 says a gamepad is involved at all —
+     the wizard's own order, and the reveal this card already had. */
   const gamepadBlock = a.inputSupport && a.inputSupport !== 'keyboard_only' ? `
     <div class="cond-block">
-      <div class="ios-content-step-label" style="margin-top:0;">Controller Support</div>
-      ${ynRow('Full Xbox Controller support', a.xboxFullSupport,
+      <div class="ios-content-step-label" style="margin-top:0;">Xbox Controller Support</div>
+      ${ynRow('Does your game meet the criteria for full Xbox Controller support?',
+        a.xboxFullSupport,
         "answerSteamField('xboxFullSupport','yes')",
         "answerSteamField('xboxFullSupport','no')",
-        'Player can launch, configure, play, and exit using only an Xbox controller. Game displays correct glyphs and any text prompts open an on-screen keyboard.')}
+        'A player must be able to do everything with only a controller, the correct glyphs must appear on screen, any text prompt must open a virtual keyboard, and local multiplayer must work with multiple controllers.')}
 
-      <div style="margin-top:12px;">
-        <div class="form-label" style="margin-bottom:6px;">PlayStation Controller support <span style="color:var(--text-faint);font-weight:400;">(select all that apply)</span></div>
-        <div class="ms-chip-group">${[
-          {id:'ps_dualshock_usb',   label:'DualShock (USB)'},
-          {id:'ps_dualshock_bt',    label:'DualShock (USB + BT)'},
-          {id:'ps_dualsense_usb',   label:'DualSense (USB)'},
-          {id:'ps_dualsense_bt',    label:'DualSense (USB + BT)'},
-          {id:'ps_none',            label:'No PS support'},
-        ].map(c => {
+      <div class="ios-content-step-label">PlayStation Controller Support</div>
+      <div class="form-label" style="margin-bottom:6px;">Yes, my game supports: <span style="color:var(--text-faint);font-weight:400;">(select all that apply)</span></div>
+      <div class="ms-chip-group">${psOpts.map(c => {
           const on = a.psControllers.includes(c.id);
           return `<button class="ms-chip${on ? ' is-on' : ''}"
                           onclick="toggleSteamPS('${c.id}', ${!on})">${escHtml(c.label)}</button>`;
         }).join('')}</div>
-      </div>
+      <div class="form-hint" style="margin-top:6px;">On PC a PlayStation controller often works over USB without the same support over Bluetooth — confirm Bluetooth really works before ticking those.</div>
 
-      <div style="margin-top:12px;">
-        ${ynRow('Full Steam Input API integration', a.steamInputAPI,
-          "answerSteamField('steamInputAPI','yes')",
-          "answerSteamField('steamInputAPI','no')",
-          'Game fully integrates the Steam Input API, implements action bindings, queries action origins for correct glyph display, and allows button remapping through the Steam configurator.')}
-      </div>
+      <div class="ios-content-step-label">Steam Input API Integration</div>
+      ${ynRow('Does your game make full use of the Steam Input API?',
+        a.steamInputAPI,
+        "answerSteamField('steamInputAPI','yes')",
+        "answerSteamField('steamInputAPI','no')",
+        'Implements Steam Input actions and queries action origins so the right glyphs show, pauses automatically if a controller disconnects, and lets the player remap buttons through the Steam configurator.')}
+
+      <div class="ios-content-step-label">Summary</div>
+      <div class="form-hint" style="margin-bottom:6px;">Based on what you have said about your controller support, Steam will show customers:</div>
+      ${(() => {
+        const hasXbox = a.xboxFullSupport === 'yes';
+        const hasPs   = (a.psControllers || []).some(c => c !== 'ps_none');
+        const rows = [];
+        if (hasXbox || hasPs || a.steamInputAPI === 'yes') rows.push('Full Controller Support');
+        if (hasXbox) rows.push('Xbox Controllers');
+        if (hasPs)   rows.push('PlayStation Controllers');
+        return rows.length
+          ? `<div class="steam-players-preview-list">${rows.map(r =>
+              `<div class="steam-players-preview-row"><span class="steam-players-preview-icon">\u{1F3AE}</span><span class="steam-players-preview-label">${escHtml(r)}</span></div>`).join('')}</div>`
+          : `<div class="steam-spp-muted">Nothing yet — answer the questions above and Steam's breakdown appears here.</div>`;
+      })()}
     </div>
   ` : '';
 
-  const accessChecks = STEAM_ACCESSIBILITY_FEATURES.map(f => {
-    const checked = a.accessibilityFeatures.includes(f.id);
-    return `<label class="cq-check-row${checked ? ' is-checked' : ''}" title="${escHtml(f.desc)}">
-      <input type="checkbox" ${checked ? 'checked' : ''}
-             onchange="toggleSteamAccessibility('${f.id}', this.checked)">
-      <span>${escHtml(f.label)}</span></label>`;
+  /* Grouped as Steam's Accessibility wizard groups them (v8.93):
+     Gameplay, Audio, Visual, Input. The nineteen features were already
+     Steam's own; nineteen ungrouped checkboxes is a list to get through,
+     and four short groups is a form. */
+  const accessChecks = STEAM_ACCESS_CATEGORIES.map(cat => {
+    const rows = STEAM_ACCESSIBILITY_FEATURES.filter(f => f.cat === cat.id).map(f => {
+      const checked = a.accessibilityFeatures.includes(f.id);
+      return `<label class="cq-check-row${checked ? ' is-checked' : ''}" title="${escHtml(f.desc)}">
+        <input type="checkbox" ${checked ? 'checked' : ''}
+               onchange="toggleSteamAccessibility('${f.id}', this.checked)">
+        <span>${escHtml(f.label)}</span></label>`;
+    }).join('');
+    return `<div class="steam-access-group">
+      <div class="steam-access-cat">${escHtml(cat.label)}</div>
+      <div class="cq-checkboxes">${rows}</div>
+    </div>`;
   }).join('');
 
   return `
     ${playersHtml}
-    <div class="ios-content-step-label">Input Support</div>
+    <div class="ios-content-step-label">General Input Support</div>
     ${inputHtml}
     ${gamepadBlock}
     <div class="ios-q-divider"></div>
@@ -22379,9 +22473,6 @@ function buildSteamLanguagesEditSection() {
 
   return `
     <div class="ios-content-step-label" style="margin-top:0;">Languages</div>
-    <p style="padding:0 0 12px;color:var(--text-muted);font-size:13px;line-height:1.5;">
-      Pre-populated from the Primary and Supported languages selected in Game Details - Localization. Check or uncheck Interface, Full Audio, and Subtitles support per language, or remove a language you don't want listed here.
-    </p>
     ${tableHtml}`;
 }
 
@@ -22414,41 +22505,32 @@ function buildSteamInfoEditSection() {
   const ws  = state.webSite;
   const ssa = state.steamSubmitAnswers;
 
-  const topGenreChecks = STEAM_TOP_GENRES.map(g => {
-    const checked = ssa.topGenres.includes(g);
+  /* ══ GENRES, FROM STEAMWORKS' OWN CHECKBOX LIST (v8.93) ══════════
+     This offered STEAM_TOP_GENRES, which is the top tier of the TAG
+     wizard, not the Genres field the store form asks for. Steam asks
+     both questions and they are not the same list: the genre list has
+     Adventure, Indie and Massively Multiplayer, which the tag tier does
+     not, and has no "Software", which the tag tier does. Read off the
+     Store edit page's own Genres checkboxes. */
+  const genreChecks = STEAM_INFO_GENRES.map(g => {
+    const checked = (ssa.infoGenres || []).includes(g);
     return `<label class="cq-check-row${checked ? ' is-checked' : ''}">
       <input type="checkbox" ${checked ? 'checked' : ''}
-             onchange="toggleSteamTag('topGenres','${g}',this.checked,2)">
+             onchange="toggleSteamInfoGenre('${egsJsStr(g)}', this.checked)">
       <span>${escHtml(g)}</span></label>`;
   }).join('');
 
+  /* TITLE, DEVELOPER AND PUBLISHER ARE NOT HERE (v8.93), by request. All
+     three are typed directly on the Store Page Preview, on the page they
+     appear on, and a second box for the same value one click away is a
+     second place to look when they disagree — which they cannot, since
+     both wrote through to the same field, but a reader cannot know that
+     by looking. The Info block still OPENS this section; what it opens
+     is now the part of itself that has nowhere else to live. */
   return `
     <div class="form-group">
-      <label class="form-label">Title</label>
-      <input class="form-input" type="text" id="steam-info-title-input" value="${escHtml(fd.title || '')}"
-             placeholder="Your Game Title" oninput="_steamSppTitleInput(this.value)">
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Genre
-        <span class="tooltip-anchor">
-          <span class="tooltip-icon">?</span>
-          <span class="tooltip-body">The same Top-Level Genre selection made in Steam - Tags (choose one or two).</span>
-        </span>
-      </label>
-      <div class="cq-check-list">${topGenreChecks}</div>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Developer</label>
-      <input class="form-input" type="text" id="steam-info-dev-input" value="${escHtml(ws.developer || '')}"
-             placeholder="Developer Name" oninput="_steamSppDevPubInput('developer', this.value)">
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Publisher</label>
-      <input class="form-input" type="text" id="steam-info-pub-input" value="${escHtml(ws.publisher || '')}"
-             placeholder="Publisher Name" oninput="_steamSppDevPubInput('publisher', this.value)">
+      <label class="form-label">Genres</label>
+      <div class="cq-check-list">${genreChecks}</div>
     </div>
 
     <div class="ios-q-divider"></div>
@@ -23219,10 +23301,16 @@ function buildSteamStorePreviewPrototypeSection() {
                  || sysreqOsList[0] || null;
   const sysreqCol = (osId, which) => {
     const os = _steamSysreq()[osId];
-    const items = STEAM_SYSREQ_ROWS
-      .filter(r => !r.winOnly || STEAM_SYSREQ_OS.find(o => o.id === osId).directx)
-      .filter(r => (os[which][r.id] || '').trim())
-      .map(r => `<li><strong>${escHtml(r.label)}:</strong> ${escHtml(os[which][r.id])}</li>`)
+    /* STORE-PAGE LABELS, NOT THE PORTAL'S. Steam prints "OS", "Storage"
+       and "VR Support" for the rows its form calls OS Version, Disk Space
+       and VR Devices and Support, and it prints the Network tick as the
+       sentence rather than as the word "Network". */
+    const items = steamSysreqRowsFor(osId)
+      .map(r => ({ r, v: steamSysreqText(r.id, os[which][r.id]) }))
+      .filter(x => x.v)
+      .map(({ r, v }) => r.kind === 'check'
+        ? `<li><strong>Network:</strong> ${escHtml(v)}</li>`
+        : `<li><strong>${escHtml(STEAM_SYSREQ_STORE_LABEL[r.id] || r.label)}:</strong> ${escHtml(v)}</li>`)
       .join('');
     if (!items) return '';
     return `

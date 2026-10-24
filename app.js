@@ -24600,6 +24600,19 @@ function toggleSteamTag(field, value, checked, maxCount) {
   updateSteamCard();
 }
 
+/* Steam's Genres checkboxes on the store form (v8.93). Uncapped: the
+   portal does not limit how many a product ticks, unlike the Tag
+   Wizard's top tier, which it caps at two. */
+function toggleSteamInfoGenre(genre, checked) {
+  const a = state.steamSubmitAnswers;
+  if (!Array.isArray(a.infoGenres)) a.infoGenres = [];
+  const i = a.infoGenres.indexOf(genre);
+  if (checked && i < 0) a.infoGenres.push(genre);
+  if (!checked && i >= 0) a.infoGenres.splice(i, 1);
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  renderDashboard();
+}
+
 function toggleSteamPS(controllerId, checked) {
   const ps = state.steamSubmitAnswers.psControllers;
   if (checked) {
@@ -25943,10 +25956,30 @@ function setSteamSysreq64(osId, on) {
   os.bits64 = !!on;
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
 }
+/* The amount or the unit of a Memory / Disk Space row (v8.93). The
+   portal stores the two separately and composes them when it prints; so
+   does this (steamSysreqText, state.js). */
+function setSteamSysreqSize(osId, which, rowId, part, value) {
+  const os = _steamSysreq()[osId];
+  if (!os || !os[which]) return;
+  const cur = os[which][rowId];
+  const next = (cur && typeof cur === 'object') ? cur : { amount: '', units: 'GB' };
+  next[part] = (value || '').trim();
+  if (!next.units) next.units = 'GB';
+  os[which][rowId] = next;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  renderDashboard();
+}
+
 function setSteamSysreqField(osId, which, rowId, value) {
   const os = _steamSysreq()[osId];
   if (!os || !os[which]) return;
-  os[which][rowId] = (value || '').slice(0, STEAM_SYSREQ_MAX);
+  /* A tick arrives as a boolean and a select as one of its own options;
+     only a typed line gets the length cap (v8.93). */
+  os[which][rowId] = (typeof value === 'boolean')
+    ? value
+    : String(value == null ? '' : value).slice(0, STEAM_SYSREQ_MAX);
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
   renderDashboard();
 }
 function setSteamLegalNotice(value) {

@@ -5488,36 +5488,81 @@ const PRIVACY_PRESETS = [
    Epic has only a sound card. `winOnly` marks DirectX, the one row the Mac
    and Linux tabs drop — the same flag EGS_SPEC_ROWS uses for the same
    reason. */
+/* ══ READ OFF STEAMWORKS' OWN FORM (v8.93) ═══════════════════════
+   partner.steamgames.com's Store edit page, field by field, rather than
+   from the store page it prints to. Four things came back that reading
+   the published page could not have told us:
+
+     - THE OS LIST IS FOUR, NOT THREE: windows, mac, linux and android.
+       Android is deliberately left out here, by request.
+     - MEMORY AND DISK SPACE ARE A NUMBER AND A UNIT, not free text. The
+       portal gives an amount box and an MB/GB select; "8 GB RAM" typed
+       into one box is this card's invention, and the store page's own
+       "8 GB RAM" is Steam composing the two.
+     - NETWORK IS A TICK, not a line. One checkbox, "Broadband internet
+       connection".
+     - DIRECTX IS A CLOSED LIST of twenty-one versions, and VR Devices
+       and Support is a row of its own that this card never had.
+
+   `os` carries which rows that tab drops: mac has no DirectX and no VR
+   row, linux has no DirectX. */
 const STEAM_SYSREQ_OS = [
-  { id: 'windows', label: 'Windows',          tab: 'Windows',          directx: true  },
-  { id: 'mac',     label: 'macOS',            tab: 'macOS',            directx: false },
-  { id: 'linux',   label: 'SteamOS + Linux',  tab: 'SteamOS + Linux',  directx: false },
+  { id: 'windows', label: 'Windows',        tab: 'Windows',        directx: true,  vr: true  },
+  { id: 'mac',     label: 'Mac',            tab: 'Mac',            directx: false, vr: false },
+  { id: 'linux',   label: 'Linux + SteamOS', tab: 'Linux + SteamOS', directx: false, vr: true },
 ];
 
+/* Steamworks' own DirectX list, in its own order. */
+const STEAM_DIRECTX_VERSIONS = ['N/A','5.2','6.0','6.1','6.1a','7.0','7.0a','7.1',
+  '8.0','8.0a','8.1','8.1a','8.1b','8.2','9.0','9.0a','9.0b','9.0c','10','11','12'];
+const STEAM_SIZE_UNITS = ['MB', 'GB'];
+
+/* `kind` is what the control is in the portal, and the labels are the
+   portal's own wording down to "OS Version:" and "VR Devices and
+   Support:". No `hint`: not one box on Steamworks' form carries
+   placeholder text, and a greyed-out "8 GB RAM" reads as an answer
+   already given. */
 const STEAM_SYSREQ_ROWS = [
-  { id: 'os',       label: 'OS',               hint: '64-bit Windows 10' },
-  { id: 'cpu',      label: 'Processor',        hint: 'Core i5-8400 / Ryzen 5 2600' },
-  { id: 'memory',   label: 'Memory',           hint: '8 GB RAM' },
-  { id: 'gpu',      label: 'Graphics',         hint: 'GeForce GTX 1060 6GB' },
-  { id: 'directx',  label: 'DirectX',          hint: 'Version 12', winOnly: true },
-  { id: 'network',  label: 'Network',          hint: 'Broadband Internet connection' },
-  { id: 'storage',  label: 'Storage',          hint: '70 GB available space' },
-  { id: 'sound',    label: 'Sound Card',       hint: 'DirectX compatible' },
-  { id: 'notes',    label: 'Additional Notes', hint: 'SSD required' },
+  { id: 'os',       label: 'OS Version',             kind: 'text' },
+  { id: 'cpu',      label: 'Processor',              kind: 'text' },
+  { id: 'memory',   label: 'Memory',                 kind: 'size' },
+  { id: 'gpu',      label: 'Graphics',               kind: 'text' },
+  { id: 'network',  label: 'Network',                kind: 'check',
+    check: 'Broadband internet connection' },
+  { id: 'directx',  label: 'DirectX Version',        kind: 'select',
+    options: STEAM_DIRECTX_VERSIONS, winOnly: true },
+  { id: 'storage',  label: 'Disk Space',             kind: 'size' },
+  { id: 'sound',    label: 'Sound Card',             kind: 'text' },
+  { id: 'vr',       label: 'VR Devices and Support', kind: 'text', vrOnly: true },
+  { id: 'notes',    label: 'Additional Notes',       kind: 'text' },
 ];
 const STEAM_SYSREQ_MAX = 240;
+
+/* Which rows a given tab asks for. winOnly is DirectX; vrOnly is the VR
+   row, which Mac's tab drops and Linux's keeps. */
+function steamSysreqRowsFor(osId) {
+  const os = STEAM_SYSREQ_OS.find(o => o.id === osId) || STEAM_SYSREQ_OS[0];
+  return STEAM_SYSREQ_ROWS.filter(r =>
+    (!r.winOnly || os.directx) && (!r.vrOnly || os.vr));
+}
 
 /* The 64-bit line Steam prints above the fields rather than beside a label
    — on the store page it is a bare <li> with no <strong>, which is why it
    is a flag here and not a row. */
 const STEAM_SYSREQ_64BIT = 'Requires a 64-bit processor and operating system';
 
+/* A size row is {amount, units}, a check row is a boolean, and everything
+   else is a string — the shapes the portal's own controls have. */
 function makeBlankSteamSysreq() {
   const out = {};
   STEAM_SYSREQ_OS.forEach(o => {
     const col = () => {
       const c = {};
-      STEAM_SYSREQ_ROWS.forEach(r => { c[r.id] = ''; });
+      STEAM_SYSREQ_ROWS.forEach(r => {
+        c[r.id] = r.kind === 'size'  ? { amount: '', units: 'GB' }
+                : r.kind === 'check' ? false
+                : '';
+      });
       return c;
     };
     /* `supported` is a three-state like Epic's: null is unanswered, and a
@@ -7252,25 +7297,58 @@ const STEAM_CONTENT_CATEGORIES = [
   ]},
 ];
 
+/* ══ THE GENRES STEAMWORKS OFFERS (v8.93) ══════════════════════
+   Read off the Store edit page's own Genres checkboxes, in its order.
+   This is NOT the tag vocabulary and not STEAM_TOP_GENRES below: Steam
+   asks for genres twice, once as a short checkbox list on the store form
+   (this) and once as the top of the Tag Wizard's three tiers (that). The
+   Info block was offering the second where the portal shows the first,
+   which is why it was missing Adventure, Indie and Massively Multiplayer
+   and offering a "Software" that the genre list does not have.
+
+   The tail from Accounting onwards is Steam's non-game application and
+   video genres. They are part of the same checkbox list and are kept, so
+   a developer submitting a tool or a video finds the row they need. */
+const STEAM_INFO_GENRES = [
+  'Action', 'Adventure', 'Casual', 'Indie', 'Massively Multiplayer',
+  'Racing', 'RPG', 'Simulation', 'Sports', 'Strategy', 'Free To Play',
+  'Accounting', 'Animation & Modeling', 'Audio Production',
+  'Design & Illustration', 'Education', 'Photo Editing',
+  'Software Training', 'Utilities', 'Video Production', 'Web Publishing',
+  'Game Development', 'Movie', 'Documentary', 'Episodic', 'Short',
+  'Tutorial', '360 Video',
+];
+
 /* ── Tag Wizard constants (PDF 9) ───────────────────── */
 const STEAM_TOP_GENRES = [
   'Action','Adventure','Casual','Racing','RPG','Simulation','Software','Sports','Strategy',
 ];
 
+/* CHECKED AGAINST STEAM'S OWN VOCABULARY (v8.93). All 150 names in these
+   three tiers were tested against the 429 tags Steam publishes at
+   store.steampowered.com/tag/browse, and three were not tags at all:
+   "Clicker" is Steam's "Incremental", and "Football"/"Soccer" are its
+   "Football (American)"/"Football (Soccer)". A tag Steam does not have
+   is a tag a developer cannot actually apply.
+
+   WHAT THAT CHECK DOES NOT COVER is which tier each tag belongs in. The
+   Tag Wizard would say, and it would not open for reading — its URL
+   wants a session token the page mints on click — so the three tiers
+   below are still the ones this file already had. */
 const STEAM_GENRES = [
   '2D Fighter','3D Fighter','4X','Action Roguelike','Action RPG','Action-Adventure',
   'Animation & Modeling','Arcade','Audio Production','Auto Battler','Automobile Sim',
   'Base Building','Baseball','Basketball','Battle Royale',"Beat 'em up",'BMX',
   'Board Game','Bowling','Building','Card Game','City Builder','Colony Sim',
-  'Character Action Game','Chess','Clicker','Cycling','Dating Sim',
+  'Character Action Game','Chess','Incremental','Cycling','Dating Sim',
   'Design & Illustration','Diplomacy','Education','eSports','Experimental',
-  'Exploration','Farming Sim','Fighting','Football','God Game','Golf',
+  'Exploration','Farming Sim','Fighting','Football (American)','God Game','Golf',
   'Grand Strategy','Hacking','Hidden Object','Hockey','Idler','Interactive Fiction',
   'JRPG','Life Sim','Management','Match 3','Medical Sim','Mini Golf','Mining',
   'MMORPG','MOBA','Motocross','Open World','Outbreak Sim','Party Game',
   'Party-Based RPG','Photo Editing','Pinball','Platformer','Point & Click',
   'Puzzle','Rhythm','Roguelike','RTS','Sandbox','Shooter','Skateboarding',
-  'Skating','Skiing','Snowboarding','Soccer','Space Sim','Stealth','Strategy RPG',
+  'Skating','Skiing','Snowboarding','Football (Soccer)','Space Sim','Stealth','Strategy RPG',
   'Survival','Tabletop','Tennis','Tower Defense','Trivia','Turn-Based Strategy',
   'Utilities','Video Production','Visual Novel','Walking Simulator','Word Game','Wrestling',
 ];
@@ -7291,27 +7369,39 @@ const STEAM_SUB_GENRES = [
 
 const STEAM_AI_LIVE_TYPES = ['Code','Text','Textures','3D Models','Sound Effects','Music','Voice','Other'];
 
-/* ── Accessibility features (PDF 11 Summary) ────────── */
+/* ══ ACCESSIBILITY, IN STEAM'S OWN FOUR GROUPS (v8.93) ═══════════
+   The nineteen features were already exactly Steam's; what this card did
+   not have was the grouping the Accessibility wizard presents them in.
+   Read off partner.steamgames.com/doc/accessibility_features: Gameplay,
+   Audio, Visual, Input, in that order. Nineteen ungrouped checkboxes is a
+   list to get through; four short groups is a form. */
+const STEAM_ACCESS_CATEGORIES = [
+  { id: 'gameplay', label: 'Gameplay' },
+  { id: 'audio',    label: 'Audio'    },
+  { id: 'visual',   label: 'Visual'   },
+  { id: 'input',    label: 'Input'    },
+];
+
 const STEAM_ACCESSIBILITY_FEATURES = [
-  { id: 'adj_difficulty',  label: 'Adjustable Difficulty',          desc: 'Difficulty settings allow players to match their experience to their abilities' },
-  { id: 'save_anytime',    label: 'Save Anytime',                   desc: 'Players can save at any point in the game' },
-  { id: 'custom_volume',   label: 'Custom Volume Controls',         desc: 'Volume for different audio types can be adjusted independently' },
-  { id: 'narrated_menus',  label: 'Narrated Game Menus',            desc: 'Players can listen to game menus with narrated audio' },
-  { id: 'stereo_sound',    label: 'Stereo Sound',                   desc: 'Players can identify how far left or right sounds are coming from' },
-  { id: 'surround_sound',  label: 'Surround Sound',                 desc: 'Players can identify direction of sounds in any direction' },
-  { id: 'adj_text_size',   label: 'Adjustable Text Size',           desc: 'Players can adjust in-game text, menu text, subtitles' },
-  { id: 'subtitle_opts',   label: 'Subtitle Options',               desc: 'Players can customize subtitle display including background opacity, text color and size' },
-  { id: 'color_alt',       label: 'Color Alternatives',             desc: "Gameplay doesn't rely on colors, or players can adjust distinguishing colors" },
-  { id: 'contrast',        label: 'Contrast Controls',              desc: 'Contrast is adjustable, e.g., dark/light mode' },
-  { id: 'camera_comfort',  label: 'Camera Comfort',                 desc: 'Players can adjust or disable screen shaking, camera bob, motion blur' },
-  { id: 'no_vision',       label: 'Playable without Vision',        desc: 'Players can play fully without ever seeing the screen' },
-  { id: 'keyboard_only',   label: 'Keyboard Only Option',           desc: 'Game can be played with just a keyboard' },
-  { id: 'mouse_only',      label: 'Mouse Only Option',              desc: 'Game can be played with just a mouse' },
-  { id: 'touch_only',      label: 'Touch Only Option',              desc: 'Game can be played with just touch controls' },
-  { id: 'no_qte',          label: 'Playable without Quick Time Events', desc: 'Players can avoid sequences of precisely timed inputs' },
-  { id: 'own_pace',        label: 'Playable at Your Own Pace',      desc: 'Players can take as long as they need for any input' },
-  { id: 'chat_tts',        label: 'Chat Text-to-speech',            desc: 'Text chat between players can be narrated out loud in real time' },
-  { id: 'chat_stt',        label: 'Chat Speech-to-text',            desc: 'Voice chat between players can be read as text transcript in real time' },
+  { id: 'adj_difficulty', cat: 'gameplay',  label: 'Adjustable Difficulty',          desc: 'Difficulty settings allow players to match their experience to their abilities' },
+  { id: 'save_anytime', cat: 'gameplay',    label: 'Save Anytime',                   desc: 'Players can save at any point in the game' },
+  { id: 'custom_volume', cat: 'audio',   label: 'Custom Volume Controls',         desc: 'Volume for different audio types can be adjusted independently' },
+  { id: 'narrated_menus', cat: 'audio',  label: 'Narrated Game Menus',            desc: 'Players can listen to game menus with narrated audio' },
+  { id: 'stereo_sound', cat: 'audio',    label: 'Stereo Sound',                   desc: 'Players can identify how far left or right sounds are coming from' },
+  { id: 'surround_sound', cat: 'audio',  label: 'Surround Sound',                 desc: 'Players can identify direction of sounds in any direction' },
+  { id: 'adj_text_size', cat: 'visual',   label: 'Adjustable Text Size',           desc: 'Players can adjust in-game text, menu text, subtitles' },
+  { id: 'subtitle_opts', cat: 'visual',   label: 'Subtitle Options',               desc: 'Players can customize subtitle display including background opacity, text color and size' },
+  { id: 'color_alt', cat: 'visual',       label: 'Color Alternatives',             desc: "Gameplay doesn't rely on colors, or players can adjust distinguishing colors" },
+  { id: 'contrast', cat: 'visual',        label: 'Contrast Controls',              desc: 'Contrast is adjustable, e.g., dark/light mode' },
+  { id: 'camera_comfort', cat: 'visual',  label: 'Camera Comfort',                 desc: 'Players can adjust or disable screen shaking, camera bob, motion blur' },
+  { id: 'no_vision', cat: 'visual',       label: 'Playable without Vision',        desc: 'Players can play fully without ever seeing the screen' },
+  { id: 'keyboard_only', cat: 'input',   label: 'Keyboard Only Option',           desc: 'Game can be played with just a keyboard' },
+  { id: 'mouse_only', cat: 'input',      label: 'Mouse Only Option',              desc: 'Game can be played with just a mouse' },
+  { id: 'touch_only', cat: 'input',      label: 'Touch Only Option',              desc: 'Game can be played with just touch controls' },
+  { id: 'no_qte', cat: 'input',          label: 'Playable without Quick Time Events', desc: 'Players can avoid sequences of precisely timed inputs' },
+  { id: 'own_pace', cat: 'input',        label: 'Playable at Your Own Pace',      desc: 'Players can take as long as they need for any input' },
+  { id: 'chat_tts', cat: 'input',        label: 'Chat Text-to-speech',            desc: 'Text chat between players can be narrated out loud in real time' },
+  { id: 'chat_stt', cat: 'input',        label: 'Chat Speech-to-text',            desc: 'Voice chat between players can be read as text transcript in real time' },
 ];
 
 /* ── State factory ──────────────────────────────────── */
@@ -7338,6 +7428,42 @@ const STEAM_ACCESSIBILITY_FEATURES = [
      - A label Shipmate has no row for is kept, appended to Additional
        Notes. Dropping it silently would lose, for instance, "VR Support"
        — and the notes row is where Steam itself puts the leftovers. */
+/* ══ ONE ROW'S ANSWER, AS THE STORE PAGE PRINTS IT (v8.93) ══════════
+   The portal stores a size as a number and a unit and a network as a
+   tick, and the store page prints both as a line of text. Everything
+   downstream of the form — the preview's own requirements block, and the
+   translation onto Epic's free-text boxes — wants that line, so it is
+   written once here rather than three times badly. An empty row returns
+   an empty string, which every caller already treats as "not answered". */
+function steamSysreqText(rowId, value) {
+  const row = STEAM_SYSREQ_ROWS.find(r => r.id === rowId);
+  if (!row) return (value == null) ? '' : String(value).trim();
+  if (row.kind === 'size') {
+    const a = value && String(value.amount || '').trim();
+    if (!a) return '';
+    /* "8 GB RAM", not "8 GB". The portal stores a number and a unit and
+       Steam appends the noun when it prints the Memory line — caught by
+       egs887, which had Epic's box carrying the store page's own wording
+       and started getting the bare size instead. Disk Space gets no
+       suffix: Steam prints "70 GB available space" only when the
+       developer typed that into Additional Notes. */
+    return a + ' ' + ((value && value.units) || 'GB') + (row.id === 'memory' ? ' RAM' : '');
+  }
+  if (row.kind === 'check') return value ? row.check : '';
+  return (value == null) ? '' : String(value).trim();
+}
+
+/* Row id → the shorter label Steam prints on the store page. */
+const STEAM_SYSREQ_STORE_LABEL = {
+  os: 'OS', storage: 'Storage', vr: 'VR Support',
+};
+
+/* Store-page label → row id, for the three Steam shortens when printing. */
+const STEAM_STORE_LABELS = {
+  'os': 'os', 'storage': 'storage', 'vr support': 'vr',
+  'additional notes': 'notes', 'directx': 'directx',
+};
+
 function parseSteamReqColumn(text) {
   const out = { bits64: false, fields: {}, extra: [] };
   if (!text || typeof text !== 'string') return out;
@@ -7356,9 +7482,26 @@ function parseSteamReqColumn(text) {
     const label = line.slice(0, i).replace(/\*/g, '').trim().toLowerCase();
     const value = line.slice(i + 1).trim();
     if (!value) return;
-    const row = STEAM_SYSREQ_ROWS.find(r => r.label.toLowerCase() === label);
-    if (row) out.fields[row.id] = value;
-    else out.extra.push(line);
+    /* The STORE page's labels, which are not all the PORTAL's: Steam
+       prints "OS" for the field Steamworks calls "OS Version", "Storage"
+       for "Disk Space", and "VR Support" for "VR Devices and Support".
+       Matched on either, so a scrape keeps working now that the rows
+       carry the portal's wording. */
+    const row = STEAM_SYSREQ_ROWS.find(r =>
+      r.label.toLowerCase() === label || (STEAM_STORE_LABELS[label] === r.id));
+    if (!row) { out.extra.push(line); return; }
+    if (row.kind === 'size') {
+      /* "8 GB RAM" / "70 GB available space" → the amount and unit the
+         portal stores separately. Anything it cannot split stays whole in
+         the amount box rather than being dropped. */
+      const m = /^(\d+(?:\.\d+)?)\s*(MB|GB)\b/i.exec(value);
+      out.fields[row.id] = m ? { amount: m[1], units: m[2].toUpperCase() }
+                             : { amount: value, units: 'GB' };
+    } else if (row.kind === 'check') {
+      out.fields[row.id] = true;
+    } else {
+      out.fields[row.id] = value;
+    }
   });
   return out;
 }
@@ -7376,8 +7519,16 @@ function steamReqTabFromApi(platformValue) {
            || min.bits64 || rec.bits64;
   if (!any) return null;
   const col = (p) => {
+    /* Start from a blank column so every row has the shape its control
+       expects, then lay the parsed answers over it. */
     const c = {};
-    STEAM_SYSREQ_ROWS.forEach(r => { c[r.id] = p.fields[r.id] || ''; });
+    STEAM_SYSREQ_ROWS.forEach(r => {
+      const v = p.fields[r.id];
+      c[r.id] = v !== undefined ? v
+              : r.kind === 'size'  ? { amount: '', units: 'GB' }
+              : r.kind === 'check' ? false
+              : '';
+    });
     if (p.extra.length) {
       c.notes = [c.notes, ...p.extra].filter(Boolean).join(' ').slice(0, STEAM_SYSREQ_MAX);
     }
@@ -7417,6 +7568,8 @@ function steamReqTabFromApi(platformValue) {
 const STEAM_TO_EGS_SPEC_ROW = {
   os: 'os', cpu: 'cpu', memory: 'memory', gpu: 'gpu',
   directx: 'directx', storage: 'storage', sound: 'sound',
+  /* network, vr and notes have no Epic row and collect in its one
+     Additional notes box — see egsSpecOsFromSteamTab's leftovers. */
 };
 
 /* "Version 12", "Version 9.0c", "DirectX 11" → one of EGS_DIRECTX_VERSIONS,
@@ -7442,7 +7595,10 @@ function egsSpecOsFromSteamTab(tab, osLabel) {
   [['minimum', 'min'], ['recommended', 'rec']].forEach(([from, to]) => {
     const col = tab[from] || {};
     Object.keys(col).forEach(sid => {
-      const raw = (col[sid] || '').trim();
+      /* Flattened through steamSysreqText since v8.93: Epic's boxes are
+         free text, and Steam's memory and disk space are a number and a
+         unit by then. */
+      const raw = steamSysreqText(sid, col[sid]);
       if (!raw) return;
       const eid = STEAM_TO_EGS_SPEC_ROW[sid];
       if (!eid) {
@@ -7641,6 +7797,10 @@ function makeBlankSteamAnswers() {
     topGenres:          [],
     genres:             [],
     subGenres:          [],
+    /* Steam's own Genres checkbox list (STEAM_INFO_GENRES), which is the
+       store form's question and NOT the Tag Wizard's top tier above
+       (v8.93). Kept apart because Steam keeps them apart. */
+    infoGenres:         [],
     // Technical — Players (mirrors Steamworks' own "Players" checkbox tree:
     // three top-level modes, an optional PvP/Co-op breakdown each with
     // Online/LAN/Local granularity, and Cross-Platform Multiplayer as its

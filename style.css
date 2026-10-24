@@ -31937,3 +31937,39 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
    has no gap in. Developer's row now ends with a number in that space,
    so the pull-up would put the two on top of each other. */
 .steam-spp-proto .steam-spp-devrow-close { margin-top: 0; }
+
+/* ══ STEAMWORKS' OWN CONTROLS (v8.93) ════════════════════════════════════
+   The requirements form's rows are no longer all text boxes: Memory and
+   Disk Space are an amount and a unit, and Network is a tick. */
+.steam-sysreq-size { display: flex; gap: 6px; align-items: center; }
+.steam-sysreq-size > .form-input:first-child { flex: 1 1 auto; min-width: 0; }
+.steam-sysreq-units { flex: 0 0 72px; width: 72px; }
+.steam-sysreq-check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-muted); line-height: 1.3;
+}
+.steam-sysreq-check input { flex: none; }
+
+/* Accessibility in Steam's four groups rather than one run of nineteen. */
+.steam-access-group { margin-bottom: 14px; }
+.steam-access-group:last-child { margin-bottom: 0; }
+.steam-access-cat {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--text-faint); margin-bottom: 6px;
+}
+
+/* ── The language table fits, rather than scrolling sideways (v8.93) ─────
+   .prv-matrix is the App Store privacy matrix: eight columns pinned to
+   fixed widths that add up to 870, with the modal sized from the table.
+   Steam's language table borrows the class for its look and has five
+   columns, so it inherited a width 120px wider than the pane it opens in
+   and asked the reader to scroll for a checkbox. It sizes from its own
+   content instead; only the three answer columns and the remove button
+   are pinned, and the language name takes what is left. */
+.steam-lang-matrix { table-layout: auto; min-width: 0; width: 100%; }
+.steam-lang-matrix .prv-type-hd,
+.steam-lang-matrix .prv-type-cell { width: auto; min-width: 0; }
+.steam-lang-matrix .prv-col-hd { width: 86px; }
+.steam-lang-matrix .steam-lang-remove-hd,
+.steam-lang-matrix .steam-lang-remove-cell { width: 32px; }
+.prv-matrix-wrap:has(.steam-lang-matrix) { overflow-x: hidden; }
