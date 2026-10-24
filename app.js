@@ -18451,7 +18451,11 @@ function _steamSppTitleInput(value) {
   const info = document.getElementById('steam-spp-info-title');
   if (crumb)    crumb.textContent = shown;
   if (purchase) purchase.textContent = purchaseShown;
-  if (info)     info.textContent = shown;
+  /* The Info box takes the RAW value (v8.96): it states facts, and an
+     empty title is not the fact "Your Game Title". The breadcrumb and the
+     purchase strip keep their fallbacks — those are page furniture that
+     would otherwise collapse. */
+  if (info)     info.textContent = value || '';
   // Same empty-field pulse the App Store Product Page Preview's own
   // selectable Title/Subtitle carry while blank (.ias-placeholder) — see
   // .steam-spp-edit / .is-todo in style.css and the comment above headerHtml in
@@ -18508,7 +18512,8 @@ function _steamSppDevPubInput(field, value) {
   _steamSppSetField(field, value);
   const infoId = field === 'developer' ? 'steam-spp-devname-info' : 'steam-spp-pubname-info';
   const el = document.getElementById(infoId);
-  if (el) el.textContent = value || (field === 'developer' ? 'Developer Name' : 'Publisher Name');
+  /* Blank, not the placeholder — same reason as the title above. */
+  if (el) el.textContent = value || '';
   // Same empty-field mark as Title above (.steam-spp-edit.is-todo) — see the
   // comment above headerHtml in render.js.
   const inputId = field === 'developer' ? 'steam-spp-dev-input' : 'steam-spp-pub-input';

@@ -32003,3 +32003,11 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
    up with the box it counts. */
 .steam-spp-proto .steam-spp-titlerow { align-items: center; }
 .steam-spp-proto .steam-spp-titlerow > .ias-char-counter-row { align-items: center; }
+
+/* The legal notice's number ends where its box ends (v8.96). The shared
+   .ias-char-counter-row carries margin: 0 -4px so it can line up with an
+   input that pulls its own box 4px wider; this one sits in a wrap that
+   is exactly the box, so the bleed just put the number past the edge. */
+.steam-spp-proto .steam-spp-legal-wrap > .ias-char-counter-row {
+  margin-left: 0; margin-right: 0; width: auto;
+}

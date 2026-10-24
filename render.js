@@ -22822,6 +22822,11 @@ function buildSteamStorePreviewPrototypeSection() {
   const genreList   = (ssa.topGenres || []);
   const genreText   = genreList.length ? genreList.join(', ') : 'Indie';
   const primaryGenre = genreList[0] || 'Games';
+  /* The Info box's GENRE row is Steam - Info's own Genres answer, which
+     is the question its door opens (v8.96) — not the Tag Wizard's top
+     tier, which is a different question in a different section. Blank
+     until that question is answered. */
+  const infoGenreText = (ssa.infoGenres || []).join(', ');
 
   // Developer/Publisher — Steam's own independent per-language storage
   // (state.webSite.localizedStoreText, via _steamFieldValue), whose Primary
@@ -22833,8 +22838,10 @@ function buildSteamStorePreviewPrototypeSection() {
   // sidebar's info block further down — in sync without a full re-render.
   const devRaw = _steamFieldValue('developer', previewLang);
   const pubRaw = _steamFieldValue('publisher', previewLang);
-  const devName = escHtml(devRaw || 'Developer Name');
-  const pubName = escHtml(pubRaw || 'Publisher Name');
+  /* devName/pubName are gone (v8.96). They existed to give the Info box
+     a placeholder to echo, and the Info box no longer echoes one. The
+     INPUTS keep their placeholder attribute, which is where a
+     placeholder belongs. */
 
   // Short description ("Hook") — this prototype's own editable field, Steam's
   // own independent per-language storage (_steamFieldValue). The Primary
@@ -23520,13 +23527,23 @@ function buildSteamStorePreviewPrototypeSection() {
   const steamSocialLinksHtml = steamSocialLinks.map(l => `
       <a class="steam-spp-linkbar steam-spp-social-linkbar" href="${escHtml(_steamLinkHref(l.url.trim()))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(l.name.trim())} ${externalLinkIconSvg}</a>`).join('');
 
+  /* ══ THE INFO BOX PRINTS FACTS, OR NOTHING (v8.96) ═══════════════
+     Four rows here were echoing the placeholder a field shows while it is
+     empty: "TITLE: Your Game Title", "DEVELOPER: Developer Name",
+     "PUBLISHER: Publisher Name", "GENRE: Indie". A placeholder belongs in
+     the box you type into, where grey italics say "this is what goes
+     here". Repeated as a VALUE on a panel that states facts, it reads as
+     an answer the developer gave — and "Indie" was never even a
+     placeholder, it was a default this card invented. The row stays and
+     its value is blank until there is one.
+
+     Steam's own box has no "Info" heading either; the rows are the block. */
   const infoBlockHtml = `
     <div class="steam-spp-side-block steam-spp-info-block steam-spp-hit${infoDone ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','info')">
-      <div class="steam-spp-side-heading">Info</div>
-      <div class="steam-spp-info-line"><strong>Title:</strong> <span id="steam-spp-info-title">${escHtml(gameTitle)}</span></div>
-      <div class="steam-spp-info-line"><strong>Genre:</strong> ${escHtml(genreText)}</div>
-      <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text" id="steam-spp-devname-info">${devName}</span></div>
-      <div class="steam-spp-info-line"><strong>Publisher:</strong> <span class="steam-spp-link-text" id="steam-spp-pubname-info">${pubName}</span></div>
+      <div class="steam-spp-info-line"><strong>Title:</strong> <span id="steam-spp-info-title">${escHtml(titleRaw)}</span></div>
+      <div class="steam-spp-info-line"><strong>Genre:</strong> <span id="steam-spp-info-genre">${escHtml(infoGenreText)}</span></div>
+      <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text" id="steam-spp-devname-info">${escHtml(devRaw)}</span></div>
+      <div class="steam-spp-info-line"><strong>Publisher:</strong> <span class="steam-spp-link-text" id="steam-spp-pubname-info">${escHtml(pubRaw)}</span></div>
       <div class="steam-spp-info-links-group">
         ${steamSocialLinksHtml}
         <div class="steam-spp-linkbar">View update history ›</div>
