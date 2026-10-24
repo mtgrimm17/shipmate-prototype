@@ -7278,6 +7278,7 @@ const SM_FLIP_LABELS = {
   steamAssets:   'Select Steam Assets',
   tags:          'Tags',
   technical:     'Technical',
+  sysreq:        'System Requirements',
   languages:     'Languages',
   info:          'Info',
   localization:  'Localization Review',
@@ -8119,6 +8120,15 @@ function buildStorePreviewFlipSection(platformId, target) {
   // section is Technical's only home. Wrapped in .qs-section with no
   // internal header, same as 'tags'/'steamAssets' — the modal's own title
   // (FLIP_LABELS.technical, above) already reads "Technical".
+  /* Steam-only: the Store Page Preview's System Requirements block (v8.86).
+     Steamworks asks per operating system, in two columns, and so does this.
+     Guarded the way 'technical' is below: every platform reaches this
+     dispatcher, and a Steam form inside an Epic modal is the kind of bug
+     you cannot see. */
+  if (target === 'sysreq') {
+    if (platformId !== 'steam') return '';
+    return `<div class="qs-section">${buildSteamSysreqSection()}</div>`;
+  }
   if (target === 'technical') {
     /* EPIC GETS NOTHING HERE (v8.42). Its Technical Requirements step went,
        and with it the preview block that was this face's only door. The line
@@ -22011,6 +22021,105 @@ function computeSteamPlayerBadges() {
 }
 
 /* ── Steam: Technical (PDFs 10 + 11) ───────────────── */
+/* ══ STEAM — SYSTEM REQUIREMENTS (v8.86) ═════════════════════════════════
+   Steamworks' own form: one tab per operating system, a Yes/No on whether
+   the game ships there at all, and two columns of the same nine fields.
+   Epic's Specifications step (buildEgsSpecificationsSection) answers the
+   same question and this borrows its shape deliberately — a developer who
+   has filled one should recognise the other — but the rows, the labels and
+   the third OS are Steam's, read off store.steampowered.com rather than
+   copied across.
+
+   WHY THE PAIR IS ONE WIDE ROW rather than two stacked fields: the store
+   page prints Minimum and Recommended side by side, and a form that stacks
+   them makes you scroll to compare the two numbers you are deciding
+   between. */
+function buildSteamSysreqSection() {
+  const sr  = _steamSysreq();
+  const tab = STEAM_SYSREQ_OS.find(o => o.id === state.steamSysreqTab) || STEAM_SYSREQ_OS[0];
+  const os  = sr[tab.id];
+
+  const tabsHtml = STEAM_SYSREQ_OS.map(o => {
+    const on   = o.id === tab.id;
+    const done = sr[o.id].supported === 'yes' && _steamSysreqOsFilled(o.id);
+    return `<button type="button" class="steam-sysreq-tab${on ? ' is-current' : ''}${
+      done ? ' is-done' : ''}" onclick="setSteamSysreqTab('${o.id}')">${escHtml(o.tab)}</button>`;
+  }).join('');
+
+  const rowsHtml = STEAM_SYSREQ_ROWS.filter(r => !r.winOnly || tab.directx).map(r => `
+    <div class="steam-sysreq-row">
+      <div class="steam-sysreq-label">${escHtml(r.label)}</div>
+      ${['minimum', 'recommended'].map(which => `
+        <label class="steam-sysreq-cell">
+          <input class="form-input" type="text" maxlength="${STEAM_SYSREQ_MAX}"
+                 value="${escHtml(os[which][r.id] || '')}"
+                 placeholder="${which === 'minimum' ? escHtml(r.hint) : ''}"
+                 onchange="setSteamSysreqField('${tab.id}','${which}','${r.id}', this.value)">
+        </label>`).join('')}
+    </div>`).join('');
+
+  const body = os.supported === 'yes' ? `
+    <div class="steam-sysreq-grid">
+      <div class="steam-sysreq-row steam-sysreq-head">
+        <div class="steam-sysreq-label"></div>
+        <div class="steam-sysreq-cell">Minimum</div>
+        <div class="steam-sysreq-cell">Recommended</div>
+      </div>
+      ${rowsHtml}
+    </div>
+    <label class="steam-sysreq-64">
+      <input type="checkbox" ${os.bits64 ? 'checked' : ''}
+             onchange="setSteamSysreq64('${tab.id}', this.checked)">
+      <span>${escHtml(STEAM_SYSREQ_64BIT)}</span>
+    </label>`
+    : os.supported === 'no'
+      ? `<div class="form-hint" style="margin-top:12px;">Not shipping on ${
+           escHtml(tab.tab)}, so the store page prints no tab for it.</div>`
+      : `<div class="form-hint" style="margin-top:12px;">Say whether the game runs on ${
+           escHtml(tab.tab)} and the fields appear.</div>`;
+
+  return `
+    <p class="ios-section-desc">Steam prints these under your description, one
+      tab per operating system and two columns per tab. Fill in the ones you
+      ship on; an operating system answered No is an answer, not a gap.</p>
+    <div class="steam-sysreq-tabs">${tabsHtml}</div>
+    ${ynRow(`Runs on ${tab.tab}`,
+        os.supported,
+        `setSteamSysreqSupported('${tab.id}','yes')`,
+        `setSteamSysreqSupported('${tab.id}','no')`,
+        'Only an operating system you ship on gets a tab on the store page.')}
+    ${body}`;
+}
+
+/* The answers, created on first read rather than in makeBlankSteamAnswers
+   alone — a project saved before v8.86 has no `sysreq` key, and a preview
+   that throws on an old save is worse than one that fills it in. */
+function _steamSysreq() {
+  const a = state.steamSubmitAnswers;
+  if (!a.sysreq) a.sysreq = makeBlankSteamSysreq();
+  STEAM_SYSREQ_OS.forEach(o => { if (!a.sysreq[o.id]) a.sysreq[o.id] = makeBlankSteamSysreq()[o.id]; });
+  return a.sysreq;
+}
+
+/* An OS counts as filled once its MINIMUM column says something. Steam's own
+   store page will print a tab with only a minimum — Counter-Strike 2, Portal
+   2 and Stardew Valley all do — so requiring both columns would mark a
+   perfectly normal listing unfinished. */
+function _steamSysreqOsFilled(osId) {
+  const os = _steamSysreq()[osId];
+  if (!os || os.supported !== 'yes') return false;
+  return STEAM_SYSREQ_ROWS.some(r => (os.minimum[r.id] || '').trim());
+}
+
+function steamSysreqDone() {
+  const sr = _steamSysreq();
+  const answered = STEAM_SYSREQ_OS.every(o => sr[o.id].supported !== null);
+  const anyYes   = STEAM_SYSREQ_OS.some(o => sr[o.id].supported === 'yes');
+  const filled   = STEAM_SYSREQ_OS.filter(o => sr[o.id].supported === 'yes')
+                                  .every(o => _steamSysreqOsFilled(o.id));
+  return answered && anyYes && filled;
+}
+
 function buildSteamTechnicalSection() {
   const a = state.steamSubmitAnswers;
   const p = a.players;
@@ -22955,6 +23064,78 @@ function buildSteamStorePreviewPrototypeSection() {
       <p class="steam-spp-p steam-spp-italic">${aiDescRaw ? escHtml(aiDescRaw) : 'No description provided yet — add one in the Content Questions step.'}</p>
     </div>`;
 
+  /* ── SYSTEM REQUIREMENTS, AS STEAM PRINTS THEM (v8.86) ────────────────
+     Measured on store.steampowered.com: a 14px heading, a row of OS tabs
+     when more than one operating system ships, and two columns under it
+     headed MINIMUM: and RECOMMENDED:, each a list of "LABEL: value" where
+     the label is uppercased by CSS and dimmer than the value. An OS with
+     only a minimum prints one full-width column, which is the common case —
+     Counter-Strike 2, Portal 2 and Stardew Valley are all like that.
+
+     THE WHOLE BLOCK IS THE DOOR into the System Requirements step, the same
+     way every other block on this preview opens the thing that fills it.
+     The tabs are the exception and stop the click: switching which OS you
+     are LOOKING at is not a request to go and edit it. */
+  const sysreqOsList = STEAM_SYSREQ_OS.filter(o => _steamSysreqOsFilled(o.id));
+  const sysreqTab = sysreqOsList.find(o => o.id === state.steamSysreqPreviewTab)
+                 || sysreqOsList[0] || null;
+  const sysreqCol = (osId, which) => {
+    const os = _steamSysreq()[osId];
+    const items = STEAM_SYSREQ_ROWS
+      .filter(r => !r.winOnly || STEAM_SYSREQ_OS.find(o => o.id === osId).directx)
+      .filter(r => (os[which][r.id] || '').trim())
+      .map(r => `<li><strong>${escHtml(r.label)}:</strong> ${escHtml(os[which][r.id])}</li>`)
+      .join('');
+    if (!items) return '';
+    return `
+      <div class="steam-spp-sysreq-col">
+        <strong class="steam-spp-sysreq-colhead">${which === 'minimum' ? 'Minimum' : 'Recommended'}:</strong>
+        <ul>${os.bits64 ? `<li>${escHtml(STEAM_SYSREQ_64BIT)}</li>` : ''}${items}</ul>
+      </div>`;
+  };
+  const sysreqBodyHtml = sysreqTab ? (() => {
+    const min = sysreqCol(sysreqTab.id, 'minimum');
+    const rec = sysreqCol(sysreqTab.id, 'recommended');
+    return `<div class="steam-spp-sysreq-cols${rec ? '' : ' is-single'}">${min}${rec}</div>`;
+  })() : `<div class="steam-spp-muted" style="margin-top:8px;">No system requirements yet.</div>`;
+  const sysreqBlockHtml = `
+    <div class="steam-spp-section steam-spp-sysreq${steamSysreqDone() ? '' : ' steam-spp-glow-empty'}"
+         data-spp-el="sysreq"
+         onclick="openStorePreviewSection('steam','sysreq')"
+         title="Edit system requirements">
+      <h2 class="steam-spp-h2">System Requirements</h2>
+      ${sysreqOsList.length > 1 ? `
+      <div class="steam-spp-sysreq-tabs" onclick="event.stopPropagation();">
+        ${sysreqOsList.map(o => `
+          <button type="button" class="steam-spp-sysreq-tab${
+            o.id === sysreqTab.id ? ' is-current' : ''}"
+            onclick="setSteamSysreqPreviewTab('${o.id}')">${escHtml(o.tab)}</button>`).join('')}
+      </div>` : ''}
+      ${sysreqBodyHtml}
+    </div>`;
+
+  /* ── THE LEGAL NOTICE (v8.86) ─────────────────────────────────────────
+     The small grey paragraph at the very foot of a Steam store page:
+     #game_area_legal, 11px, rgb(86,97,104), 20px above it and nothing else
+     — no box, no heading, no rule. Typed on the page rather than in a step,
+     because it is one field and the page is where you can see how small it
+     prints. The counter is the preview's own, so it does not take a line
+     from the page (the same argument Epic's three counters settled on). */
+  const steamLegalRaw = (state.steamSubmitAnswers.legalNotice || '');
+  const legalBlockHtml = `
+    <div class="steam-spp-legal-wrap">
+      <textarea class="steam-spp-legal steam-spp-autogrow${
+                  steamLegalRaw ? '' : ' steam-spp-glow-empty'}"
+                id="steam-spp-legal" rows="1" maxlength="${STEAM_LEGAL_MAX}"
+                placeholder="Copyright and trademark lines, printed at the foot of the store page."
+                oninput="_steamSppAutoGrow(this); updateIapCharCounter(this, ${STEAM_LEGAL_MAX}); this.classList.toggle('steam-spp-glow-empty', !this.value)"
+                onchange="setSteamLegalNotice(this.value)">${escHtml(steamLegalRaw)}</textarea>
+      <div class="ias-char-counter-row">
+        <span class="ias-char-error"></span>
+        <span class="ias-char-count">${STEAM_LEGAL_MAX - steamLegalRaw.length}</span>
+      </div>
+    </div>`;
+
   const leftColHtml = `
     ${langWarningHtml}
     ${purchaseAreaHtml}
@@ -22965,7 +23146,9 @@ function buildSteamStorePreviewPrototypeSection() {
                 oninput="_steamSppAutoGrow(this); _steamSppSetField('aboutGame', this.value); this.classList.toggle('steam-spp-glow-empty', !this.value)">${escHtml(aboutGameRaw)}</textarea>
       ${aboutGameStatusHtml}
     </div>
-    ${aiDisclosureHtml}`;
+    ${aiDisclosureHtml}
+    ${sysreqBlockHtml}
+    ${legalBlockHtml}`;
 
   const relevanceCardHtml = supportsEnglish ? '' : `
     <div class="steam-spp-side-block">

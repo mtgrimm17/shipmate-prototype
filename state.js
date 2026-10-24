@@ -5403,6 +5403,68 @@ const PRIVACY_PRESETS = [
 ];
 
 
+/* ══ STEAM'S SYSTEM REQUIREMENTS (v8.86) ═════════════════════════════════
+   Steamworks asks for these per operating system, in two columns, and the
+   store page prints them back as two columns under an OS tab — measured on
+   store.steampowered.com (Cyberpunk 2077, Portal 2, Counter-Strike 2).
+
+   THREE OPERATING SYSTEMS, NOT TWO. Epic's own EGS_SPEC_OS has Windows and
+   Mac because Epic's portal has two tabs; Steam has three, and the third is
+   labelled "SteamOS + Linux" on the store page even though Steamworks calls
+   the field Linux.
+
+   THE ROWS ARE STEAM'S OWN LABELS, in Steam's order, which is not Epic's:
+   Steam leads with a 64-bit note that is its own line rather than a field,
+   prints OS before Processor, and has both Network and Sound Card where
+   Epic has only a sound card. `winOnly` marks DirectX, the one row the Mac
+   and Linux tabs drop — the same flag EGS_SPEC_ROWS uses for the same
+   reason. */
+const STEAM_SYSREQ_OS = [
+  { id: 'windows', label: 'Windows',          tab: 'Windows',          directx: true  },
+  { id: 'mac',     label: 'macOS',            tab: 'macOS',            directx: false },
+  { id: 'linux',   label: 'SteamOS + Linux',  tab: 'SteamOS + Linux',  directx: false },
+];
+
+const STEAM_SYSREQ_ROWS = [
+  { id: 'os',       label: 'OS',               hint: '64-bit Windows 10' },
+  { id: 'cpu',      label: 'Processor',        hint: 'Core i5-8400 / Ryzen 5 2600' },
+  { id: 'memory',   label: 'Memory',           hint: '8 GB RAM' },
+  { id: 'gpu',      label: 'Graphics',         hint: 'GeForce GTX 1060 6GB' },
+  { id: 'directx',  label: 'DirectX',          hint: 'Version 12', winOnly: true },
+  { id: 'network',  label: 'Network',          hint: 'Broadband Internet connection' },
+  { id: 'storage',  label: 'Storage',          hint: '70 GB available space' },
+  { id: 'sound',    label: 'Sound Card',       hint: 'DirectX compatible' },
+  { id: 'notes',    label: 'Additional Notes', hint: 'SSD required' },
+];
+const STEAM_SYSREQ_MAX = 240;
+
+/* The 64-bit line Steam prints above the fields rather than beside a label
+   — on the store page it is a bare <li> with no <strong>, which is why it
+   is a flag here and not a row. */
+const STEAM_SYSREQ_64BIT = 'Requires a 64-bit processor and operating system';
+
+function makeBlankSteamSysreq() {
+  const out = {};
+  STEAM_SYSREQ_OS.forEach(o => {
+    const col = () => {
+      const c = {};
+      STEAM_SYSREQ_ROWS.forEach(r => { c[r.id] = ''; });
+      return c;
+    };
+    /* `supported` is a three-state like Epic's: null is unanswered, and a
+       tab that has been answered "no" is a decision rather than a gap. */
+    out[o.id] = { supported: null, bits64: false, minimum: col(), recommended: col() };
+  });
+  return out;
+}
+
+/* Steam's legal notice: the small grey paragraph under the requirements on
+   every store page (#game_area_legal, 11px, rgb(86,97,104)). Steamworks
+   caps it; 2,650 characters is the longest in the games surveyed (GTA V),
+   so the cap here is generous rather than measured. */
+const STEAM_LEGAL_MAX = 8000;
+
+
 /* ── Application State ───────────────────────────────── */
 
 const state = {
@@ -6106,6 +6168,13 @@ const state = {
 
   // Steam submission questionnaire answers
   steamSubmitAnswers: makeBlankSteamAnswers(),
+
+  /* Which OS tab the System Requirements STEP and the PREVIEW are each
+     showing (v8.86). Two fields rather than one: the page and the form are
+     read at different moments and tying them together moves one under the
+     other. Surface state, like egsPreviewTab. */
+  steamSysreqTab: 'windows',
+  steamSysreqPreviewTab: null,
 
   // Epic Games Store submission answers. Content Rating is NOT here — it is
   // IARC, shared with Google Play through state.cqAnswers (see
@@ -7100,8 +7169,85 @@ const STEAM_ACCESSIBILITY_FEATURES = [
 ];
 
 /* ── State factory ──────────────────────────────────── */
+/* ── READING /game's requirements (v8.86) ────────────────────────────────
+   search.dev.shipmate.gg returns the requirements already flattened out of
+   Steam's HTML into plain text, which is the whole reason this is twenty
+   lines rather than an HTML parse. One column looks like:
+
+     "Minimum: \n• OS *: Windows 7\n• Processor: 2.6 GHz Intel Quad Core
+      \n• Memory: 2 GB RAM\n• DirectX: Version 11"
+
+   A "Minimum: " or "Recommended: " prefix, then one line per field, each
+   "• Label: value". Surveyed across eight games (Cyberpunk 2077, RDR2,
+   GTA V, Counter-Strike 2, Portal 2, Stardew Valley, PEAK, Tape To Tape),
+   and three things that survey turned up are handled here rather than
+   discovered later:
+
+     - "OS *", not "OS". Steam's asterisk marks a legacy or unsupported
+       OS version, and it is part of the label, so a match on the label
+       has to tolerate it. Tape To Tape is the one in the sample.
+     - A LINE WITH NO COLON is Steam's bare 64-bit note, which has no
+       label because on the store page it has no <strong>. It sets the
+       flag rather than becoming a field with an empty name.
+     - A label Shipmate has no row for is kept, appended to Additional
+       Notes. Dropping it silently would lose, for instance, "VR Support"
+       — and the notes row is where Steam itself puts the leftovers. */
+function parseSteamReqColumn(text) {
+  const out = { bits64: false, fields: {}, extra: [] };
+  if (!text || typeof text !== 'string') return out;
+  /* Everything after the first newline; the prefix is the column's own name
+     and is already known by the caller. */
+  const body = text.indexOf('\n') >= 0 ? text.slice(text.indexOf('\n') + 1) : '';
+  body.split('\n').forEach(raw => {
+    const line = raw.replace(/^\s*[•\u2022]\s*/, '').trim();
+    if (!line) return;
+    const i = line.indexOf(':');
+    if (i < 0) {
+      if (/64-bit/i.test(line)) out.bits64 = true;
+      else out.extra.push(line);
+      return;
+    }
+    const label = line.slice(0, i).replace(/\*/g, '').trim().toLowerCase();
+    const value = line.slice(i + 1).trim();
+    if (!value) return;
+    const row = STEAM_SYSREQ_ROWS.find(r => r.label.toLowerCase() === label);
+    if (row) out.fields[row.id] = value;
+    else out.extra.push(line);
+  });
+  return out;
+}
+
+/* One platform's pair of columns into one tab's answers. Returns null when
+   there is nothing in it, so the caller can tell "Steam has no Mac
+   requirements" from "Steam says Mac needs an M1" — the endpoint spells the
+   first of those two different ways depending on the game (an empty object,
+   or the key missing altogether), and both arrive here as null. */
+function steamReqTabFromApi(platformValue) {
+  if (!platformValue || typeof platformValue !== 'object') return null;
+  const min = parseSteamReqColumn(platformValue.minimum);
+  const rec = parseSteamReqColumn(platformValue.recommended);
+  const any = Object.keys(min.fields).length || Object.keys(rec.fields).length
+           || min.bits64 || rec.bits64;
+  if (!any) return null;
+  const col = (p) => {
+    const c = {};
+    STEAM_SYSREQ_ROWS.forEach(r => { c[r.id] = p.fields[r.id] || ''; });
+    if (p.extra.length) {
+      c.notes = [c.notes, ...p.extra].filter(Boolean).join(' ').slice(0, STEAM_SYSREQ_MAX);
+    }
+    return c;
+  };
+  return { supported: 'yes', bits64: !!(min.bits64 || rec.bits64),
+           minimum: col(min), recommended: col(rec) };
+}
+
 function makeBlankSteamAnswers() {
   return {
+    /* System requirements and the legal notice (v8.86). Both are printed on
+       the store page; the requirements are a step of their own and the
+       notice is typed on the page itself. */
+    sysreq:      makeBlankSteamSysreq(),
+    legalNotice: '',
     // Content Survey — all yes/no items stored in one object {[id]: 'yes'|'no'|null}
     steamContentAnswers: {},
     matureDescription:  '',

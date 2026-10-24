@@ -11075,6 +11075,25 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // Social links, straight off this same response — see
     // _applySteamSocialLinks for what this replaced.
     _applySteamSocialLinks(data.links);
+    /* ── legalNotice, requirements and categories (v8.86) ──────────────
+       Three fields /game has been returning that nothing read. Surveyed
+       across eight games before wiring, and the survey is why the three
+       calls below look defensive rather than trusting:
+
+         - THE KEY IS `legalNotice`, camelCase, and it is OMITTED when the
+           game has none rather than set to null or "". Three of the eight
+           surveyed had one (Red Dead Redemption 2, Cyberpunk 2077, GTA V,
+           all big publishers); the indies had none at all.
+         - `requirements` encodes "nothing here" TWO ways depending on the
+           game: `mac: {}` on some, the key missing entirely on others.
+           steamReqTabFromApi (state.js) turns both into null.
+         - `categories` is an array of {platform, id, description} where id
+           is a STRING, and duplicate descriptions are normal — Steam
+           issues separate ids for the same display name, so "DualShock
+           Controller Support" arrives twice on most games. */
+    _applySteamLegalNotice(data.legalNotice);
+    _applySteamRequirements(data.requirements);
+    _applySteamCategories(data.categories);
     if (data.developers && data.developers.length) state.webSite.developer = data.developers.join(', ');
     // Publisher — same "join Steam's list" treatment as Developer above,
     // just a different appdetails field (a game can, and often does, have
@@ -25662,6 +25681,160 @@ function restoreEgsLogos() {
    storefront is not a project-wide asset. (A developer who wants it
    everywhere drops it in Assets, where it arrives as a logotype and shows
    up here on its own through egsLogoCandidates.) */
+/* ── STEAM'S SYSTEM REQUIREMENTS AND LEGAL NOTICE (v8.86) ────────────────
+   Which OS tab the STEP is on and which the PREVIEW is on are two different
+   facts: a developer reading the page may be looking at macOS while the
+   form they last edited was Windows, and tying them together would move the
+   page under them every time they opened the step. Both are surface state,
+   like state.egsPreviewTab. */
+/* ── WHAT THE SCRAPE FILLS IN (v8.86) ────────────────────────────────────
+   All three follow the rule the rest of this file's importers follow: a
+   scrape SEEDS an empty field and never overwrites a developer's own
+   answer. A title picked by mistake and corrected must not take the
+   developer's typing with it. */
+function _applySteamLegalNotice(notice) {
+  const text = (typeof notice === 'string') ? notice.trim() : '';
+  if (!text) return;
+  const a = state.steamSubmitAnswers;
+  if ((a.legalNotice || '').trim()) return;          // already answered
+  a.legalNotice = text.slice(0, STEAM_LEGAL_MAX);
+  /* Epic prints a legal footer on its own page and asks the same question,
+     so a notice found once answers both — seeded, not linked, so editing
+     one afterwards does not rewrite the other. */
+  const e = state.egsSubmitAnswers;
+  if (e && !(e.legalFooter || '').trim()) e.legalFooter = a.legalNotice;
+}
+
+function _applySteamRequirements(reqs) {
+  if (!reqs || typeof reqs !== 'object') return;
+  const sr = _steamSysreq();
+  /* The endpoint's platform keys are pc/mac/linux; Shipmate's tabs are
+     windows/mac/linux, because the store page's tab says Windows. */
+  const map = { windows: 'pc', mac: 'mac', linux: 'linux' };
+  STEAM_SYSREQ_OS.forEach(o => {
+    const tab = steamReqTabFromApi(reqs[map[o.id]]);
+    const cur = sr[o.id];
+    /* An OS the developer has already answered is left alone — including
+       one answered "no", which is a decision and not an empty field. */
+    if (cur.supported !== null) return;
+    if (!tab) {
+      /* The endpoint saying nothing about an OS is not the same as Steam
+         saying the game does not run there, so this stays unanswered
+         rather than being filled in with a No the developer never gave. */
+      return;
+    }
+    sr[o.id] = tab;
+  });
+}
+
+/* Steam's categories describe four unrelated things at once — play modes,
+   platform features, controller support and accessibility — and only the
+   first two are questions the Technical step asks. The platform facts
+   (Steam Cloud, Trading Cards, Family Sharing, Remote Play, VAC, Workshop)
+   are true of Steam rather than of this game and have no field to land in,
+   so they are dropped rather than stashed somewhere nothing reads.
+
+   The play-mode names below are Steam's own, copied from the endpoint's
+   `categories[].description` as the survey returned them — Steam writes
+   "Shared/Split Screen PvP" for what Shipmate's Technical step calls Local
+   PvP, and the two must be spelled exactly or the row silently never
+   seeds. */
+const STEAM_CATEGORY_TO_PLAYER = {
+  'Single-player':              'singlePlayer',
+  'Multi-player':               'multiPlayer',
+  'MMO':                        'mmo',
+  'PvP':                        'pvp',
+  'Online PvP':                 'pvpOnline',
+  'LAN PvP':                    'pvpLan',
+  'Shared/Split Screen PvP':    'pvpLocal',
+  'Co-op':                      'coop',
+  'Online Co-op':               'coopOnline',
+  'LAN Co-op':                  'coopLan',
+  'Shared/Split Screen Co-op':  'coopLocal',
+  'Cross-Platform Multiplayer': 'crossPlatform',
+};
+function _applySteamCategories(categories) {
+  if (!Array.isArray(categories) || !categories.length) return;
+  const a = state.steamSubmitAnswers;
+  /* Deduped by DESCRIPTION, not by id: Steam issues several ids for one
+     display name — "DualShock Controller Support" arrives as both 55 and
+     56, "Steam Workshop" twice on Portal 2 — and a map keyed by name would
+     otherwise do the same work twice. */
+  const names = [];
+  categories.forEach(c => {
+    const d = c && typeof c.description === 'string' ? c.description.trim() : '';
+    if (d && names.indexOf(d) < 0) names.push(d);
+  });
+  if (!names.length) return;
+
+  /* PLAYERS seeds as a BLOCK, not field by field. Every player field
+     starts false, so an unchecked box and a box the developer deliberately
+     cleared look identical — there is no per-field empty to test. Touching
+     any of them at all is therefore only safe while the whole tree is
+     still untouched; after that the scrape keeps its hands off, the same
+     rule every other importer here follows. */
+  const p = a.players;
+  if (p && !Object.keys(p).some(k => p[k])) {
+    names.forEach(n => {
+      const key = STEAM_CATEGORY_TO_PLAYER[n];
+      if (key && key in p) p[key] = true;
+    });
+    /* Steam lists the children without always listing the parent — Rocket
+       League returns Online PvP with no bare "PvP" — and the Technical
+       step hides a child row whose parent is unchecked, so a seed that
+       copied Steam literally would set rows the developer cannot see. */
+    if (p.pvpOnline || p.pvpLan || p.pvpLocal) p.pvp = true;
+    if (p.coopOnline || p.coopLan || p.coopLocal) p.coop = true;
+    if (p.pvp || p.coop || p.crossPlatform) p.multiPlayer = true;
+  }
+
+  /* CONTROLLER SUPPORT. Steam's two controller categories answer the
+     Input devices question, not the Xbox/PlayStation/Steam Input ones
+     below it: "Full controller support" means the game is playable on a
+     gamepad, which is not the same claim as Steamworks' per-controller
+     checklist, and guessing those would put words in the developer's
+     mouth on a page Valve reads. */
+  if (!a.inputSupport) {
+    if (names.indexOf('Full controller support') >= 0) a.inputSupport = 'gamepad_preferred';
+    else if (names.indexOf('Partial Controller Support') >= 0) a.inputSupport = 'keyboard_plus';
+  }
+}
+
+function setSteamSysreqTab(osId) {
+  state.steamSysreqTab = osId;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+function setSteamSysreqPreviewTab(osId) {
+  state.steamSysreqPreviewTab = osId;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+function setSteamSysreqSupported(osId, value) {
+  const os = _steamSysreq()[osId];
+  if (!os) return;
+  /* Pressing the answer you already gave takes it back, the way Epic's own
+     per-OS switch does — and saying No does NOT clear what was typed, for
+     that switch's reason: a developer deciding is not a developer deleting. */
+  os.supported = (os.supported === value) ? null : value;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  renderDashboard();
+}
+function setSteamSysreq64(osId, on) {
+  const os = _steamSysreq()[osId];
+  if (!os) return;
+  os.bits64 = !!on;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+function setSteamSysreqField(osId, which, rowId, value) {
+  const os = _steamSysreq()[osId];
+  if (!os || !os[which]) return;
+  os[which][rowId] = (value || '').slice(0, STEAM_SYSREQ_MAX);
+  renderDashboard();
+}
+function setSteamLegalNotice(value) {
+  state.steamSubmitAnswers.legalNotice = (value || '').slice(0, STEAM_LEGAL_MAX);
+  renderDashboard();
+}
+
 function handleEgsLogoFiles(files) {
   if (!files || !files.length) return;
   const list = Array.from(files).filter(f => f.type.startsWith('image/'));

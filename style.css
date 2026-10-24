@@ -31226,3 +31226,127 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   cursor: pointer;
 }
 .egs-logo-restore:hover { color: var(--text); }
+
+/* ══ STEAM — SYSTEM REQUIREMENTS AND THE LEGAL NOTICE (v8.86) ════════════
+   The store page's own presentation, measured on store.steampowered.com
+   (Cyberpunk 2077, Portal 2, Counter-Strike 2): a 14px heading, OS tabs
+   only when more than one ships, then two columns headed MINIMUM: and
+   RECOMMENDED: whose field labels are uppercased and dimmer than their
+   values. A tab with only a minimum prints one full-width column. */
+.steam-spp-sysreq { cursor: pointer; }
+.steam-spp-sysreq-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 8px 0 12px;
+}
+.steam-spp-sysreq-tab {
+  padding: 4px 14px;
+  border: none;
+  border-radius: 2px;
+  background: rgba(103, 128, 153, 0.12);
+  color: #8ba6c1;
+  font-size: 12px;
+  cursor: pointer;
+}
+.steam-spp-sysreq-tab.is-current { background: #3d6c8d; color: #fff; }
+.steam-spp-sysreq-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+}
+.steam-spp-sysreq-cols.is-single { grid-template-columns: 1fr; }
+.steam-spp-sysreq-colhead {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: uppercase;
+  color: #c6d4df;
+}
+.steam-spp-sysreq-col ul { margin: 0; padding: 0; list-style: none; }
+.steam-spp-sysreq-col li {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #acb2b8;
+}
+/* Steam uppercases the label and dims it against the value — the <strong>
+   is the label, and on the real page it is the quieter of the two. */
+.steam-spp-sysreq-col li strong {
+  font-weight: 400;
+  text-transform: uppercase;
+  color: #7d8792;
+  margin-right: 4px;
+}
+
+/* The legal notice: 11px, rgb(86,97,104), 20px above it, and nothing else
+   around it — no box, no heading, no rule. Editable here, so it wears the
+   preview's own empty glow and carries a counter, but at rest it is the
+   same small grey paragraph the store page prints. */
+.steam-spp-legal-wrap { position: relative; margin-top: 20px; }
+.steam-spp-legal {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  resize: none;
+  overflow: hidden;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #566168;
+}
+.steam-spp-legal:hover  { border-color: rgba(255, 255, 255, .14); }
+.steam-spp-legal:focus  { outline: none; border-color: #3d6c8d; color: #8f9ba3; }
+.steam-spp-legal-wrap > .ias-char-counter-row {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 2px;
+  justify-content: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+/* ── The step's own form: Steamworks' two columns ──────────────────────── */
+.steam-sysreq-tabs { display: flex; gap: 6px; margin: 4px 0 14px; }
+.steam-sysreq-tab {
+  padding: 6px 14px;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 6px;
+  background: none;
+  color: var(--text-dim, #b7b7bc);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.steam-sysreq-tab.is-current { background: var(--panel-2, #1a1a1f); color: var(--text); }
+.steam-sysreq-tab.is-done::after { content: ' ✓'; color: var(--pill-on-color, #52BAFF); }
+.steam-sysreq-grid { margin-top: 14px; }
+.steam-sysreq-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.steam-sysreq-head {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--text-faint);
+  margin-bottom: 4px;
+}
+.steam-sysreq-label { font-size: 12.5px; color: var(--text-dim, #b7b7bc); }
+.steam-sysreq-cell { display: block; min-width: 0; }
+.steam-sysreq-cell .form-input { width: 100%; }
+.steam-sysreq-64 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--text-dim, #b7b7bc);
+  cursor: pointer;
+}
