@@ -7297,26 +7297,22 @@ const STEAM_CONTENT_CATEGORIES = [
   ]},
 ];
 
-/* ══ THE GENRES STEAMWORKS OFFERS (v8.93) ══════════════════════
-   Read off the Store edit page's own Genres checkboxes, in its order.
-   This is NOT the tag vocabulary and not STEAM_TOP_GENRES below: Steam
-   asks for genres twice, once as a short checkbox list on the store form
-   (this) and once as the top of the Tag Wizard's three tiers (that). The
-   Info block was offering the second where the portal shows the first,
-   which is why it was missing Adventure, Indie and Massively Multiplayer
-   and offering a "Software" that the genre list does not have.
+/* ══ THE GENRES STEAMWORKS SHOWS (v8.95) ══════════════════════
+   Ten, not the twenty-eight v8.93 put here. That version read every
+   `checkbox_rgGenres_*` row out of the Store edit page's markup and took
+   the lot; eighteen of them are in the DOM but not on the form — the
+   software and video genres (Accounting, Animation & Modeling, Movie,
+   Episodic, 360 Video and the rest, plus Free To Play), which Steam
+   reveals for other application types and never shows for a Game.
+   Measured this time rather than read: every row's own height, with its
+   ancestors checked for display:none.
 
-   The tail from Accounting onwards is Steam's non-game application and
-   video genres. They are part of the same checkbox list and are kept, so
-   a developer submitting a tool or a video finds the row they need. */
+   The lesson is the one this file keeps relearning — a list taken from
+   markup is not the list a developer sees, and only the second one is
+   the question being asked. */
 const STEAM_INFO_GENRES = [
   'Action', 'Adventure', 'Casual', 'Indie', 'Massively Multiplayer',
-  'Racing', 'RPG', 'Simulation', 'Sports', 'Strategy', 'Free To Play',
-  'Accounting', 'Animation & Modeling', 'Audio Production',
-  'Design & Illustration', 'Education', 'Photo Editing',
-  'Software Training', 'Utilities', 'Video Production', 'Web Publishing',
-  'Game Development', 'Movie', 'Documentary', 'Episodic', 'Short',
-  'Tutorial', '360 Video',
+  'Racing', 'RPG', 'Simulation', 'Sports', 'Strategy',
 ];
 
 /* ══ THE TAG WIZARD'S OWN THREE TIERS (v8.94) ═══════════════════

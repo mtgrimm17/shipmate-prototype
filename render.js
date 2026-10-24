@@ -22332,16 +22332,25 @@ function buildSteamTechnicalSection() {
     { id: 'gamepad_required',  label: 'Gamepad Required; No support for mouse and keyboard' },
   ];
 
-  const inputHtml = singleSelectRow(
-    'What kind of devices can be used to comfortably play your game?',
-    a.inputSupport,
-    INPUT_OPTS.map(o => ({
-      value: o.id, label: o.label,
-      selectedClass: 'is-sel-none',
-      onSelect: `answerSteamField('inputSupport','${o.id}')`,
-    })),
-    'Note that any VR devices, including input devices, that your game supports should be described in the system requirements.'
-  );
+  /* NOT singleSelectRow (v8.95). That draws a label on the left and its
+     pills on the right, which is right for "None / Infrequent /
+     Frequent" and wrong here: the question is a sentence and the
+     longest option is "Gamepad Required; No support for mouse and
+     keyboard", so the row ran off the side of the card. The wizard puts
+     the question on its own line with the options stacked under it as a
+     radio list, and so does this. */
+  const inputHtml = `
+    <div class="steam-ctrl-q">
+      <div class="steam-ctrl-ask">What kind of devices can be used to comfortably play your game?
+        <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">Note that any VR devices, including input devices, that your game supports should be described in the system requirements.</span></span>
+      </div>
+      <div class="steam-ctrl-opts">${INPUT_OPTS.map(o => `
+        <label class="steam-ctrl-opt${a.inputSupport === o.id ? ' is-on' : ''}">
+          <input type="radio" name="steam-input-support" ${a.inputSupport === o.id ? 'checked' : ''}
+                 onchange="answerSteamField('inputSupport','${o.id}')">
+          <span>${escHtml(o.label)}</span>
+        </label>`).join('')}</div>
+    </div>`;
 
   const psOpts = [
     { id: 'ps_dualshock_usb', label: 'DualShock Controller (USB)' },

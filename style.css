@@ -31973,3 +31973,33 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .steam-lang-matrix .steam-lang-remove-hd,
 .steam-lang-matrix .steam-lang-remove-cell { width: 32px; }
 .prv-matrix-wrap:has(.steam-lang-matrix) { overflow-x: hidden; }
+
+/* ── The wizard's first question, stacked (v8.95) ────────────────────────
+   Question on its own line, options under it as a radio list. The row
+   idiom this used (.ios-q-row-intensity, a label left and pills right)
+   is built for three one-word answers; this question is a sentence and
+   its longest answer is nine words, and the pair ran off the card. */
+.steam-ctrl-q { margin: 0 0 4px; }
+.steam-ctrl-ask {
+  font-size: 13px; line-height: 1.45; color: var(--text);
+  margin-bottom: 8px;
+}
+.steam-ctrl-opts { display: flex; flex-direction: column; gap: 2px; }
+.steam-ctrl-opt {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer;
+  font-size: 13px; line-height: 1.4; color: var(--text-muted);
+  border: 1px solid transparent;
+}
+.steam-ctrl-opt:hover { border-color: var(--border); }
+.steam-ctrl-opt.is-on { color: var(--text); border-color: var(--accent, #67c1f5); }
+.steam-ctrl-opt input { flex: none; margin-top: 2px; }
+.steam-ctrl-opt span { min-width: 0; }
+
+/* ── The title's number sits on the middle of its box (v8.95) ────────────
+   It shares the row with the field and the Community Hub button, and
+   baseline put it on the text's baseline — which on a 26px field with a
+   12px number reads as sitting near the bottom. Centre is what lines it
+   up with the box it counts. */
+.steam-spp-proto .steam-spp-titlerow { align-items: center; }
+.steam-spp-proto .steam-spp-titlerow > .ias-char-counter-row { align-items: center; }
