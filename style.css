@@ -31575,3 +31575,196 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .steam-spp-proto .ias-char-counter-row { color: #8f98a0; }
 .steam-spp-proto .ias-char-count { color: #8f98a0; }
 .steam-spp-proto .ias-char-count.is-over { color: var(--magenta); }
+
+/* ══ STEAM'S STORE PAGE, AT STEAM'S OWN SIZE (v8.90) ═════════════════════
+   Every number below was read off store.steampowered.com with
+   getComputedStyle — Go Ape Ship (4037180) and Cyberpunk 2077 (1091500),
+   the first for a free product and the second for a paid one with a legal
+   notice, mature-content block and a second system-requirements tab.
+
+   THE PAGE IS DRAWN AT 1200 AND SCALED, which is the idiom .egs-sp already
+   uses and the reason it was worth borrowing: a preview built to the
+   modal's 751px has to invent proportions, and every one it invents is a
+   small lie about what the developer will see. #game_highlights measures
+   1200px wide on a 1512px viewport; below it Steam splits 780 / 396 with a
+   14px gutter, and the highlights split 824 / 375. Those five numbers are
+   the whole layout, and they are Steam's, not a ratio fitted to a box.
+
+   THE TWO NUMBERS HAVE TO AGREE WITH THE MODAL and nothing in CSS can
+   check that, so steam890.py asserts the rendered width lands on 751 — a
+   modal that changes size fails a test instead of silently overflowing. */
+.steam-spp-proto {
+  --steam-page-w: 1200px;
+  width: var(--steam-page-w);
+  zoom: 0.6258;                       /* 751 / 1200 */
+  /* Steam ships Motiva Sans and falls back to a plain sans; the font is
+     not ours to load, so the fallback IS what a developer sees, and it is
+     Steam's own fallback rather than a third choice. */
+  font-family: 'Motiva Sans', Arial, Helvetica, sans-serif;
+  background: #1b2838;
+  color: #c6d4df;
+  font-size: 13px;
+  line-height: normal;
+  border-radius: 0;
+  padding: 0 0 24px;
+}
+
+/* ── The two splits ──────────────────────────────────────────────────── */
+/* 824 + 375 is 1199 of the 1200, so the highlights carry no gap of their
+   own: the gutter a reader sees on the real page comes from the media
+   being inset inside its column, not from space between the columns. Put
+   it on the media's padding and both column boxes keep the width they
+   were measured at. */
+.steam-spp-proto .steam-spp-media-block {
+  display: grid;
+  grid-template-columns: 824px 375px;
+  gap: 0 1px;
+  margin-bottom: 0;
+}
+.steam-spp-proto .steam-spp-media-left {
+  padding-right: 14px; box-sizing: border-box;
+}
+.steam-spp-proto .steam-spp-columns {
+  display: grid;
+  grid-template-columns: 780px 396px;
+  gap: 0 14px;
+  align-items: start;
+}
+.steam-spp-proto .steam-spp-col-side {
+  display: block;                      /* Steam spaces its blocks, not a gap */
+}
+
+/* ── The head of the page ────────────────────────────────────────────── */
+.steam-spp-proto .steam-spp-breadcrumb {
+  font-size: 12px; color: #56707f; margin-bottom: 0; line-height: 38px;
+}
+.steam-spp-proto .steam-spp-apphub-name {
+  font-size: 26px; line-height: 32px; font-weight: 400; color: #fff;
+  padding: 2px 4px; margin: 0 -4px;
+}
+.steam-spp-proto .steam-spp-apphub { margin-bottom: 8px; }
+
+/* ── At a glance, the right of the highlights ────────────────────────── */
+.steam-spp-proto .steam-spp-shortdesc {
+  font-size: 14px; line-height: 19px; color: #c6d4df;
+}
+.steam-spp-proto .steam-spp-devrow,
+.steam-spp-proto .steam-spp-reviews-row {
+  font-size: 13px; line-height: 18px; color: #c6d4df;
+}
+/* Steam's .subtitle column is a fixed 131.25px, which is what makes the
+   four values line up with each other rather than with their own labels. */
+.steam-spp-proto .steam-spp-label {
+  font-size: 11px; line-height: 18px; color: #798a95;
+  text-transform: uppercase; letter-spacing: normal;
+  display: inline-block; width: 131.25px; flex: 0 0 131.25px;
+}
+.steam-spp-proto .steam-spp-muted { font-size: 13px; color: #798a95; }
+.steam-spp-proto .steam-spp-tags { margin-top: 10px; }
+.steam-spp-proto .steam-spp-tag-pill {
+  font-size: 11px; line-height: 19px; height: 19px; padding: 0 7px;
+  margin-right: 2px; border-radius: 2px;
+  background: rgba(103, 193, 245, .2); color: #67c1f5;
+}
+
+/* ── The left column below the highlights ────────────────────────────── */
+/* Steam's section heads are 14px, not the 16/600 this file had: the page
+   leans on white against #acb2b8 body text rather than on size. */
+.steam-spp-proto .steam-spp-h2 {
+  font-size: 14px; font-weight: 400; line-height: 26px; color: #fff;
+  margin: 0 0 10px; padding-top: 2px;
+}
+.steam-spp-proto .steam-spp-about-textarea,
+.steam-spp-proto .steam-spp-p {
+  font-size: 14px; line-height: 21px; color: #acb2b8;
+}
+.steam-spp-proto .steam-spp-section { margin-bottom: 30px; }
+
+/* The purchase box, in Steam's two flavours: green when the product is
+   free to download, and the pale diagonal when there is a price. */
+.steam-spp-proto .steam-spp-purchase.steam-spp-hit,
+.steam-spp-proto .steam-spp-purchase.steam-spp-hit.is-todo {
+  padding: 16px 16px 26px; border-radius: 4px; margin: 0 0 50px;
+  background-image: linear-gradient(-60deg, rgba(226, 244, 255, .3) 5%, rgba(84, 107, 115, .3) 95%);
+  background-color: transparent;
+}
+.steam-spp-proto .steam-spp-purchase.is-free.steam-spp-hit,
+.steam-spp-proto .steam-spp-purchase.is-free.steam-spp-hit.is-todo {
+  background-image: linear-gradient(60deg, rgba(117, 176, 34, .7) 5%, rgba(88, 138, 27, .6) 95%);
+}
+.steam-spp-proto .steam-spp-purchase h1,
+.steam-spp-proto .steam-spp-purchase .steam-spp-purchase-title {
+  font-size: 21px; line-height: 23px; font-weight: 400; color: #fff; margin: 0 0 12px;
+}
+.steam-spp-proto .steam-spp-btn-green {
+  background-image: linear-gradient(to right, #75b022 5%, #588a1b 95%);
+  color: #d2efa9; border-radius: 2px; padding: 0 15px; font-size: 15px;
+  height: 32px; line-height: 32px; border: 0;
+}
+
+/* System requirements: the tab strip's own two states, and Steam's 300px
+   minimum column. */
+.steam-spp-proto .steam-spp-sysreq-tab {
+  font-size: 12px; padding: 0 10px; border-radius: 0;
+  background: transparent; color: #3b6e8c; border: 0;
+}
+.steam-spp-proto .steam-spp-sysreq-tab.is-current {
+  background: #18222e; color: #67c1f5;
+}
+.steam-spp-proto .steam-spp-sysreq-col { width: 300px; font-size: 12px; color: #acb2b8; }
+.steam-spp-proto .steam-spp-legal {
+  font-size: 11px; color: #566168; line-height: normal;
+}
+.steam-spp-proto .steam-spp-legal-wrap { margin: 20px 0 10px; }
+
+/* ── The right column's blocks ───────────────────────────────────────────
+   Steam's .block is the page's one repeated panel: a left-to-right black
+   wash over whatever the page background is, 16px of padding, square
+   corners, and 8px to the next one. Not a card — there is no fill and no
+   border, which is why a rounded grey box reads as the wrong site. */
+.steam-spp-proto .steam-spp-side-block {
+  background-image: linear-gradient(90deg, rgba(0, 0, 0, .5) 5%, rgba(0, 0, 0, .65) 95%);
+  background-color: transparent;
+  padding: 16px; margin: 0 0 8px; border-radius: 0;
+  font-size: 12px; line-height: normal; color: #c6d4df;
+}
+.steam-spp-proto .steam-spp-side-heading {
+  font-size: 12px; font-weight: 400; color: #8f98a0;
+  text-transform: none; letter-spacing: normal;
+  margin-bottom: 6px; padding-bottom: 0; border-bottom: 0;
+}
+.steam-spp-proto .steam-spp-info-block { line-height: 20px; color: #8f98a0; }
+.steam-spp-proto .steam-spp-info-line strong {
+  color: #8f98a0; font-weight: 400; text-transform: uppercase;
+}
+
+/* The step ring sits INSIDE a block that already pays 16px of padding, so
+   it takes none of its own — otherwise the right column is 20px wider than
+   Steam's and every block starts in a different place. */
+.steam-spp-proto .steam-spp-side-block.steam-spp-hit {
+  padding: 16px; margin-left: 0; margin-right: 0;
+}
+
+/* THE AFFORDANCE BLEED STOPS AT THE PAGE EDGE (v8.90). The inline fields
+   and the tags block carry a negative horizontal margin so their hover
+   wash can spill a few pixels past the text — the trick
+   .steam-spp-apphub-name's comment describes. In the glance column the
+   right-hand side of that spill lands outside the 1200px page and gives
+   the whole preview 8px of horizontal scroll. There is nothing out there
+   to bleed into, so on this side it does not: the left-hand bleed, which
+   is what lines the wash up with the label column, stays. */
+.steam-spp-proto .steam-spp-glance .steam-spp-inline-input { margin-right: 0; }
+.steam-spp-proto .steam-spp-glance .steam-spp-tags-inner.steam-spp-hit { margin-right: 0; }
+
+/* THE WASH SURVIVES THE RING (v8.90). .steam-spp-hit sets `background` as
+   a shorthand, and .is-todo sets `background: transparent` at one class
+   more specificity, so a meta block that opens a step — which is most of
+   them, and all of them before anything is answered — had its gradient
+   reset to none and read as a bare ring on the page ground. The ring is a
+   box-shadow and costs the background nothing; it only has to be said at
+   the specificity .is-todo already uses. */
+.steam-spp-proto .steam-spp-side-block.steam-spp-hit,
+.steam-spp-proto .steam-spp-side-block.steam-spp-hit.is-todo {
+  background-image: linear-gradient(90deg, rgba(0, 0, 0, .5) 5%, rgba(0, 0, 0, .65) 95%);
+  background-color: transparent;
+}

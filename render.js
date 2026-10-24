@@ -22770,9 +22770,9 @@ function buildSteamStorePreviewPrototypeSection() {
   // placeholder) so the field always shows real, editable text rather than
   // ever looking blank. releaseDateSet tracks whether that's a REAL answer
   // or still just the "Coming soon" filler, so the field can carry the same
-  // steam-spp-glow-empty pulse every other unanswered field in this
-  // prototype uses (Developer/Publisher's own glow, just above, follows the
-  // identical "raw value" vs. "decorated fallback" split).
+  // unanswered mark every other field here does (.steam-spp-edit.is-todo
+  // since v8.89; Developer/Publisher just above follow the identical
+  // "raw value" vs. "decorated fallback" split).
   const releaseDateSet = !!(ws.releaseDate && ws.releaseDate.trim());
   const releaseDateRaw = releaseDateSet ? ws.releaseDate.trim() : 'Coming soon';
 
@@ -22939,22 +22939,18 @@ function buildSteamStorePreviewPrototypeSection() {
   // read yet since nothing's been added), so the carousel reads as
   // interactive — and highlights on hover via the shared [onclick] rule
   // below — even before the first screenshot or trailer is uploaded. It
-  // also carries the same ias-meta-pulse glow (steam-spp-glow-empty) every
-  // other unanswered/unvisited section in this prototype uses, gated on
-  // isSteamSectionComplete('screenshots') — the same check the old
-  // checklist-style buildSteamStorePreviewSection's own "Select
-  // Screenshots" button reads for its own screenshotsDone, just computed
-  // fresh here since that's a different function's own local — so it keeps
-  // pulsing until at least one screenshot has actually been added, then
-  // goes quiet the same way Title/Short Description/Developer/Publisher do
-  // once filled in. The glow itself is on a separate outer wrap
-  // (steam-spp-media-hero-glow-wrap, style.css) rather than the hero div
-  // itself: the hero needs
-  // overflow:hidden to clip screenshots/trailer video to its rounded
-  // corners, which would also clip the pulse's own outward box-shadow ring
-  // into invisibility if it carried the class directly.
-  const screenshotsDone = isSteamSectionComplete('screenshots');
-  const heroGlowClass = screenshotsDone ? '' : ' steam-spp-glow-empty';
+  // THE CAROUSEL NO LONGER GLOWS (v8.90), by request. It was the last
+  // .steam-spp-glow-empty on the page after v8.89 moved every field and
+  // block onto Epic's quieter marks, and one pulsing ring on an otherwise
+  // still page draws the eye harder than eight did. The empty state still
+  // says what it is, in the hero's own words ("No screenshots yet"), and
+  // the hero is still the door into Select Steam Assets.
+  //
+  // The wrap stays. It exists because the hero needs overflow:hidden to
+  // clip screenshots and trailer video to its corners, and removing a
+  // structural element to delete a class it no longer carries is how the
+  // thumbnail strip's own layout gets broken by accident.
+  const heroGlowClass = '';
   const heroHtml = firstCarouselItem
     ? `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero" data-kind="${firstCarouselItem.kind}" onclick="_steamSppCarouselItemClick(this.dataset.kind)">${heroInnerHtml}</div></div>`
     : `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero steam-spp-media-empty" onclick="_steamSppOpenAssetsSection('steam-assets-screenshots-section')">No screenshots yet</div></div>`;
@@ -23127,20 +23123,26 @@ function buildSteamStorePreviewPrototypeSection() {
   // Price — the exact field free-vs-paid above is computed from — now
   // lives (buildSteamBusinessSection). Consistent with the Content/
   // Features side blocks' own "click the whole card" pattern just below.
-  // Also carries the same steam-spp-glow-empty pulse as those blocks, gated
+  // Also carries the same unanswered mark as those blocks (.is-todo), gated
   // on whether Price has actually been answered rather than on isFreeGame —
   // isFreeGame is also true before Price has ever been answered (empty
   // string reads as free), so gating on that instead would leave a
-  // genuinely-answered free game glowing forever. businessDone distinguishes
+  // genuinely-answered free game marked forever. businessDone distinguishes
   // "never answered" from "answered, and the answer happens to be
   // Free/blank-price" — same underlying rawPrice check
   // buildSteamStorePreviewSection's own old checklist-style "Answer
   // Business Questions" button reads for its own businessDone, just reusing
   // this function's own rawPrice (above) instead of re-deriving it.
   const businessDone = !!rawPrice;
+  /* TWO GRADIENTS, NOT ONE (v8.90). Measured on the two reference pages:
+     a free product's box is Steam's green
+     (60deg, rgba(117,176,34,.7) -> rgba(88,138,27,.6)) and a priced one is
+     the pale diagonal (-60deg, rgba(226,244,255,.3) -> rgba(84,107,115,.3)).
+     This card painted both with one grey-blue, which made every free game
+     look like a paid one. `is-free` picks the green in the stylesheet. */
   const purchaseAreaHtml = isFreeGame
     ? `
-      <div class="steam-spp-purchase steam-spp-hit${businessDone ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','business')">
+      <div class="steam-spp-purchase is-free steam-spp-hit${businessDone ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','business')">
         <div class="steam-spp-purchase-top">
           <div class="steam-spp-purchase-title">Play <span id="steam-spp-purchase-title-text">${escHtml(purchaseTitleText)}</span></div>
           <div class="steam-spp-purchase-icons">${purchaseIconsHtml}</div>
@@ -23420,12 +23422,11 @@ function buildSteamStorePreviewPrototypeSection() {
   // same 'content' flip target "Answer Content Questions" already uses
   // elsewhere, see buildStorePreviewFlipSection/buildSteamContentRatingSection),
   // surfaced here so it's reachable straight from the store page preview
-  // itself rather than only from the old checklist-style buttons. Glows
-  // with the same ias-meta-pulse animation (steam-spp-glow-empty, reused
-  // throughout this prototype for every other unanswered field) until
-  // Content Questions has actually been answered, then goes quiet —
-  // mirroring how Title/Short Description/Developer/Publisher stop
-  // pulsing once filled in.
+  // itself rather than only from the old checklist-style buttons. Wears
+  // the same .is-todo ring as every other block that opens a step until
+  // Content Questions has actually been answered, then rests —
+  // mirroring how Title/Short Description/Developer/Publisher settle
+  // into their well once filled in.
   const contentDone = isSteamSectionComplete('contentRating');
   const contentSectionHtml = `
     <div class="steam-spp-side-block steam-spp-content-block steam-spp-hit${contentDone ? '' : ' is-todo'}"
