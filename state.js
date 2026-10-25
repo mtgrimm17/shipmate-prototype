@@ -5551,6 +5551,79 @@ function steamSysreqRowsFor(osId) {
    is a flag here and not a row. */
 const STEAM_SYSREQ_64BIT = 'Requires a 64-bit processor and operating system';
 
+/* ══ STEAM ACHIEVEMENTS (v8.98) ══════════════════════════════════════════
+   Five fields, because five is what the Steamworks Achievement
+   Configuration page asks a developer for that a PLAYER ever sees:
+   Display Name, Description, Hidden, Achieved Icon, Unachieved Icon. The
+   portal's own table has two more columns — API Name and Progress Stat —
+   and both exist for the SDK rather than for the store page: a key the
+   game calls SetAchievement() with, and a stat to tie progress to. This
+   card is a preview of a store page, where neither is ever printed, so
+   neither is asked for here. (The same reason Epic's achievement editor
+   has no achievement id; see makeBlankEgsAchievement.)
+
+   NO CHARACTER LIMITS, because the portal states none. Every name and
+   description input on partner.steamgames.com/apps/achievements/<appid>
+   was read live for this version and not one of them carries a maxlength
+   attribute. A counter here would be Shipmate inventing a rule Steam does
+   not have, which is the mistake v8.95 cost a round-trip to undo on the
+   genre list: a list taken from markup is not the list a developer sees,
+   and a limit nobody wrote down is not a limit. */
+
+/* THE ASSET RULE, IN STEAM'S OWN WORDS, from the line printed under both
+   icon wells on the Achievement Configuration page: "For best results,
+   achievement icons should be 256x256 px JPG images. They can be as small
+   as 64x64, but it is recommended you use the larger size. We recommend
+   that achieved icons be colorful; unachieved icons should be grayscale."
+
+   256x256 JPG is the requirement, so a file that is neither is refused;
+   64x64 is the floor Steam names, so anything between the two is taken
+   with a note rather than rejected. */
+const STEAM_ACH_ICON = {
+  px:     256,
+  minPx:  64,
+  accept: 'image/jpeg',
+  types:  ['image/jpeg'],
+  note:   '256 x 256 px JPG',
+};
+
+/* A BLANK ACHIEVEMENT. `open` is surface state riding on the record rather
+   than a parallel map keyed by id — there is one editor per achievement and
+   it dies with it, the same shape makeBlankEgsAchievement uses. */
+function makeBlankSteamAchievement() {
+  return {
+    id: (typeof generateId === 'function') ? generateId('steamach') : 'steamach' + Date.now(),
+    displayName:    '',
+    description:    '',
+    hidden:         false,
+    achievedIcon:   null,
+    unachievedIcon: null,
+    open:           true,
+  };
+}
+
+/* THE LIST, FILTERED OF HOLES. One accessor so the preview block, the
+   editor and the completeness check cannot disagree about what is in it. */
+function steamAchievements() {
+  return (state.steamAchievements || []).filter(Boolean);
+}
+
+/* WHAT A STORE PAGE SHOWS FOR ONE ROW. Steam prints the achieved (colourful)
+   icon in the showcase, and a hidden achievement still shows its icon — it
+   is the name and description that are withheld until it is unlocked. */
+function steamAchievementTileIcon(a) {
+  return ((a && a.achievedIcon) || {}).dataUrl
+      || ((a && a.unachievedIcon) || {}).dataUrl
+      || '';
+}
+
+/* DONE MEANS THERE IS AT LEAST ONE NAMED ACHIEVEMENT. An empty row the
+   developer added and has not typed into yet is not an answer, the same
+   test every other block on this page applies to its own field. */
+function steamAchievementsFilled() {
+  return steamAchievements().some(a => (a.displayName || '').trim());
+}
+
 /* A size row is {amount, units}, a check row is a boolean, and everything
    else is a string — the shapes the portal's own controls have. */
 function makeBlankSteamSysreq() {
@@ -6420,6 +6493,16 @@ const state = {
      Empty until the developer adds one or adopts the Steam import; see
      egsAchievements() for which list the page reads. */
   egsAchievements: [],
+
+  /* STEAM'S OWN ACHIEVEMENTS (v8.98) — the list the Store Page Preview's
+     Achievements block shows and the Steam - Achievements section edits,
+     in the Steamworks Achievement Configuration page's own shape (see
+     makeBlankSteamAchievement). Empty until the developer adds one or a
+     Steam scrape lands; unlike every other imported field in this app, a
+     scrape REPLACES this list rather than leaving a filled one alone —
+     asked for directly, and the same rule Epic's list follows (see
+     replaceEgsAchievementsFromSteam). */
+  steamAchievements: [],
   egsSubmitAnswers: makeBlankEgsAnswers(),
 
   /* Epic's Localizations surface state (v7.31). Which field is on screen,

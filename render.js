@@ -7278,6 +7278,7 @@ const SM_FLIP_LABELS = {
   tags:          'Tags',
   technical:     'Technical',
   sysreq:        'System Requirements',
+  achievements:  'Achievements',
   languages:     'Languages',
   info:          'Info',
   localization:  'Localization Review',
@@ -8126,6 +8127,17 @@ function buildStorePreviewFlipSection(platformId, target) {
   if (target === 'sysreq') {
     if (platformId !== 'steam') return '';
     return `<div class="qs-section">${buildSteamSysreqSection()}</div>`;
+  }
+  /* Steam-only: the Store Page Preview's Achievements block (v8.98).
+     Guarded the same way 'sysreq' directly above is, and for the same
+     reason — every platform reaches this dispatcher, and Steam's
+     achievement form inside an Epic modal is the kind of bug you cannot
+     see. Epic has an achievements editor of its own on its own preview
+     (buildEgsAchievementsPanel); the two lists are separate records and
+     neither should ever be drawn by the other's door. */
+  if (target === 'achievements') {
+    if (platformId !== 'steam') return '';
+    return `<div class="qs-section">${buildSteamAchievementsSection()}</div>`;
   }
   if (target === 'technical') {
     /* EPIC GETS NOTHING HERE (v8.42). Its Technical Requirements step went,
@@ -22131,6 +22143,133 @@ function _steamSppCounter(value, max) {
    Devices and Support is a row Mac's tab does not have. Not one box on
    the portal's form carries placeholder text, so none here does either.
    The paragraph that used to head this section is gone, by request. */
+/* ══ STEAM - ACHIEVEMENTS (v8.98) ════════════════════════════════════════
+   Reached from the Achievements block on the Store Page Preview, and only
+   from there. Five fields per row, the five a player ever sees — see
+   makeBlankSteamAchievement (state.js) for why API Name and Progress Stat
+   are not among them.
+
+   ONE ROW SHAPE, ALWAYS EDITABLE. Epic's panel has two modes because its
+   list can still be a read-out of the Steam import; this one does not,
+   because there is nothing else for it to show: a Steam scrape writes
+   straight into state.steamAchievements (replaceSteamAchievementsFromSteam,
+   app.js) and what lands is the developer's own list from that moment on.
+
+   HIDDEN DOES NOT GREY ANYTHING OUT. Epic drops the locked name and
+   description for a hidden achievement because it genuinely stores
+   neither. Steam stores both and withholds them from the player until it
+   is unlocked, so the fields stay live and the row says what the player
+   will see instead. */
+function buildSteamAchievementsSection() {
+  const list = (typeof steamAchievements === 'function') ? steamAchievements() : [];
+
+  /* Steam's own trophy glyph stands in for a tile with no artwork yet. */
+  const trophySvg = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/>'
+    + '<path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3"/></svg>';
+
+  const iconWell = (a, which) => {
+    const icon  = (which === 'achieved' ? a.achievedIcon : a.unachievedIcon) || null;
+    const label = which === 'achieved' ? 'Achieved Icon' : 'Unachieved Icon';
+    /* Steam's own recommendation, split so each well carries only its own
+       half of it rather than both halves twice. */
+    const tone  = which === 'achieved'
+      ? 'Steam recommends a colorful icon.'
+      : 'Steam recommends a grayscale icon.';
+    const id    = `steam-ach-icon-${which}-${a.id}`;
+    return `
+      <div class="steam-ach-field steam-ach-iconfield">
+        <label class="steam-ach-label" for="${id}">${label}</label>
+        <div class="steam-ach-icon-well${icon && icon.dataUrl ? ' has-file' : ''}${
+             icon && icon.error ? ' is-bad' : ''}">
+          ${icon && icon.dataUrl
+            ? `<img class="steam-ach-icon-thumb" src="${escHtml(icon.dataUrl)}" alt="">`
+            : `<span class="steam-ach-icon-slot">${trophySvg}</span>`}
+          <div class="steam-ach-icon-text">
+            <label class="steam-ach-icon-browse" for="${id}">${icon && icon.dataUrl
+              ? escHtml(icon.name || 'Replace') : 'Choose a file'}</label>
+            <div class="steam-ach-icon-note">${escHtml(STEAM_ACH_ICON.note)} &middot; ${escHtml(tone)}</div>
+            ${icon && icon.error ? `<div class="steam-ach-icon-err">${escHtml(icon.error)}</div>` : ''}
+            ${icon && icon.warn  ? `<div class="steam-ach-icon-warn">${escHtml(icon.warn)}</div>` : ''}
+          </div>
+          ${icon ? `<button type="button" class="steam-ach-icon-x" title="Remove"
+                            aria-label="Remove ${escHtml(label)}"
+                            onclick="event.stopPropagation(); removeSteamAchIcon('${a.id}','${which}')">&times;</button>` : ''}
+          <input class="steam-ach-icon-input" id="${id}" type="file"
+                 accept="${escHtml(STEAM_ACH_ICON.accept)}"
+                 onchange="handleSteamAchIcon(event, '${a.id}', '${which}')">
+        </div>
+      </div>`;
+  };
+
+  const editor = a => `
+    <div class="steam-ach-editor" onclick="event.stopPropagation();">
+      <div class="steam-ach-field">
+        <label class="steam-ach-label" for="steam-ach-name-${a.id}">Display Name</label>
+        <input class="form-input" id="steam-ach-name-${a.id}" type="text"
+               value="${escHtml(a.displayName || '')}"
+               placeholder="What the achievement is called"
+               oninput="setSteamAchField('${a.id}','displayName', this.value)">
+      </div>
+      <div class="steam-ach-field">
+        <label class="steam-ach-label" for="steam-ach-desc-${a.id}">Description</label>
+        <textarea class="form-input steam-ach-desc-input" id="steam-ach-desc-${a.id}" rows="2"
+                  placeholder="What the player did to earn it"
+                  oninput="setSteamAchField('${a.id}','description', this.value)">${escHtml(a.description || '')}</textarea>
+      </div>
+      <label class="steam-ach-hidden-row">
+        <input type="checkbox" ${a.hidden ? 'checked' : ''}
+               onchange="setSteamAchField('${a.id}','hidden', this.checked)">
+        <span class="steam-ach-label">Hidden?</span>
+        <span class="steam-ach-hidden-note">A hidden achievement keeps its name and description
+          from the player until they unlock it. Its icon still shows.</span>
+      </label>
+      <div class="steam-ach-icons">
+        ${iconWell(a, 'achieved')}
+        ${iconWell(a, 'unachieved')}
+      </div>
+    </div>`;
+
+  const rows = list.map(a => {
+    const src  = (typeof steamAchievementTileIcon === 'function') ? steamAchievementTileIcon(a) : '';
+    const name = (a.displayName || '').trim();
+    const desc = (a.description || '').trim();
+    return `
+      <div class="steam-ach-row${a.open ? ' is-open' : ''}" onclick="toggleSteamAchievement('${a.id}')">
+        <div class="steam-ach-rowhead">
+          <div class="steam-ach-rowicon">${src
+            ? `<img src="${escHtml(src)}" alt="">`
+            : `<span class="steam-ach-rowicon-empty">${trophySvg}</span>`}</div>
+          <div class="steam-ach-rowtext">
+            <div class="steam-ach-rowname">${name
+              ? escHtml(name)
+              : '<span class="steam-ach-placeholder">Untitled achievement</span>'}${
+              a.hidden ? '<span class="steam-ach-badge">Hidden</span>' : ''}</div>
+            <div class="steam-ach-rowdesc">${desc
+              ? escHtml(desc)
+              : '<span class="steam-ach-placeholder">No description</span>'}</div>
+          </div>
+          <button class="steam-ach-x" type="button" title="Remove achievement"
+                  aria-label="Remove achievement"
+                  onclick="event.stopPropagation(); removeSteamAchievement('${a.id}')">&#10005;</button>
+        </div>
+        ${a.open ? editor(a) : ''}
+      </div>`;
+  }).join('');
+
+  /* ADD IS ALWAYS THERE, including on an empty list — a game that has never
+     been near Steam still has to be able to write its first one. */
+  const addHtml = `
+    <div class="steam-ach-add">
+      <button type="button" class="steam-ach-addbtn" onclick="addSteamAchievement()">+ Add achievement</button>
+      ${list.length ? `<span class="steam-ach-count">${list.length} achievement${
+        list.length === 1 ? '' : 's'}</span>` : ''}
+    </div>`;
+
+  return `${addHtml}${list.length ? `<div class="steam-ach-list">${rows}</div>` : ''}`;
+}
+
 function buildSteamSysreqSection() {
   const sr  = _steamSysreq();
   const tab = STEAM_SYSREQ_OS.find(o => o.id === state.steamSysreqTab) || STEAM_SYSREQ_OS[0];
@@ -23493,6 +23632,57 @@ function buildSteamStorePreviewPrototypeSection() {
       </div>
     </div>`;
 
+  /* ══ ACHIEVEMENTS, THE WAY STEAM'S OWN PAGE PRINTS THEM (v8.98) ═══════
+     Read live off store.steampowered.com/app/1091500/Cyberpunk_2077 with
+     getComputedStyle, the same way v8.90 measured the rest of this page,
+     because the block is not where this app assumed it was. The old
+     classic-layout markup (#achievement_block, .communitylink_achievement_images)
+     still exists on a store page and now holds the Points Shop; the
+     achievements showcase is a newer component further down the same right
+     column, and these are its numbers:
+
+       block    396 wide, 16px padding, the right column's own
+                linear-gradient(90deg, rgba(0,0,0,.5) 5%, rgba(0,0,0,.65) 95%)
+       label    "Steam Achievements", 12px/16 Motiva Sans, #acb2b8
+       grid     five equal 66.4px columns, 8px gap  (5x66.4 + 4x8 = 364)
+       tile     66.4 square, square corners, the icon stretched to fill
+       last     "View all 57" on #1d1f23, 13px/17 Motiva Sans, #9a9fa5
+
+     FOUR ICONS AND A DOOR, which is what 57 achievements render as: the
+     fifth cell is the "View all" tile, not a fifth icon. A list short
+     enough to fit keeps all five as icons and prints no door, because
+     there is nothing behind it to go to.
+
+     THE ACHIEVED ICON IS THE ONE ON THE SHELF, hidden or not. Steam
+     withholds a hidden achievement's NAME and DESCRIPTION until it is
+     unlocked; the artwork is on the page either way. */
+  const steamAchList  = (typeof steamAchievements === 'function') ? steamAchievements() : [];
+  const steamAchDone  = (typeof steamAchievementsFilled === 'function') ? steamAchievementsFilled() : false;
+  const STEAM_ACH_CELLS = 5;
+  const steamAchOverflow = steamAchList.length > STEAM_ACH_CELLS;
+  const steamAchShown = steamAchList.slice(0, steamAchOverflow ? STEAM_ACH_CELLS - 1 : STEAM_ACH_CELLS);
+  const steamAchTile = a => {
+    const src = (typeof steamAchievementTileIcon === 'function') ? steamAchievementTileIcon(a) : '';
+    return `<div class="steam-spp-ach-tile${src ? '' : ' is-empty'}">${
+      src ? `<img src="${escHtml(src)}" alt="${escHtml((a.displayName || '').trim())}">` : ''}</div>`;
+  };
+  /* An empty list still draws Steam's five cells rather than a bare
+     heading: the shape IS the thing being previewed, and a block that
+     collapses to one line of grey text while unanswered tells a developer
+     nothing about what their page will look like. */
+  const steamAchGridHtml = steamAchList.length
+    ? steamAchShown.map(steamAchTile).join('')
+      + (steamAchOverflow
+          ? `<div class="steam-spp-ach-more"><span>View all ${steamAchList.length}</span></div>`
+          : '')
+    : new Array(STEAM_ACH_CELLS).fill('<div class="steam-spp-ach-tile is-empty"></div>').join('');
+  const achievementsHtml = `
+    <div class="steam-spp-side-block steam-spp-ach-block steam-spp-hit${steamAchDone ? '' : ' is-todo'}"
+         onclick="openStorePreviewSection('steam','achievements')">
+      <div class="steam-spp-ach-label">Steam Achievements</div>
+      <div class="steam-spp-ach-grid">${steamAchGridHtml}</div>
+    </div>`;
+
   // Glows (same ias-meta-pulse ring every other unanswered/unvisited field
   // in this prototype uses) until the Info section has actually been
   // visited once — state.storePreviewSectionSeen.steam.info, set generically
@@ -23596,6 +23786,7 @@ function buildSteamStorePreviewPrototypeSection() {
     ${featuresHtml}
     ${languagesHtml}
     ${deckHtml}
+    ${achievementsHtml}
     ${infoBlockHtml}
     ${embedRowHtml}
     ${contentSectionHtml}`;

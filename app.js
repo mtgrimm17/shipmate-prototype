@@ -11474,6 +11474,16 @@ async function _applySteamAchievements(appId, expectedTitle) {
      And repaint if the tab is already open: the scrape is async, so a
      developer can be looking at this list when it lands, and rebuilding it in
      state without redrawing would leave them reading the old one. */
+  /* STEAM'S OWN LIST, SAME MOMENT, SAME RULE (v8.98). The scrape is async,
+     so a developer can be looking at Steam - Achievements when it lands;
+     rebuilding the list in state without redrawing would leave them
+     reading the old one. */
+  if (typeof replaceSteamAchievementsFromSteam === 'function'
+      && replaceSteamAchievementsFromSteam(parsed)
+      && state.stepModal && state.stepModal.platformId === 'steam'
+      && typeof reRenderStepModal === 'function') {
+    reRenderStepModal();
+  }
   if (typeof replaceEgsAchievementsFromSteam === 'function'
       && replaceEgsAchievementsFromSteam()
       && state.stepModal && state.stepModal.platformId === 'egs'
@@ -24261,6 +24271,139 @@ function handleEgsAchIcon(event, id, which) {
   };
   reader.readAsDataURL(file);
 }
+/* ══ STEAM ACHIEVEMENTS (v8.98) ══════════════════════════════════════════
+   The list behind the Store Page Preview's Achievements block and the
+   Steam - Achievements section (buildSteamAchievementsSection, render.js).
+   Five fields, add/edit/remove, and one import that replaces rather than
+   tops up. */
+
+function _steamAch(id) {
+  return (state.steamAchievements || []).find(a => a && a.id === id) || null;
+}
+
+function addSteamAchievement() {
+  if (!Array.isArray(state.steamAchievements)) state.steamAchievements = [];
+  const a = makeBlankSteamAchievement();
+  /* One editor open at a time: a list of twelve expanded forms is a list
+     you scroll past, not one you read. Same as Epic's addEgsAchievement. */
+  state.steamAchievements.forEach(x => { if (x) x.open = false; });
+  state.steamAchievements.push(a);
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  /* The new row lands at the bottom of a list that may be long; put the
+     caret in its first field so Add is something you can keep doing from
+     the keyboard. */
+  setTimeout(() => {
+    const el = document.getElementById('steam-ach-name-' + a.id);
+    if (el) { try { el.focus(); } catch (e) {} }
+  }, 0);
+}
+
+function removeSteamAchievement(id) {
+  state.steamAchievements = (state.steamAchievements || []).filter(a => a && a.id !== id);
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+function toggleSteamAchievement(id) {
+  const a = _steamAch(id);
+  if (!a) return;
+  const wasOpen = !!a.open;
+  (state.steamAchievements || []).forEach(x => { if (x) x.open = false; });
+  a.open = !wasOpen;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* TYPING DOES NOT REDRAW. Display Name and Description are `oninput`, and
+   a re-render on every keystroke would take the caret with it. The preview
+   block behind the flip is rebuilt when the section is left, the same way
+   every other inline-edited Steam field on this page behaves. `hidden` is a
+   checkbox, which has no caret to lose and whose badge on the row should
+   appear at once — so that one, and only that one, repaints. */
+function setSteamAchField(id, field, value) {
+  const a = _steamAch(id);
+  if (!a) return;
+  a[field] = value;
+  if (field === 'hidden' && typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* THE ASSET RULE IS STEAM'S, AND IT IS CHECKED (STEAM_ACH_ICON, state.js):
+   256x256 JPG. A JPG of some other size is taken with a note rather than
+   refused, because Steam itself says 64x64 still works and only recommends
+   the larger one — but anything that is not a JPG at all is not what the
+   page asked for, so it is refused and says why. */
+function handleSteamAchIcon(event, id, which) {
+  const file = event.target && event.target.files && event.target.files[0];
+  if (!file) return;
+  const a = _steamAch(id);
+  if (!a) return;
+  const key = (which === 'achieved') ? 'achievedIcon' : 'unachievedIcon';
+  if (STEAM_ACH_ICON.types.indexOf(file.type) < 0) {
+    a[key] = { name: file.name, dataUrl: '', error: 'Steam takes a JPG here.' };
+    if (typeof reRenderStepModal === 'function') reRenderStepModal();
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const dataUrl = ev.target.result;
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      let warn = '';
+      if (w !== STEAM_ACH_ICON.px || h !== STEAM_ACH_ICON.px) {
+        warn = (w < STEAM_ACH_ICON.minPx || h < STEAM_ACH_ICON.minPx)
+          ? `That icon is ${w}x${h}. Steam's smallest is ${STEAM_ACH_ICON.minPx}x${STEAM_ACH_ICON.minPx}.`
+          : `That icon is ${w}x${h}. Steam asks for ${STEAM_ACH_ICON.px}x${STEAM_ACH_ICON.px}.`;
+      }
+      a[key] = { name: file.name, dataUrl, warn };
+      if (typeof reRenderStepModal === 'function') reRenderStepModal();
+    };
+    img.onerror = () => {
+      a[key] = { name: file.name, dataUrl };
+      if (typeof reRenderStepModal === 'function') reRenderStepModal();
+    };
+    img.src = dataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeSteamAchIcon(id, which) {
+  const a = _steamAch(id);
+  if (!a) return;
+  a[(which === 'achieved') ? 'achievedIcon' : 'unachievedIcon'] = null;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* ── THE IMPORT REPLACES THE LIST (v8.98) ────────────────────────────────
+   Asked for directly: a Steam scrape overwrites whatever is already in
+   Steam - Achievements. That breaks this app's usual never-clobber-an-
+   answer rule on purpose, and the reason it is safe to break here is that
+   this list is a mirror of the game's achievements as Steam already has
+   them — the scrape is not guessing at an answer the developer gave, it is
+   re-reading the source both of them are copying from. It is the same rule
+   Epic's own list follows (replaceEgsAchievementsFromSteam, just above).
+
+   ONLY THE ACHIEVED ICON ARRIVES. /game returns one `icon` per achievement
+   and it is the colourful, earned one; Steam's grey locked variant is not
+   in the payload at all, so Unachieved Icon is left empty for the developer
+   to upload rather than filled with the wrong artwork. */
+function replaceSteamAchievementsFromSteam(parsed) {
+  const made = (parsed || [])
+    .filter(p => p && (p.name || '').trim())
+    .map(p => ({
+      id: generateId('steamach'),
+      displayName:    (p.name || '').trim(),
+      description:    (p.description || '').trim(),
+      hidden:         p.hidden === true,
+      achievedIcon:   p.iconUrl ? { name: 'Imported from Steam', dataUrl: p.iconUrl } : null,
+      unachievedIcon: null,
+      /* Collapsed on arrival. An import of fifty-seven rows that each open
+         their own editor is not a list anybody can look at. */
+      open: false,
+    }));
+  if (!made.length) return false;
+  state.steamAchievements = made;
+  return true;
+}
+
 function removeEgsAchIcon(id, which) {
   const a = _egsAch(id);
   if (!a) return;

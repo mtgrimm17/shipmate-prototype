@@ -32011,3 +32011,150 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .steam-spp-proto .steam-spp-legal-wrap > .ias-char-counter-row {
   margin-left: 0; margin-right: 0; width: auto;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   STEAM ACHIEVEMENTS (v8.98)
+   Two surfaces: the block on the Store Page Preview, whose numbers are
+   Steam's own (read off store.steampowered.com/app/1091500 with
+   getComputedStyle — see the comment on achievementsHtml, render.js), and
+   the Steam - Achievements editor behind it, which wears this app's own
+   form furniture rather than Steam's.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── The block on the preview ───────────────────────────────────────────
+   Steam's grid is five equal columns with an 8px gap inside a 364px
+   content box, which is what makes each cell 66.4px square. Written as
+   fractions rather than that measured pixel so the cells stay square at
+   any modal width — the page is already under a zoom, and a hardcoded
+   66.4 would be the one number on this block that does not scale with it. */
+.steam-spp-proto .steam-spp-ach-label {
+  font-size: 12px; line-height: 16px; color: #acb2b8; margin-bottom: 8px;
+}
+.steam-spp-proto .steam-spp-ach-grid {
+  display: grid; grid-auto-flow: column;
+  grid-template-columns: repeat(5, 1fr); gap: 8px;
+  align-items: center; justify-content: center;
+}
+.steam-spp-proto .steam-spp-ach-tile,
+.steam-spp-proto .steam-spp-ach-more {
+  aspect-ratio: 1 / 1; min-width: 0; border-radius: 0; overflow: hidden;
+}
+/* object-fit: fill, which is Steam's — its own icons are square already,
+   and a letterbox under one that is not would be this card inventing a
+   crop the store page does not perform. */
+.steam-spp-proto .steam-spp-ach-tile img {
+  display: block; width: 100%; height: 100%; object-fit: fill;
+}
+.steam-spp-proto .steam-spp-ach-tile.is-empty {
+  background: rgba(0, 0, 0, .35);
+  box-shadow: inset 0 0 0 1px var(--steam-well-line);
+}
+.steam-spp-proto .steam-spp-ach-more {
+  background: #1d1f23;
+  display: grid; place-items: center; text-align: center;
+  padding: 0 4px;
+  font-family: 'Motiva Sans', Arial, sans-serif;
+  font-size: 13px; line-height: 17px; color: #9a9fa5;
+}
+
+/* ── The editor ────────────────────────────────────────────────────────── */
+.steam-ach-add {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+}
+.steam-ach-addbtn {
+  background: var(--steam-well-fill, #16202d);
+  border: 1px solid var(--steam-well-line-todo, #3d5a7d);
+  border-radius: 4px; color: #c6d4df; cursor: pointer;
+  font-size: 13px; padding: 7px 14px;
+  transition: border-color .12s ease;
+}
+.steam-ach-addbtn:hover { border-color: var(--steam-well-line-hover, #4c6b8a); }
+.steam-ach-count { color: #8f98a0; font-size: 12px; }
+
+.steam-ach-list { display: flex; flex-direction: column; gap: 8px; }
+.steam-ach-row {
+  border: 1px solid var(--steam-well-line, #2a3f5a); border-radius: 4px;
+  background: rgba(0, 0, 0, .18); cursor: pointer;
+  transition: border-color .12s ease;
+}
+.steam-ach-row:hover { border-color: var(--steam-well-line-hover, #4c6b8a); }
+.steam-ach-rowhead {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+}
+.steam-ach-rowicon {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 3px;
+  background: rgba(0, 0, 0, .35); overflow: hidden;
+  display: grid; place-items: center;
+}
+.steam-ach-rowicon img { display: block; width: 100%; height: 100%; object-fit: fill; }
+.steam-ach-rowicon-empty { color: #4c6b8a; display: grid; place-items: center; }
+.steam-ach-rowtext { flex: 1 1 auto; min-width: 0; }
+.steam-ach-rowname {
+  color: #c6d4df; font-size: 13px; display: flex; align-items: center; gap: 8px;
+}
+.steam-ach-rowdesc {
+  color: #8f98a0; font-size: 12px; margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.steam-ach-placeholder { color: #5c6b7a; font-style: italic; }
+.steam-ach-badge {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  color: #66c0f4; background: rgba(103, 193, 245, .15);
+  border-radius: 2px; padding: 1px 6px;
+}
+.steam-ach-x {
+  flex: 0 0 auto; background: none; border: 0; color: #5c6b7a;
+  cursor: pointer; font-size: 13px; padding: 4px 6px; line-height: 1;
+}
+.steam-ach-x:hover { color: #c6d4df; }
+
+.steam-ach-editor {
+  border-top: 1px solid var(--steam-well-line, #2a3f5a);
+  padding: 14px 12px; display: flex; flex-direction: column; gap: 14px;
+  cursor: default;
+}
+.steam-ach-field { display: flex; flex-direction: column; gap: 6px; }
+.steam-ach-label { color: #8f98a0; font-size: 12px; }
+.steam-ach-desc-input { resize: vertical; min-height: 54px; }
+.steam-ach-hidden-row {
+  display: flex; align-items: baseline; gap: 8px; cursor: pointer;
+}
+.steam-ach-hidden-row input { flex: 0 0 auto; }
+.steam-ach-hidden-note { color: #6f7f8e; font-size: 12px; flex: 1 1 auto; }
+
+/* Two wells side by side, stacking before either gets too narrow to read
+   its own note. */
+.steam-ach-icons {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px;
+}
+.steam-ach-icon-well {
+  position: relative; display: flex; align-items: center; gap: 12px;
+  border: 1px dashed var(--steam-well-line-todo, #3d5a7d); border-radius: 4px;
+  padding: 10px 12px; background: rgba(0, 0, 0, .18);
+  transition: border-color .12s ease;
+}
+.steam-ach-icon-well:hover { border-color: var(--steam-well-line-hover, #4c6b8a); }
+.steam-ach-icon-well.has-file { border-style: solid; border-color: var(--steam-well-line, #2a3f5a); }
+.steam-ach-icon-well.is-bad { border-color: var(--magenta, #d6409f); }
+.steam-ach-icon-thumb,
+.steam-ach-icon-slot {
+  flex: 0 0 auto; width: 48px; height: 48px; border-radius: 3px;
+  background: rgba(0, 0, 0, .35); display: grid; place-items: center;
+  color: #4c6b8a; object-fit: fill;
+}
+.steam-ach-icon-text { flex: 1 1 auto; min-width: 0; }
+.steam-ach-icon-browse {
+  color: #66c0f4; font-size: 13px; cursor: pointer; display: block;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.steam-ach-icon-note { color: #6f7f8e; font-size: 11px; margin-top: 3px; }
+.steam-ach-icon-err  { color: var(--magenta, #d6409f); font-size: 11px; margin-top: 3px; }
+.steam-ach-icon-warn { color: #d6a14f; font-size: 11px; margin-top: 3px; }
+.steam-ach-icon-x {
+  position: absolute; top: 4px; right: 6px;
+  background: none; border: 0; color: #5c6b7a; cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 2px 4px;
+}
+.steam-ach-icon-x:hover { color: #c6d4df; }
+/* The input covers nothing — the label above is the control. */
+.steam-ach-icon-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
