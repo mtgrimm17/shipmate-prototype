@@ -22341,9 +22341,7 @@ function buildSteamTechnicalSection() {
      radio list, and so does this. */
   const inputHtml = `
     <div class="steam-ctrl-q">
-      <div class="steam-ctrl-ask">What kind of devices can be used to comfortably play your game?
-        <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">Note that any VR devices, including input devices, that your game supports should be described in the system requirements.</span></span>
-      </div>
+      <div class="steam-ctrl-ask">What kind of devices can be used to comfortably play your game?</div>
       <div class="steam-ctrl-opts">${INPUT_OPTS.map(o => `
         <label class="steam-ctrl-opt${a.inputSupport === o.id ? ' is-on' : ''}">
           <input type="radio" name="steam-input-support" ${a.inputSupport === o.id ? 'checked' : ''}
@@ -22362,30 +22360,47 @@ function buildSteamTechnicalSection() {
 
   /* Steps 2–4 only apply once Step 1 says a gamepad is involved at all —
      the wizard's own order, and the reveal this card already had. */
+  /* THE CRITERIA HANG OFF THE HEADING, NOT THE QUESTION (v8.97). Each of
+     these steps is one heading and one question that restates it, so a
+     mark against the question was the second place to look on a row
+     where there was only ever one thing to explain. The heading is the
+     thing a developer reads first, so it carries the criteria.
+
+     PLAYSTATION GETS THE XBOX CRITERIA, by request — and it is Steam's
+     own framing: the wizard's PlayStation step opens by saying it
+     "should generally be possible to use those devices to do everything
+     in game that can be done with Xbox controllers". Same bar, different
+     hardware, so the same sentence. */
+  const ctrlCriteria = 'A player must be able to do everything with only a controller, the correct glyphs must appear on screen, any text prompt must open a virtual keyboard, and local multiplayer must work with multiple controllers.';
+  const headTip = (text, tip) => `
+      <div class="ios-content-step-label">${escHtml(text)}
+        <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">${escHtml(tip)}</span></span>
+      </div>`;
+
   const gamepadBlock = a.inputSupport && a.inputSupport !== 'keyboard_only' ? `
     <div class="cond-block">
-      <div class="ios-content-step-label" style="margin-top:0;">Xbox Controller Support</div>
+      <div class="ios-content-step-label" style="margin-top:0;">Xbox Controller Support
+        <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">${escHtml(ctrlCriteria)}</span></span>
+      </div>
       ${ynRow('Does your game meet the criteria for full Xbox Controller support?',
         a.xboxFullSupport,
         "answerSteamField('xboxFullSupport','yes')",
-        "answerSteamField('xboxFullSupport','no')",
-        'A player must be able to do everything with only a controller, the correct glyphs must appear on screen, any text prompt must open a virtual keyboard, and local multiplayer must work with multiple controllers.')}
+        "answerSteamField('xboxFullSupport','no')")}
 
-      <div class="ios-content-step-label">PlayStation Controller Support</div>
+      ${headTip('PlayStation Controller Support', ctrlCriteria)}
       <div class="form-label" style="margin-bottom:6px;">Yes, my game supports: <span style="color:var(--text-faint);font-weight:400;">(select all that apply)</span></div>
       <div class="ms-chip-group">${psOpts.map(c => {
           const on = a.psControllers.includes(c.id);
           return `<button class="ms-chip${on ? ' is-on' : ''}"
                           onclick="toggleSteamPS('${c.id}', ${!on})">${escHtml(c.label)}</button>`;
         }).join('')}</div>
-      <div class="form-hint" style="margin-top:6px;">On PC a PlayStation controller often works over USB without the same support over Bluetooth — confirm Bluetooth really works before ticking those.</div>
 
-      <div class="ios-content-step-label">Steam Input API Integration</div>
+      ${headTip('Steam Input API Integration',
+        'Implements Steam Input actions and queries action origins so the right glyphs show, pauses automatically if a controller disconnects, and lets the player remap buttons through the Steam configurator.')}
       ${ynRow('Does your game make full use of the Steam Input API?',
         a.steamInputAPI,
         "answerSteamField('steamInputAPI','yes')",
-        "answerSteamField('steamInputAPI','no')",
-        'Implements Steam Input actions and queries action origins so the right glyphs show, pauses automatically if a controller disconnects, and lets the player remap buttons through the Steam configurator.')}
+        "answerSteamField('steamInputAPI','no')")}
 
       <div class="ios-content-step-label">Summary</div>
       <div class="form-hint" style="margin-bottom:6px;">Based on what you have said about your controller support, Steam will show customers:</div>
