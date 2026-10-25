@@ -24325,6 +24325,114 @@ function setSteamAchField(id, field, value) {
   if (field === 'hidden' && typeof reRenderStepModal === 'function') reRenderStepModal();
 }
 
+/* ══ THE GREY ONE IS MADE, NOT ASKED FOR (v8.99) ═════════════════════════
+   Steam's own guidance is that the achieved icon be colourful and the
+   unachieved one grayscale — the same picture, drained. That is a
+   conversion, not a decision, so the page performs it: every time an
+   Achieved Icon arrives, by upload or by scrape, the Unachieved Icon is
+   filled with a greyscale copy of it.
+
+   DERIVED, AND SAID TO BE. The copy is marked `auto: true`, which is the
+   whole of the override rule: anything the developer uploads into that
+   well is not auto, and nothing derived ever overwrites it. A record that
+   has never been touched carries no icon at all, which is also not auto,
+   so the first achieved upload fills it — `auto` is a claim about where a
+   picture came from, and an empty well has no picture to make a claim
+   about.
+
+   REAL PIXELS WHERE IT CAN GET THEM. The copy is rasterised through a
+   canvas at Rec. 709 luma, so what sits in the well is a genuine greyscale
+   JPG a developer could hand to Steam — not the colour one with a CSS
+   filter painted over it. A canvas cannot read back a cross-origin image,
+   though, and a scraped icon is served from Steam's own CDN: when the read
+   is refused the copy falls back to the source URL marked `cssGrey`, which
+   the well renders through filter: grayscale(1). It looks right and it
+   says so; it is just not a file. An image that will not load at all
+   produces nothing, because a well showing a broken picture is worse than
+   an empty one. */
+const STEAM_ACH_GREY_FAIL_LOAD  = 'load';
+const STEAM_ACH_GREY_FAIL_TAINT = 'taint';
+
+function _steamGreyscaleDataUrl(src) {
+  return new Promise(resolve => {
+    if (!src) { resolve({ ok: false, reason: STEAM_ACH_GREY_FAIL_LOAD }); return; }
+    const img = new Image();
+    /* Asked for before the src is set, or the browser caches the request
+       without the CORS headers and the canvas is tainted anyway. */
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width  = img.naturalWidth  || STEAM_ACH_ICON.px;
+        c.height = img.naturalHeight || STEAM_ACH_ICON.px;
+        const x = c.getContext('2d');
+        x.drawImage(img, 0, 0, c.width, c.height);
+        const d = x.getImageData(0, 0, c.width, c.height);
+        const px = d.data;
+        for (let i = 0; i < px.length; i += 4) {
+          /* Rec. 709 luma rather than a flat average: an average turns a
+             saturated blue into mid-grey and a saturated yellow into mid-
+             grey too, and achievement art is mostly saturated. */
+          const g = (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]) | 0;
+          px[i] = px[i + 1] = px[i + 2] = g;
+        }
+        x.putImageData(d, 0, 0);
+        resolve({ ok: true, dataUrl: c.toDataURL('image/jpeg', 0.92) });
+      } catch (e) {
+        resolve({ ok: false, reason: STEAM_ACH_GREY_FAIL_TAINT });
+      }
+    };
+    img.onerror = () => resolve({ ok: false, reason: STEAM_ACH_GREY_FAIL_LOAD });
+    img.src = src;
+  });
+}
+
+/* Brings ONE record's Unachieved Icon back in line with its Achieved Icon.
+   A no-op when the developer has uploaded their own. Resolves to whether
+   anything changed, so a caller can decide whether to repaint. */
+async function _steamAchSyncUnachieved(id) {
+  const a = _steamAch(id);
+  if (!a) return false;
+  const cur = a.unachievedIcon;
+  if (cur && !cur.auto) return false;             // a manual override stands
+  const src = (a.achievedIcon || {}).dataUrl || '';
+  if (!src) {
+    /* The achieved icon went, so the copy of it goes too. */
+    if (!cur) return false;
+    a.unachievedIcon = null;
+    return true;
+  }
+  const grey = await _steamGreyscaleDataUrl(src);
+  /* The record can have been removed, or its achieved icon replaced again,
+     while the canvas was working. Check it is still the same picture. */
+  const still = _steamAch(id);
+  if (!still || ((still.achievedIcon || {}).dataUrl || '') !== src) return false;
+  if (still.unachievedIcon && !still.unachievedIcon.auto) return false;
+  const name = 'Greyscale of ' + (((a.achievedIcon || {}).name) || 'the achieved icon');
+  if (grey.ok) {
+    still.unachievedIcon = { name, dataUrl: grey.dataUrl, auto: true };
+  } else if (grey.reason === STEAM_ACH_GREY_FAIL_TAINT) {
+    still.unachievedIcon = { name, dataUrl: src, auto: true, cssGrey: true };
+  } else {
+    still.unachievedIcon = null;                  // nothing loadable to copy
+  }
+  return true;
+}
+
+/* The whole list, for the scrape. One repaint at the end rather than one
+   per achievement: fifty-seven of them would otherwise redraw the section
+   fifty-seven times while the developer is looking at it. */
+async function _steamAchSyncAllUnachieved(ids) {
+  let any = false;
+  for (const id of (ids || [])) {
+    /* Sequential on purpose. Fifty-seven canvases at once is fifty-seven
+       full-size bitmaps held in memory at the same moment. */
+    if (await _steamAchSyncUnachieved(id)) any = true;
+  }
+  if (any && typeof reRenderStepModal === 'function') reRenderStepModal();
+  return any;
+}
+
 /* THE ASSET RULE IS STEAM'S, AND IT IS CHECKED (STEAM_ACH_ICON, state.js):
    256x256 JPG. A JPG of some other size is taken with a note rather than
    refused, because Steam itself says 64x64 still works and only recommends
@@ -24337,10 +24445,24 @@ function handleSteamAchIcon(event, id, which) {
   if (!a) return;
   const key = (which === 'achieved') ? 'achievedIcon' : 'unachievedIcon';
   if (STEAM_ACH_ICON.types.indexOf(file.type) < 0) {
-    a[key] = { name: file.name, dataUrl: '', error: 'Steam takes a JPG here.' };
+    /* A REFUSAL IS NOT AN OVERRIDE. The well shows why it was refused, and
+       the record keeps whatever it had: if the greyscale copy was in there,
+       it stays `auto` and stays derived. */
+    a[key] = { name: file.name, dataUrl: '', error: 'Steam takes a JPG here.',
+               auto: !!(a[key] && a[key].auto) };
     if (typeof reRenderStepModal === 'function') reRenderStepModal();
     return;
   }
+  /* An upload into the unachieved well is the developer's own, which is
+     what stops the derivation touching it ever again (_steamAchSyncUnachieved). */
+  const done = () => {
+    if (typeof reRenderStepModal === 'function') reRenderStepModal();
+    /* Every new achieved icon redraws the greyscale copy — unless the
+       developer has put their own file in that well, which this leaves
+       alone. Deliberately after the repaint above, so the colour icon
+       appears at once rather than waiting on a canvas. */
+    if (which === 'achieved') _steamAchSyncAllUnachieved([id]);
+  };
   const reader = new FileReader();
   reader.onload = ev => {
     const dataUrl = ev.target.result;
@@ -24354,22 +24476,28 @@ function handleSteamAchIcon(event, id, which) {
           : `That icon is ${w}x${h}. Steam asks for ${STEAM_ACH_ICON.px}x${STEAM_ACH_ICON.px}.`;
       }
       a[key] = { name: file.name, dataUrl, warn };
-      if (typeof reRenderStepModal === 'function') reRenderStepModal();
+      done();
     };
     img.onerror = () => {
       a[key] = { name: file.name, dataUrl };
-      if (typeof reRenderStepModal === 'function') reRenderStepModal();
+      done();
     };
     img.src = dataUrl;
   };
   reader.readAsDataURL(file);
 }
 
+/* REMOVING AN OVERRIDE PUTS THE COPY BACK (v8.99), rather than emptying a
+   well that the page is about to want to fill again anyway. Removing the
+   ACHIEVED icon empties both, because the copy has nothing left to be a
+   copy of — both through the one sync, so there is one rule about what
+   the unachieved well holds and not two. */
 function removeSteamAchIcon(id, which) {
   const a = _steamAch(id);
   if (!a) return;
   a[(which === 'achieved') ? 'achievedIcon' : 'unachievedIcon'] = null;
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  _steamAchSyncAllUnachieved([id]);
 }
 
 /* ── THE IMPORT REPLACES THE LIST (v8.98) ────────────────────────────────
@@ -24401,6 +24529,12 @@ function replaceSteamAchievementsFromSteam(parsed) {
     }));
   if (!made.length) return false;
   state.steamAchievements = made;
+  /* THE SCRAPE GETS THE GREY ONES TOO (v8.99). /game sends one icon per
+     achievement and it is the colourful earned one; the unachieved well is
+     filled from it here, the same derivation an upload goes through. Fired
+     rather than awaited so the list appears the moment it lands and the
+     copies fill in behind it — the sync repaints once when it is done. */
+  _steamAchSyncAllUnachieved(made.map(a => a.id));
   return true;
 }
 

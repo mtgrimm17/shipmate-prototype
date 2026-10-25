@@ -32158,3 +32158,26 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .steam-ach-icon-x:hover { color: #c6d4df; }
 /* The input covers nothing — the label above is the control. */
 .steam-ach-icon-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* ── The derived greyscale icon (v8.99) ─────────────────────────────────
+   A well holding a picture the page made rather than one the developer
+   chose. Dimmer line than an uploaded file's, plus a small "Auto" tag, so
+   the three states of this well — empty, derived, overridden — are told
+   apart at a glance. */
+.steam-ach-icon-well.is-auto {
+  border-style: solid;
+  border-color: rgba(103, 193, 245, .22);
+  background: rgba(103, 193, 245, .04);
+}
+.steam-ach-icon-well.is-auto:hover { border-color: var(--steam-well-line-hover, #4c6b8a); }
+.steam-ach-icon-autotag {
+  display: inline-block; margin-left: 8px; vertical-align: baseline;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+  color: #66c0f4; background: rgba(103, 193, 245, .15);
+  border-radius: 2px; padding: 1px 5px;
+}
+.steam-ach-icon-browse { display: inline-block; max-width: 100%; }
+/* The fallback for an icon a canvas is not allowed to read back (a scraped
+   one, served cross-origin): the colour picture, drained in the browser
+   rather than in the pixels. See _steamGreyscaleDataUrl, app.js. */
+.steam-ach-icon-thumb.is-cssgrey { filter: grayscale(1); }

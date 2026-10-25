@@ -22169,32 +22169,56 @@ function buildSteamAchievementsSection() {
     + '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/>'
     + '<path d="M7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3"/></svg>';
 
+  /* ── THE UNACHIEVED WELL HAS THREE STATES, NOT TWO (v8.99) ───────────
+     Empty, a greyscale copy Shipmate derived from the Achieved Icon, or a
+     file the developer uploaded over it. The middle one is the new one and
+     it has to LOOK derived, or a developer cannot tell what they still owe
+     Steam from what the page did for them.
+
+     It carries no x. There is nothing of theirs in it to remove, and a
+     cleared derived icon would only come back the next time anything
+     touched the achieved one — a button that undoes itself. The way out of
+     it is to upload your own, which the well says; the way to be rid of it
+     entirely is to remove the Achieved Icon it is a copy of, which takes
+     the copy with it (removeSteamAchIcon, app.js).
+
+     An OVERRIDE's x says what it does: it reverts to the copy rather than
+     emptying the well, because the copy is what was there before. */
   const iconWell = (a, which) => {
     const icon  = (which === 'achieved' ? a.achievedIcon : a.unachievedIcon) || null;
     const label = which === 'achieved' ? 'Achieved Icon' : 'Unachieved Icon';
+    const auto  = !!(icon && icon.auto);
+    const overridable = which === 'unachieved' && !!((a.achievedIcon || {}).dataUrl);
     /* Steam's own recommendation, split so each well carries only its own
-       half of it rather than both halves twice. */
+       half of it rather than both halves twice. Once the greyscale copy is
+       in place the advice has been taken, so the well stops giving it and
+       says where the picture came from instead. */
     const tone  = which === 'achieved'
       ? 'Steam recommends a colorful icon.'
-      : 'Steam recommends a grayscale icon.';
+      : (auto ? 'Made from the Achieved Icon. Upload your own to override it.'
+              : 'Steam recommends a grayscale icon.');
     const id    = `steam-ach-icon-${which}-${a.id}`;
     return `
       <div class="steam-ach-field steam-ach-iconfield">
         <label class="steam-ach-label" for="${id}">${label}</label>
         <div class="steam-ach-icon-well${icon && icon.dataUrl ? ' has-file' : ''}${
-             icon && icon.error ? ' is-bad' : ''}">
+             icon && icon.error ? ' is-bad' : ''}${auto ? ' is-auto' : ''}">
           ${icon && icon.dataUrl
-            ? `<img class="steam-ach-icon-thumb" src="${escHtml(icon.dataUrl)}" alt="">`
+            ? `<img class="steam-ach-icon-thumb${icon.cssGrey ? ' is-cssgrey' : ''}"
+                    src="${escHtml(icon.dataUrl)}" alt="">`
             : `<span class="steam-ach-icon-slot">${trophySvg}</span>`}
           <div class="steam-ach-icon-text">
             <label class="steam-ach-icon-browse" for="${id}">${icon && icon.dataUrl
               ? escHtml(icon.name || 'Replace') : 'Choose a file'}</label>
+            ${auto ? '<span class="steam-ach-icon-autotag">Auto</span>' : ''}
             <div class="steam-ach-icon-note">${escHtml(STEAM_ACH_ICON.note)} &middot; ${escHtml(tone)}</div>
             ${icon && icon.error ? `<div class="steam-ach-icon-err">${escHtml(icon.error)}</div>` : ''}
             ${icon && icon.warn  ? `<div class="steam-ach-icon-warn">${escHtml(icon.warn)}</div>` : ''}
           </div>
-          ${icon ? `<button type="button" class="steam-ach-icon-x" title="Remove"
-                            aria-label="Remove ${escHtml(label)}"
+          ${icon && !auto ? `<button type="button" class="steam-ach-icon-x"
+                            title="${overridable ? 'Revert to the greyscale copy' : 'Remove'}"
+                            aria-label="${overridable ? 'Revert to the greyscale copy'
+                                                      : 'Remove ' + escHtml(label)}"
                             onclick="event.stopPropagation(); removeSteamAchIcon('${a.id}','${which}')">&times;</button>` : ''}
           <input class="steam-ach-icon-input" id="${id}" type="file"
                  accept="${escHtml(STEAM_ACH_ICON.accept)}"
