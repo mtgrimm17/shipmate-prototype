@@ -24939,6 +24939,11 @@ function toggleSteamPS(controllerId, checked) {
    preview filters STEAM_SUPPORTED_FEATURES, which is already in the store
    page's order, so a feature ticked last does not jump to the end of the
    store page's list. */
+function setSteamTechnicalTab(tabId) {
+  state.steamTechnicalTab = tabId;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
 function toggleSteamSupportedFeature(featureId, on) {
   const a = state.steamSubmitAnswers;
   if (!Array.isArray(a.supportedFeatures)) a.supportedFeatures = [];
@@ -24949,11 +24954,19 @@ function toggleSteamSupportedFeature(featureId, on) {
   renderDashboard();
 }
 
+/* REPAINTS NOW (v9.02). This used to flip the DOM checkbox and leave the
+   card alone, which was right while the list was one long scroll — the
+   only thing on screen that depended on the answer was the box the
+   developer had just clicked. The Accessibility TAB now carries a tick
+   that means "something in here", and a tick that waits for the next
+   unrelated interaction to appear is a tick nobody trusts. Same cost
+   toggleSteamSupportedFeature already pays for its seventeen rows. */
 function toggleSteamAccessibility(featureId, checked) {
   const feats = state.steamSubmitAnswers.accessibilityFeatures;
   if (checked) { if (!feats.includes(featureId)) feats.push(featureId); }
   else { state.steamSubmitAnswers.accessibilityFeatures = feats.filter(f => f !== featureId); }
   updateSteamCard();
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
 }
 
 // Players checkbox tree (Technical section, buildSteamTechnicalSection) —
@@ -26196,11 +26209,17 @@ function _applySteamCategories(categories) {
      56, "Steam Workshop" twice on Portal 2 — and a map keyed by name would
      otherwise do the same work twice. */
   const names = [];
+  /* The ids alongside the names (v9.01/v9.02). Several importers below
+     read these instead: an id is stable where a description is a label
+     Valve rewords, and it separates two categories that share one name. */
+  const ids = new Set();
   categories.forEach(c => {
     const d = c && typeof c.description === 'string' ? c.description.trim() : '';
     if (d && names.indexOf(d) < 0) names.push(d);
+    const i = (c && c.id !== null && c.id !== undefined) ? String(c.id).trim() : '';
+    if (i) ids.add(i);
   });
-  if (!names.length) return;
+  if (!names.length && !ids.size) return;
 
   /* PLAYERS seeds as a BLOCK, not field by field. Every player field
      starts false, so an unchecked box and a box the developer deliberately
@@ -26223,16 +26242,77 @@ function _applySteamCategories(categories) {
     if (p.pvp || p.coop || p.crossPlatform) p.multiPlayer = true;
   }
 
-  /* CONTROLLER SUPPORT. Steam's two controller categories answer the
-     Input devices question, not the Xbox/PlayStation/Steam Input ones
-     below it: "Full controller support" means the game is playable on a
-     gamepad, which is not the same claim as Steamworks' per-controller
-     checklist, and guessing those would put words in the developer's
-     mouth on a page Valve reads. */
+  /* ══ CONTROLLER SUPPORT, BY CATEGORY ID (v9.02) ═══════════════════════
+     Steam's controller categories, read off the Steamworks store-page
+     editor's own hidden fields and off the store's "Narrow by Controller
+     Support" facet:
+
+       18  Partial Controller Support   (the facet calls it "Xbox Controller
+                                         Support" — see below)
+       28  Full Controller Support
+       55  DualShock Controller Support
+       56  DualShock, the second id Steam issues for it
+       57  DualSense Controller Support
+       58  DualSense, the second id
+       59  Steam Input API Support
+       60  Gamepad Preferred
+
+     18 IS NOT THE XBOX QUESTION, however the facet labels it. Searching
+     category2=18 returns Helldivers 2, whose own store page prints
+     "Partial Controller Support" — so 18 and 28 are the two halves of the
+     wizard's SUMMARY ("what Steam will show customers"), not an answer to
+     any one of its questions. Go Ape Ship's own editor agrees: 28 true,
+     18 false, with the PlayStation ids set and the Xbox question answered
+     No. One id, two names, which is the second time Valve's facet and its
+     store pages have disagreed about a label (see the accessibility
+     feature 74, STEAM_ACCESS_STORE_ORDER in state.js).
+
+     SO XBOX IS NOT INFERRED AT ALL. "Full Controller Support" is what
+     Steam prints when the Xbox question OR the PlayStation list OR Steam
+     Input is satisfied; working backwards from an OR to one of its three
+     terms would be writing "yes" into a claim Valve reads, on no
+     evidence. The v8.93 rule stands for that one field and only that one:
+     the others have ids of their own and are read from them.
+
+     POSITIVE ONLY. A category that is absent might mean "no" or might
+     mean the payload is partial, so nothing here ever writes a No. */
   if (!a.inputSupport) {
-    if (names.indexOf('Full controller support') >= 0) a.inputSupport = 'gamepad_preferred';
-    else if (names.indexOf('Partial Controller Support') >= 0) a.inputSupport = 'keyboard_plus';
+    /* 60 is the exact wizard option; 28 and 18 both only say a controller
+       works, which is the "plus gamepads" answer. ("Full controller
+       support" used to map to gamepad_preferred here, which was wrong —
+       Steam has a separate category for preferred, and it is 60.) */
+    if (ids.has('60'))                           a.inputSupport = 'gamepad_preferred';
+    else if (ids.has('28') || ids.has('18'))     a.inputSupport = 'keyboard_plus';
   }
+
+  /* THE PLAYSTATION LIST, which is the one place an id genuinely beats a
+     name: 55 and 56 BOTH arrive described as "DualShock Controller
+     Support", so the deduped name list this function builds above cannot
+     tell the USB row from the USB + Bluetooth row, and the ids can.
+
+     WHICH OF A PAIR IS WHICH IS INFERRED, not measured — the lower id is
+     read as the plain USB variant because that is the one Steam's search
+     facet exposes on its own (55 DualShock, 57 DualSense), with 56 and 58
+     the Bluetooth siblings. No game was found declaring one half of a
+     pair without the other, so nothing proves it. If a scrape ever ticks
+     Bluetooth for a game that does not have it, this is the line. */
+  const PS_CATEGORY_TO_OPTION = {
+    '55': 'ps_dualshock_usb',
+    '56': 'ps_dualshock_bt',
+    '57': 'ps_dualsense_usb',
+    '58': 'ps_dualsense_bt',
+  };
+  if (Array.isArray(a.psControllers) && !a.psControllers.length) {
+    const picked = [];
+    Object.keys(PS_CATEGORY_TO_OPTION).forEach(cid => {
+      if (ids.has(cid)) picked.push(PS_CATEGORY_TO_OPTION[cid]);
+    });
+    if (picked.length) a.psControllers = picked;
+  }
+
+  /* STEAM INPUT API has an id of its own and means exactly what the
+     wizard asks, so it is read straight across. */
+  if (!a.steamInputAPI && ids.has('59')) a.steamInputAPI = 'yes';
 
   /* ── SUPPORTED FEATURES, BY ID (v9.01) ────────────────────────────────
      The one importer on this page that does NOT match on display name.

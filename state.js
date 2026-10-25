@@ -6433,6 +6433,9 @@ const state = {
      read at different moments and tying them together moves one under the
      other. Surface state, like egsPreviewTab. */
   steamSysreqTab: 'windows',
+  /* Which pane of Steam - Technical is showing (v9.02). Four now:
+     players / supported / controller / access. */
+  steamTechnicalTab: 'players',
   steamSysreqPreviewTab: null,
 
   // Epic Games Store submission answers. Content Rating is NOT here — it is
@@ -7520,9 +7523,9 @@ const STEAM_AI_LIVE_TYPES = ['Code','Text','Textures','3D Models','Sound Effects
    Purchases vs Steam Cloud, and Turn Notifications vs Stats, are also
    unproven — no page carried both — so those two adjacencies follow the
    facet and the Civ VI/TF2 constraints and nothing stronger. */
-const STEAM_SUPPORTED_INTRO = 'Please select the specific features that are available in '
-  + 'your product. If you intend to add a feature in the future, do not select it here '
-  + 'until implemented and released.';
+/* NO INTRO PARAGRAPH (v9.02, by request). The portal prints one above
+   this list; the constant that carried it is gone rather than left
+   unused, so nobody re-adds it by finding it here. */
 
 const STEAM_SUPPORTED_FEATURES = [
   { id: '22', label: 'Steam Achievements', icon: '\u{1F3C6}',

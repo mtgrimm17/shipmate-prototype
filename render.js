@@ -22473,8 +22473,7 @@ function buildSteamTechnicalSection() {
       ${multiplayerModesHtml}
       ${playerRow('crossPlatform', 'Cross-Platform Multiplayer', 'Players on different platforms (PC, Mac, console, mobile) can play together.')}
     </div>
-    ${playersPreviewHtml}
-    <div class="ios-q-divider"></div>`;
+    ${playersPreviewHtml}`;
 
   /* ══ THE CONTROLLER SUPPORT WIZARD, STEP BY STEP (v8.93) ══════════
      Read off Steamworks' own wizard: five steps, named General Input
@@ -22619,27 +22618,75 @@ function buildSteamTechnicalSection() {
   const supported = a.supportedFeatures || [];
   const supportedRows = STEAM_SUPPORTED_FEATURES.map(f => {
     const checked = supported.includes(f.id);
+    /* THE MARK FOLLOWS THE WORDS, not the row (v9.02). It used to sit at
+       the far right of the card because the label was the flexible child
+       and took all the slack — so seventeen question marks lined up in a
+       column with nothing under them, each one a long way from the thing
+       it explains. It belongs against the end of the label, the way every
+       other tooltip on this card hangs off its own text. */
     return `<label class="cq-check-row steam-supported-row${checked ? ' is-checked' : ''}">
       <input type="checkbox" ${checked ? 'checked' : ''}
              onchange="toggleSteamSupportedFeature('${f.id}', this.checked)">
-      <span>${escHtml(f.label)}</span>
-      <span class="tooltip-anchor" onclick="event.preventDefault(); event.stopPropagation();"
-            ><span class="tooltip-icon">?</span><span class="tooltip-body">${escHtml(f.desc)}</span></span>
+      <span>${escHtml(f.label)} <span class="tooltip-anchor"
+            onclick="event.preventDefault(); event.stopPropagation();"
+            ><span class="tooltip-icon">?</span><span class="tooltip-body">${escHtml(f.desc)}</span></span></span>
     </label>`;
   }).join('');
 
+  /* ══ FOUR TABS, NOT ONE LONG SCROLL (v9.02) ═══════════════════════════
+     This card had grown to four unrelated questionnaires stacked end to
+     end — Players, seventeen Supported Features, the five-step controller
+     wizard and nineteen accessibility checkboxes — and the last of them
+     was two screens below the first. Tabs, the same control System
+     Requirements already uses for its operating systems.
+
+     THE TAB IS NOT THE HEADING. Each pane keeps the section heading it
+     had, including where that heading repeats its own tab's name: the
+     headings were asked for by name (v9.02: "General Input Support"
+     becomes "Controller Support", "Accessibility Features" becomes
+     "Accessibility") and the tab labels were given separately, so the
+     two lists are deliberately not the same words. */
+  const TECH_TABS = [
+    { id: 'players',    label: 'Players' },
+    { id: 'supported',  label: 'Supported Features' },
+    { id: 'controller', label: 'Controller Support' },
+    { id: 'access',     label: 'Accessibility Features' },
+  ];
+  const techTab = TECH_TABS.some(t => t.id === state.steamTechnicalTab)
+    ? state.steamTechnicalTab : TECH_TABS[0].id;
+
+  /* A tick on a tab means that pane has an answer in it, the same signal
+     the System Requirements tabs carry. Players is the only required one,
+     so it is the only one that also wears the asterisk. */
+  const techDone = {
+    players:    Object.keys(p || {}).some(k => p[k]),
+    supported:  supported.length > 0,
+    controller: !!a.inputSupport,
+    access:     (a.accessibilityFeatures || []).length > 0,
+  };
+
+  const techTabsHtml = TECH_TABS.map(t => `
+    <button type="button" class="steam-sysreq-tab steam-tech-tab${
+      t.id === techTab ? ' is-current' : ''}${techDone[t.id] ? ' is-done' : ''}"
+            onclick="setSteamTechnicalTab('${t.id}')">${escHtml(t.label)}</button>`).join('');
+
+  const techPanes = {
+    players: playersHtml,
+    supported: `
+      <div class="ios-content-step-label" style="margin-top:0;">Supported Features</div>
+      <div class="cq-check-list"><div class="cq-checkboxes">${supportedRows}</div></div>`,
+    controller: `
+      <div class="ios-content-step-label" style="margin-top:0;">Controller Support</div>
+      ${inputHtml}
+      ${gamepadBlock}`,
+    access: `
+      <div class="ios-content-step-label" style="margin-top:0;">Accessibility <span style="font-weight:400;text-transform:none;font-size:11px;letter-spacing:0;">(Optional — select all that apply)</span></div>
+      <div class="cq-check-list">${accessChecks}</div>`,
+  };
+
   return `
-    ${playersHtml}
-    <div class="ios-content-step-label">General Input Support</div>
-    ${inputHtml}
-    ${gamepadBlock}
-    <div class="ios-q-divider"></div>
-    <div class="ios-content-step-label">Supported Features</div>
-    <p class="form-hint steam-supported-intro">${escHtml(STEAM_SUPPORTED_INTRO)}</p>
-    <div class="cq-check-list"><div class="cq-checkboxes">${supportedRows}</div></div>
-    <div class="ios-q-divider"></div>
-    <div class="ios-content-step-label">Accessibility Features <span style="font-weight:400;text-transform:none;font-size:11px;letter-spacing:0;">(Optional — select all that apply)</span></div>
-    <div class="cq-check-list">${accessChecks}</div>`;
+    <div class="steam-sysreq-tabs steam-tech-tabs">${techTabsHtml}</div>
+    ${techPanes[techTab] || ''}`;
 }
 
 /* ── Steam: Store Page Preview - Prototype's "Languages" block ──────

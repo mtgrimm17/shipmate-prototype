@@ -32227,10 +32227,12 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
    the portal's own sentence — those run to three lines, which is why they
    are a real tooltip here and a title= attribute on the short
    accessibility ones. */
-.steam-supported-intro { margin: -4px 0 12px; }
+/* THE LABEL NO LONGER TAKES THE SLACK (v9.02). It was `flex: 1 1 auto`,
+   which pushed every ? to the right edge of the card — seventeen of them
+   in a column, each one nowhere near the words it explains. The mark now
+   sits inside the label span, right after the text, so the row only has
+   to not stretch it. */
 .steam-supported-row { display: flex; align-items: center; gap: 8px; }
-.steam-supported-row > span:first-of-type { flex: 1 1 auto; min-width: 0; }
-.steam-supported-row .tooltip-anchor { flex: 0 0 auto; }
 /* NOTHING IS POSITIONED HERE, deliberately. .tooltip-body is a hidden
    data carrier, not the bubble: showTip (app.js) reads its text into the
    one shared #g-tip element and clamps THAT to the viewport. A rule
