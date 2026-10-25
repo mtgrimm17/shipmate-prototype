@@ -7506,6 +7506,61 @@ const STEAM_ACCESSIBILITY_FEATURES = [
   { id: 'chat_stt', cat: 'input',        label: 'Chat Speech-to-text',            desc: 'Voice chat between players can be read as text transcript in real time' },
 ];
 
+/* ══ THE STORE PAGE HAS ITS OWN ORDER, TWICE OVER (v9.00) ════════════════
+   Both the categories and the features inside them are printed in an
+   order of Valve's choosing, and it is not STEAM_ACCESSIBILITY_FEATURES'
+   order above. Taken from Steam's own "Narrow by accessibility feature"
+   facet (store.steampowered.com/search), which lists all nineteen under
+   the four category headings — the canonical list, rather than whatever
+   subset one game happens to declare — and checked against two product
+   pages that print a subset of it: God of War Ragnarök (2322010), which
+   declares all four categories, and The Last of Us Part I (1888930),
+   which declares three. All three agree.
+
+   Where it differs from the array above, which was the first guess and
+   was wrong three times out of four:
+     Visual  puts Contrast Controls LAST, after Playable without Vision
+     Audio   puts Narrated Game Menus LAST, after Stereo and Surround
+     Input   puts Playable without Timed Input FIRST, and Your Own Pace last
+
+   ONE FEATURE, TWO NAMES. The facet calls id 74 "Playable without Timed
+   Input"; the product page calls the same thing "Playable without Quick
+   Time Events" and links it to /category/playable_without_timed_input.
+   The preview prints a product page, so it keeps the product page's
+   wording, which is the label the array already carries. */
+const STEAM_ACCESS_STORE_ORDER = [
+  { id: 'gameplay', features: ['adj_difficulty', 'save_anytime'] },
+  { id: 'visual',   features: ['adj_text_size', 'subtitle_opts', 'color_alt',
+                               'camera_comfort', 'no_vision', 'contrast'] },
+  { id: 'audio',    features: ['custom_volume', 'stereo_sound', 'surround_sound',
+                               'narrated_menus'] },
+  { id: 'input',    features: ['no_qte', 'keyboard_only', 'mouse_only', 'touch_only',
+                               'chat_stt', 'chat_tts', 'own_pace'] },
+];
+
+/* The declared features grouped the way the store page groups them:
+   [{ id, label, features: [feature, ...] }], categories with nothing in
+   them left out entirely. Takes the id list
+   (state.steamSubmitAnswers.accessibilityFeatures) so the preview and any
+   test ask the same question of the same data. */
+function steamAccessStoreGroups(ids) {
+  const picked = new Set(ids || []);
+  return STEAM_ACCESS_STORE_ORDER.map(ord => {
+    const cat = STEAM_ACCESS_CATEGORIES.find(c => c.id === ord.id) || { id: ord.id, label: ord.id };
+    const features = ord.features
+      .filter(fid => picked.has(fid))
+      .map(fid => STEAM_ACCESSIBILITY_FEATURES.find(f => f.id === fid))
+      .filter(Boolean);
+    return { id: cat.id, label: cat.label, features };
+  }).filter(g => g.features.length);
+}
+
+/* How many the collapsed row says. The store prints the TOTAL across every
+   category, not the number of categories. */
+function steamAccessDeclaredCount(ids) {
+  return steamAccessStoreGroups(ids).reduce((n, g) => n + g.features.length, 0);
+}
+
 /* ── State factory ──────────────────────────────────── */
 /* ── READING /game's requirements (v8.86) ────────────────────────────────
    search.dev.shipmate.gg returns the requirements already flattened out of

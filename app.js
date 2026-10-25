@@ -24271,6 +24271,21 @@ function handleEgsAchIcon(event, id, which) {
   };
   reader.readAsDataURL(file);
 }
+/* THE ACCESSIBILITY ROW OPENS IN PLACE (v9.00), the way Steam's <details>
+   does — it does not open Technical. The row sits inside the Features
+   block, and that whole block is a click target that flips to Steam -
+   Technical, so the expander has to stop the event or every attempt to
+   read the list would navigate away from it instead. The ? beside it
+   stops the event for the same reason.
+
+   One flag for the whole card rather than one per block: there is one
+   accessibility row on the page. */
+function toggleSteamSppAccess(event) {
+  if (event) { event.stopPropagation(); event.preventDefault(); }
+  state.steamSppAccessOpen = !state.steamSppAccessOpen;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
 /* ══ STEAM ACHIEVEMENTS (v8.98) ══════════════════════════════════════════
    The list behind the Store Page Preview's Achievements block and the
    Steam - Achievements section (buildSteamAchievementsSection, render.js).

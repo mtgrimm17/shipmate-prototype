@@ -32181,3 +32181,42 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
    one, served cross-origin): the colour picture, drained in the browser
    rather than in the pixels. See _steamGreyscaleDataUrl, app.js. */
 .steam-ach-icon-thumb.is-cssgrey { filter: grayscale(1); }
+
+/* ── Accessibility, the last row of Features (v9.00) ────────────────────
+   Reuses the block's own vocabulary — .steam-spp-feature for a row,
+   .steam-spp-feature-subheading for a category heading — because the
+   store page's shape here (heading, then indented rows) is the shape
+   "Full Controller Support" already has in this block. What is added is
+   only what is actually different: a row you can open, and the indent
+   under each heading that Steam gives these. */
+.steam-spp-proto .steam-spp-access-row { cursor: pointer; width: 100%; }
+.steam-spp-proto .steam-spp-access-label { flex: 1 1 auto; min-width: 0; }
+/* The glyph is drawn rather than typed (see featuresHtml, render.js), so
+   it needs the box the emoji icons get from their font size. */
+.steam-spp-proto .steam-spp-access-glyph { display: block; margin: 0 auto; }
+.steam-spp-proto .steam-spp-access-row:hover .steam-spp-access-label { color: #c6d4df; }
+.steam-spp-proto .steam-spp-access-tip { flex: 0 0 auto; }
+/* Steam indents the features under their category heading; the heading
+   itself sits flush, the same way Full Controller Support does. */
+.steam-spp-proto .steam-spp-access-item { padding-left: 26px; }
+
+/* STEAM'S OWN ? , not this app's (v9.00). The shared .tooltip-icon is a
+   15px chip in --panel-3 (#242424) with --text-faint (#555) on it: about
+   1.2:1 against the blue-black of a Steam panel, the same contrast bug
+   v8.89 fixed on the counters by giving them the page's own grey. Steam's
+   own glyph on this row, measured off God of War Ragnarök (2322010): a
+   19px circle of rgba(217,217,217,.1) with WHITE text at 12px Arial, no
+   border. So the row wears that instead. */
+.steam-spp-proto .steam-spp-access-tip .tooltip-icon {
+  width: 19px; height: 19px;
+  background: rgba(217, 217, 217, .1);
+  border: 0;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  margin-left: 6px;
+}
+.steam-spp-proto .steam-spp-access-tip:hover .tooltip-icon {
+  background: rgba(217, 217, 217, .18);
+  color: #fff;
+}

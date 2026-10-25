@@ -23610,6 +23610,61 @@ function buildSteamStorePreviewPrototypeSection() {
   const playerFeatureBadgesHtml = computeSteamPlayerBadges()
     .map(b => `<div class="steam-spp-feature"><span class="steam-spp-feature-icon">${b.icon}</span><span>${escHtml(b.label)}</span></div>`)
     .join('');
+  /* ══ ACCESSIBILITY IS THE LAST ROW OF FEATURES (v9.00) ════════════════
+     Not a block of its own. Steam puts it inside #category_block — the
+     same box as Single-player, Steam Achievements, Steam Cloud and Family
+     Sharing — as the final row, below every regular category chip, and as
+     a <details> expander rather than a chip: a collapsed line reading
+     "Accessibility Features (11)" with a ? beside it, which opens in
+     place to the declarations grouped under category headings.
+
+     THE ROW IS ABSENT UNTIL SOMETHING IS DECLARED. Checked on two games
+     that declare nothing — Go Ape Ship (4037180) and Hades II (1145350) —
+     and the expander is not on either page at all. So this is not a block
+     that shows "None yet": an empty one would be Shipmate printing a row
+     Steam would not print, on the one card whose whole job is to show
+     what the store page will look like.
+
+     THE COUNT IS THE TOTAL, across categories, and the store shows it
+     only while collapsed. The order is the STORE's, not the wizard's —
+     see STEAM_ACCESS_STORE_ORDER, state.js, for why those differ.
+
+     A SVG GLYPH RATHER THAN AN EMOJI, breaking this block's own
+     convention on purpose. The others approximate Steam's icons with
+     emoji; the nearest emoji here is the wheelchair, and Steam's icon is
+     the universal accessibility figure. The wheelchair would say
+     "mobility" over a list that is mostly about sight and hearing.
+
+     THE ? IS A TOOLTIP, where Steam's is a link into its own
+     documentation. There is no page behind this prototype to send anyone
+     to, so the row says what it is instead of pretending to. */
+  const accessGroups = (typeof steamAccessStoreGroups === 'function')
+    ? steamAccessStoreGroups(ssa.accessibilityFeatures) : [];
+  const accessCount = accessGroups.reduce((n, g) => n + g.features.length, 0);
+  const accessOpen  = !!state.steamSppAccessOpen;
+  const accessGlyph = '<svg class="steam-spp-access-glyph" width="14" height="14" viewBox="0 0 24 24"'
+    + ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+    + ' stroke-linejoin="round" aria-hidden="true">'
+    + '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="7.2" r="1.3" fill="currentColor" stroke="none"/>'
+    + '<path d="M7.5 10.2h9M12 10.5v4M12 14.5l-2 4M12 14.5l2 4"/></svg>';
+  const accessTip = 'Steam prints the accessibility features you declare here, grouped the way '
+    + 'it groups them, and shows nothing at all until you declare one. Set them in Technical.';
+  const accessRowHtml = accessCount ? `
+        <div class="steam-spp-feature steam-spp-access-row${accessOpen ? ' is-open' : ''}"
+             role="button" tabindex="0" aria-expanded="${accessOpen}"
+             onclick="toggleSteamSppAccess(event)">
+          <span class="steam-spp-feature-icon">${accessGlyph}</span>
+          <span class="steam-spp-access-label">Accessibility Features${
+            accessOpen ? '' : ` (${accessCount})`}</span>
+          <span class="tooltip-anchor steam-spp-access-tip" onclick="event.stopPropagation()"
+                ><span class="tooltip-icon">?</span><span class="tooltip-body">${escHtml(accessTip)}</span></span>
+        </div>
+        ${accessOpen ? accessGroups.map(g => `
+        <div class="steam-spp-feature-subheading">${escHtml(g.label)}</div>
+        ${g.features.map(f => `
+        <div class="steam-spp-feature steam-spp-access-item"
+             title="${escHtml(f.desc || '')}"><span>${escHtml(f.label)}</span></div>`).join('')}`).join('') : ''}` : '';
+
   const featuresHtml = `
     <div class="steam-spp-side-block steam-spp-features-block steam-spp-hit${technicalDone ? '' : ' is-todo'}"
          onclick="openStorePreviewSection('steam','technical')">
@@ -23621,6 +23676,7 @@ function buildSteamStorePreviewPrototypeSection() {
         ${hasXboxSupport ? `<div class="steam-spp-feature"><span class="steam-spp-feature-icon">🎮</span><span>Xbox Controllers</span></div>` : ''}
         ${hasPsSupport ? `<div class="steam-spp-feature"><span class="steam-spp-feature-icon">🎮</span><span>PlayStation Controllers</span></div>` : ''}` : ''}
         ${usesAI ? `<div class="steam-spp-feature steam-spp-feature-warn" title="This game is not currently eligible to appear in certain showcases on your Steam Profile, and does not contribute to global Achievement or game collector counts."><span class="steam-spp-feature-icon">ⓘ</span><span>Profile Features Limited</span></div>` : ''}
+        ${accessRowHtml}
       </div>
       ${aiThirdParty ? `<div class="steam-spp-drm-notice">Connects to 3rd-Party Service for AI Content Generation: <span class="steam-spp-link-text">${aiServiceName}</span></div>` : ''}
     </div>`;
