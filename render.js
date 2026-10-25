@@ -20427,7 +20427,7 @@ function egsPageField(o) {
      is. It stays the input's NEXT SIBLING, which is how updateIapCharCounter
      finds it. */
   return `
-    <div class="egs-sp-fieldrow">
+    <div class="egs-sp-fieldrow${o.rowCls ? ' ' + o.rowCls : ''}">
       ${body}
       <div class="ias-char-counter-row">
         <span class="ias-char-error">${over ? `Must be less than ${o.limit} characters.` : ''}</span>
@@ -20469,19 +20469,36 @@ function egsPageField(o) {
 /* One field for the chip's legal lines: the page's own well at the foot's
    own type, with an optional label beside it for the privacy link — Epic
    prints that one as a labelled link rather than as a line of its own. */
+/* COUNTS WHEN IT IS GIVEN A LIMIT (v9.03), and is unchanged without one —
+   the chip holds fields that have no cap of their own, and a number
+   against one of those would be invented.
+
+   THE ROW HAS TO FOLLOW THE INPUT, because that is how
+   updateIapCharCounter (app.js) finds it: nextElementSibling, then the
+   class. In the labelled form the input is wrapped in a .egs-sp-sysrow,
+   so the counter goes inside that wrapper rather than after it. */
 function egsSysField(o) {
-  const val  = o.value || '';
+  const val   = o.value || '';
+  const limit = o.limit;
+  const over  = limit != null && val.length > limit;
+  const grow  = o.multiline ? 'egsGrowField(this); ' : '';
+  const count = limit != null ? ` oninput="${grow}updateIapCharCounter(this, ${limit})"` 
+              : (o.multiline ? ` oninput="egsGrowField(this)"` : '');
   const body = o.multiline
-    ? `<textarea class="egs-sp-sysinput" id="${o.id}" rows="2" data-egs-grow="1"
-                 placeholder="${escHtml(o.placeholder || '')}"
-                 oninput="egsGrowField(this)"
+    ? `<textarea class="egs-sp-sysinput${over ? ' is-over-limit' : ''}" id="${o.id}" rows="2" data-egs-grow="1"
+                 placeholder="${escHtml(o.placeholder || '')}"${count}
                  onchange="${o.onChange}">${escHtml(val)}</textarea>`
-    : `<input class="egs-sp-sysinput" id="${o.id}" type="${o.type || 'text'}"
-              placeholder="${escHtml(o.placeholder || '')}" value="${escHtml(val)}"
+    : `<input class="egs-sp-sysinput${over ? ' is-over-limit' : ''}" id="${o.id}" type="${o.type || 'text'}"
+              placeholder="${escHtml(o.placeholder || '')}" value="${escHtml(val)}"${count}
               onchange="${o.onChange}">`;
+  const counter = limit == null ? '' : `
+      <div class="ias-char-counter-row">
+        <span class="ias-char-error">${over ? `Must be less than ${limit} characters.` : ''}</span>
+        <span class="ias-char-count${over ? ' is-over' : ''}">${limit - val.length}</span>
+      </div>`;
   return o.label
-    ? `<div class="egs-sp-sysrow"><span class="egs-sp-sysrow-label">${escHtml(o.label)}</span>${body}</div>`
-    : body;
+    ? `<div class="egs-sp-sysrow${limit != null ? ' is-counted' : ''}"><span class="egs-sp-sysrow-label">${escHtml(o.label)}</span>${body}${counter}</div>`
+    : (counter ? `<div class="egs-sp-sysfield is-counted">${body}${counter}</div>` : body);
 }
 
 function egsAchTip(text) {
@@ -20900,13 +20917,29 @@ function buildEgsStorePreviewSection() {
      well as every other field on this page at a tighter padding, because the
      panel is 300px wide and a 15px gutter on a 14px line would leave the
      value nowhere to go. */
-  const metaEdit = (label, id, value, key) => `
-    <div class="egs-sp-meta-row is-edit">
+  /* COUNTED LIKE EVERY OTHER FIELD (v9.03). Epic's Product Details page
+     caps both of these at 280, and the panel is 300px wide — the two
+     places on this card where a developer is most likely to run past a
+     limit without the page saying so. The number goes under the field's
+     right corner, out of flow, because the panel's rows are a fixed
+     rhythm and a line per counter would stretch two of them. */
+  const metaEdit = (label, id, value, key, limit) => {
+    const v = value || '';
+    const over = v.length > limit;
+    return `
+    <div class="egs-sp-meta-row is-edit egs-sp-meta-counted">
       <span>${label}</span>
-      <input class="egs-sp-edit egs-sp-metafield${(value || '').trim() ? '' : ' egs-sp-edit-empty'}"
-             id="${id}" type="text" value="${escHtml(value)}" placeholder="Not set"
+      <input class="egs-sp-edit egs-sp-metafield${v.trim() ? '' : ' egs-sp-edit-empty'}${
+             over ? ' is-over-limit' : ''}"
+             id="${id}" type="text" value="${escHtml(v)}" placeholder="Not set"
+             oninput="updateIapCharCounter(this, ${limit})"
              onchange="setEgsProductShared('${key}', this.value)">
+      <div class="ias-char-counter-row">
+        <span class="ias-char-error">${over ? `Must be less than ${limit} characters.` : ''}</span>
+        <span class="ias-char-count${over ? ' is-over' : ''}">${limit - v.length}</span>
+      </div>
     </div>`;
+  };
 
   /* PLATFORM IS EARNED, NOT TYPED. Epic inherits it from the artifact and
      prints it here; this card learns it from whichever operating systems the
@@ -20956,8 +20989,8 @@ function buildEgsStorePreviewSection() {
       ${isFree ? '' : `
       <div class="egs-sp-meta-row"><span>Epic Rewards</span><b>Earn 5% back</b></div>
       <div class="egs-sp-meta-row"><span>Refund Type</span><b>Self-Refundable</b></div>`}
-      ${metaEdit('Developer', 'egs-sp-dev', developer, 'developer')}
-      ${metaEdit('Publisher', 'egs-sp-pub', publisher, 'publisher')}
+      ${metaEdit('Developer', 'egs-sp-dev', developer, 'developer', EGS_PAGE_LIMITS.developer)}
+      ${metaEdit('Publisher', 'egs-sp-pub', publisher, 'publisher', EGS_PAGE_LIMITS.publisher)}
       ${metaRow('Release Date', (ws.releaseDate || ''), 'Coming soon')}
       ${metaRow('Platform', platforms.join(', '), 'From Specifications')}
       </div>
@@ -21292,6 +21325,7 @@ function buildEgsStorePreviewSection() {
         <div class="egs-sp-chip-part" data-spp-el="productDetails">
           <div class="egs-sp-foot-sub">Legal</div>
           ${egsSysField({ id: 'egs-sp-legalfooter', value: a.legalFooter, multiline: true,
+              limit: EGS_PAGE_LIMITS.legalFooter,
               /* NAMES THE FIELD FIRST (v8.77). The part's heading is
                  "Legal", which covers this box and the privacy link under
                  it; the old placeholder described what goes in without ever
@@ -21299,6 +21333,7 @@ function buildEgsStorePreviewSection() {
               placeholder: 'Legal footer (e.g., copyright and trademark information).',
               onChange: `setEgsProductText('legalFooter', this.value)` })}
           ${egsSysField({ id: 'egs-sp-privacy', value: a.privacyLink, type: 'url',
+              limit: EGS_PAGE_LIMITS.privacyLink,
               /* "Optional" rather than a specimen URL (v8.72): Epic does not
                  require a privacy policy on the offer, and a greyed-out
                  address reads as one already filled in. */
@@ -21325,7 +21360,15 @@ function buildEgsStorePreviewSection() {
      more row between the developer and the page they came to look at. */
   return `
     <div class="egs-spp egs-sp">
+      ${/* THE TITLE'S COUNT SITS BESIDE IT (v9.03), not beneath. Everything
+            else on this page keeps its number under the box's right corner,
+            which works where the box is one line of body copy; the title is
+            40px/48 and the gap under it is the page's largest, so a number
+            parked in it read as a stray label rather than as the title's
+            count. egs-sp-titlerow turns the row into a flex line and centres
+            the number against the box. */''}
       ${egsPageField({ spp: 'title', id: 'egs-sp-name', cls: 'egs-sp-title', value: title,
+          rowCls: 'egs-sp-titlerow',
           limit: EGS_PAGE_LIMITS.name, placeholder: 'Game Name',
           onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.name})`,
           onChange: `setEgsProductShared('title', this.value)` })}

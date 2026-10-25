@@ -3418,7 +3418,23 @@ const EGS_PICK_FIELDS = {
    egsBodyLimit() subtracts one from the other rather than giving the body a
    limit of its own. Epic's Product Home Page stores them together — the
    headline is the h2 at the top of the body, not a field beside it. */
-const EGS_PAGE_LIMITS = { name: 64, shortDesc: 280, headline: 140, body: 10000 };
+/* ══ EPIC'S OWN LIMITS (v9.03) ═══════════════════════════════════════════
+   Every number here is read off the Developer Portal's Product Details
+   page (Store Settings › Product configuration › Product details), which
+   prints each field's counter as "<left> <limit> <left> characters left".
+   name 64 and shortDesc 280 were already right; the four added below are
+   the ones the preview was counting nothing for.
+
+   Two notes from the same page. Legal footer and the body share the
+   number 10000 and are still separate fields, so they get separate
+   entries — a shared constant would be two rules that happen to agree.
+   And Epic's own counter prints "undefined" instead of "characters left"
+   on its URL fields (Privacy link, EULA link, Support page link); that is
+   a bug on their page, not a format to copy. */
+const EGS_PAGE_LIMITS = {
+  name: 64, shortDesc: 280, headline: 140, body: 10000,
+  developer: 280, publisher: 280, legalFooter: 10000, privacyLink: 260,
+};
 function egsBodyLimit(headlineLen) {
   const used = headlineLen != null
     ? headlineLen
@@ -3604,16 +3620,30 @@ function egsAchievements() {
       const hidden = a.visibility === 'hidden';
       const xp = parseInt(a.xp, 10);
       return {
-        /* WHAT A PLAYER SEES BEFORE UNLOCKING IT, because that is what a
-           store page shows. Epic's tooltip: a Hidden achievement is
-           "presented to users as a 'Hidden Achievement' with the icon that
-           was uploaded for them". So the row prints the locked face, and the
-           unlocked name a developer typed stays where it was typed. */
+        /* ── THE ROW READS THE UNLOCKED FIELDS, AND ONLY THOSE (v9.03) ──
+           Each of these used to fall back to its locked twin when the
+           unlocked box was empty, which from the outside looked like the
+           header syncing to whichever of the pair was typed in last: type
+           a locked name into a row with no unlocked name and the header
+           changed; type an unlocked one and it changed again; clear it
+           and the locked one came back. Two fields quietly feeding one
+           line is a header you cannot predict, and the description's
+           fallback ran the other way round from the name's — locked
+           first — so the two halves of the same header disagreed about
+           which twin won.
+
+           The unlocked pair is the right single source: it is what Epic's
+           own page shows for an achievement, and it is the pair the
+           editor marks required.
+
+           HIDDEN IS NOT PART OF THAT, and is unchanged. Epic's tooltip:
+           a Hidden achievement is "presented to users as a 'Hidden
+           Achievement' with the icon that was uploaded for them". That is
+           a rule about concealment, not about which of two boxes a header
+           reads, so it still overrides both. */
         name:        hidden ? 'Hidden Achievement'
-                            : ((a.unlockedDisplayName || '').trim()
-                               || (a.lockedDisplayName || '').trim()),
-        description: hidden ? '' : (a.lockedDescription || '').trim()
-                                   || (a.unlockedDescription || '').trim(),
+                            : (a.unlockedDisplayName || '').trim(),
+        description: hidden ? '' : (a.unlockedDescription || '').trim(),
         hidden,
         icon:        ((hidden ? a.lockedIcon : (a.lockedIcon || a.unlockedIcon)) || {}).dataUrl || '',
         xp:          (isFinite(xp) && xp > 0) ? xp : null,
