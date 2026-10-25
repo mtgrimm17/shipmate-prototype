@@ -32220,3 +32220,27 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   background: rgba(217, 217, 217, .18);
   color: #fff;
 }
+
+/* ── Supported Features (v9.01) ─────────────────────────────────────────
+   The seventeen rows in Steam - Technical. Same .cq-check-row the
+   Accessibility list uses, plus room on the right for the ? that carries
+   the portal's own sentence — those run to three lines, which is why they
+   are a real tooltip here and a title= attribute on the short
+   accessibility ones. */
+.steam-supported-intro { margin: -4px 0 12px; }
+.steam-supported-row { display: flex; align-items: center; gap: 8px; }
+.steam-supported-row > span:first-of-type { flex: 1 1 auto; min-width: 0; }
+.steam-supported-row .tooltip-anchor { flex: 0 0 auto; }
+/* NOTHING IS POSITIONED HERE, deliberately. .tooltip-body is a hidden
+   data carrier, not the bubble: showTip (app.js) reads its text into the
+   one shared #g-tip element and clamps THAT to the viewport. A rule
+   nudging .tooltip-body around would move nothing and read as if it
+   did — which is what the first draft of this block did. */
+
+/* Steam draws HDR as letters, not a picture (verified on God of War
+   Ragnarök) — so that one chip's "icon" is a wordmark and needs type
+   rather than the emoji slot's 15px. */
+.steam-spp-proto .steam-spp-feature-icon.is-text {
+  font-size: 9px; font-weight: 700; letter-spacing: .02em;
+  color: #8f98a0; font-family: Arial, sans-serif;
+}

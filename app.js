@@ -24933,6 +24933,22 @@ function toggleSteamPS(controllerId, checked) {
   reRenderSteamStepModal();
 }
 
+/* ── SUPPORTED FEATURES (v9.01) ──────────────────────────────────────────
+   Steam category ids, kept as a plain list of the ones that are on. The
+   order of this array is NOT the order anything is printed in: the
+   preview filters STEAM_SUPPORTED_FEATURES, which is already in the store
+   page's order, so a feature ticked last does not jump to the end of the
+   store page's list. */
+function toggleSteamSupportedFeature(featureId, on) {
+  const a = state.steamSubmitAnswers;
+  if (!Array.isArray(a.supportedFeatures)) a.supportedFeatures = [];
+  const id = String(featureId);
+  if (on) { if (a.supportedFeatures.indexOf(id) < 0) a.supportedFeatures.push(id); }
+  else    { a.supportedFeatures = a.supportedFeatures.filter(f => f !== id); }
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  renderDashboard();
+}
+
 function toggleSteamAccessibility(featureId, checked) {
   const feats = state.steamSubmitAnswers.accessibilityFeatures;
   if (checked) { if (!feats.includes(featureId)) feats.push(featureId); }
@@ -26216,6 +26232,36 @@ function _applySteamCategories(categories) {
   if (!a.inputSupport) {
     if (names.indexOf('Full controller support') >= 0) a.inputSupport = 'gamepad_preferred';
     else if (names.indexOf('Partial Controller Support') >= 0) a.inputSupport = 'keyboard_plus';
+  }
+
+  /* ── SUPPORTED FEATURES, BY ID (v9.01) ────────────────────────────────
+     The one importer on this page that does NOT match on display name.
+     Steamworks' editor gives every Supported Feature its own category id
+     (app[classification][category][category_NN]) and /game's `categories`
+     carries that same number, so the two can be joined on the id and the
+     whole class of name-matching bugs this function works around above —
+     "DualShock Controller Support" arriving under two ids, a label Valve
+     rewords between the editor and the store page — simply does not
+     arise. STEAM_SUPPORTED_FEATURES holds the ids.
+
+     Ids outside that table are skipped rather than guessed at: the
+     players and controller categories are already seeded above, Family
+     Sharing has no row to tick, and Remote Play on Phone and on Tablet
+     were left out of the section by request (STEAM_SUPPORTED_EXCLUDED
+     names those two so a reader can tell "deliberately not offered" from
+     "we have never heard of it").
+
+     Same empty-array test Epic's features use directly below: [] means
+     nobody has picked, and a developer who has picked any is visibly done
+     picking, so a re-scrape leaves their list alone. */
+  const known = new Set(STEAM_SUPPORTED_FEATURES.map(f => f.id));
+  if (Array.isArray(a.supportedFeatures) && !a.supportedFeatures.length) {
+    const picked = [];
+    categories.forEach(c => {
+      const id = (c && (c.id !== null && c.id !== undefined)) ? String(c.id).trim() : '';
+      if (id && known.has(id) && picked.indexOf(id) < 0) picked.push(id);
+    });
+    if (picked.length) a.supportedFeatures = picked;
   }
 
   /* EPIC'S FEATURES, from the same list (v8.87). Unlike Steam's players

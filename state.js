@@ -7477,6 +7477,107 @@ const STEAM_AI_LIVE_TYPES = ['Code','Text','Textures','3D Models','Sound Effects
    Read off partner.steamgames.com/doc/accessibility_features: Gameplay,
    Audio, Visual, Input, in that order. Nineteen ungrouped checkboxes is a
    list to get through; four short groups is a form. */
+/* ══ SUPPORTED FEATURES (v9.01) ══════════════════════════════════════════
+   Steamworks' own Supported Features list, read off the store-page editor
+   (partner.steamgames.com/admin/game/edit — the .feature_options_list
+   block under the "Supported Features" heading). Nineteen rows there;
+   seventeen here, Remote Play on Phone and Remote Play on Tablet left out
+   by request.
+
+   `id` IS STEAM'S OWN CATEGORY ID, taken from each row's checkbox name
+   (app[classification][category][category_NN]). That is the same number
+   /game's `categories` array carries, which is what makes the scrape a
+   lookup rather than a guess at matching display names — the mistake the
+   player seed has to work around, where "DualShock Controller Support"
+   arrives under two different ids.
+
+   `desc` IS THE PORTAL'S OWN SENTENCE, verbatim, with only the trailing
+   "Go to X configuration" link dropped. Asked for directly, and it is the
+   right call anyway: a paraphrase of a rule teaches the rule wrong.
+
+   ── THE ORDER IS THE STORE PAGE'S, AND IT IS ONLY PARTLY MEASURED ──────
+   Steam does not print these in the editor's order. The spine below comes
+   from Steam's own "Narrow by feature" facet (store.steampowered.com/
+   search), which agreed with the print order everywhere the two overlap,
+   and from eight product pages read for this version:
+
+     Portal 2 (620)        22 29 13 30 23 15 17 14 41 42 43 44 62
+     Team Fortress 2 (440) 22 29 13 30 35 15 17 14 41 42
+     Civilization VI       22 29 30 35 32 42 44 62
+     Warframe (230410)     22 29 30 35 41 42 43 61
+     Cyberpunk 2077        22 29 23 61 62
+     God of War Ragnarök   22 23 61 62
+     The Last of Us Pt I   22 29 23 43 62
+     Hades II (1145350)    22 29 13 23 62
+
+   THREE PLACEMENTS ARE INFERRED, not measured, because no page surveyed
+   declared the feature alongside the ones that would pin it. They are
+   marked `guessed: true` below so the next person knows which lines to
+   doubt: Steam Workshop (for Steam China), Steam Leaderboards and
+   Includes Source SDK. Steam China sits beside Workshop and Leaderboards
+   beside Stats because they are the same feature's siblings; Source SDK
+   is where the facet puts it, between Cloud and Remote Play. In-App
+   Purchases vs Steam Cloud, and Turn Notifications vs Stats, are also
+   unproven — no page carried both — so those two adjacencies follow the
+   facet and the Civ VI/TF2 constraints and nothing stronger. */
+const STEAM_SUPPORTED_INTRO = 'Please select the specific features that are available in '
+  + 'your product. If you intend to add a feature in the future, do not select it here '
+  + 'until implemented and released.';
+
+const STEAM_SUPPORTED_FEATURES = [
+  { id: '22', label: 'Steam Achievements', icon: '\u{1F3C6}',
+    desc: 'Must first implement and release Steam Achievements.' },
+  { id: '29', label: 'Steam Trading Cards', icon: '\u{1F0CF}',
+    desc: 'Only select this category if you have uploaded, reviewed, and published Steam Trading Cards and badges.' },
+  { id: '13', label: 'Captions available', icon: '\u{1F4AC}',
+    desc: "Captions are intended for hearing impaired, where text shown on screen should include description of noises, music, and sound effects. If your game has subtitles, please indicate that above under 'Supported languages'" },
+  { id: '30', label: 'Steam Workshop', icon: '\u{1F6E0}',
+    desc: 'Must first configure Steam Workshop for your game and make use of Steam Workshop APIs to share user-generated content.' },
+  { id: '51', label: 'Steam Workshop (for Steam China)', icon: '\u{1F6E0}', guessed: true,
+    desc: 'Only for games distributed via Steam China and making use of that version of Steam Workshop.' },
+  { id: '23', label: 'Steam Cloud', icon: '\u2601',
+    desc: 'Must first enable and test Steam Cloud.' },
+  { id: '35', label: 'In-App Purchases', icon: '\u{1F6D2}',
+    desc: "You must select this if there is additional content available for purchase within your game that isn't surfaced on the Steam Store." },
+  { id: '32', label: 'Steam Turn Notifications', icon: '\u{1F514}',
+    desc: 'Only select this category if your game is making use of the Steam Turn Notification APIs.' },
+  { id: '15', label: 'Stats', icon: '\u{1F4CA}',
+    desc: 'This feature describes games that make use of Steamworks stat reporting. Must be accompanied by configuring Steam Stat Reporting.' },
+  { id: '25', label: 'Steam Leaderboards', icon: '\u{1F947}', guessed: true,
+    desc: 'Only select this category if your game is making use of the Steam Leaderboard APIs.' },
+  { id: '16', label: 'Includes Source SDK', icon: '\u{1F9F0}', guessed: true,
+    desc: "This category only applies to games that are built on Valve's Source Engine." },
+  { id: '17', label: 'Includes level editor', icon: '\u{1F9F1}',
+    desc: "You can select this category if your game includes a level editor for players to create or modify levels for the game. It can be part of your game, or provided as a 'tool' app as a separate install." },
+  { id: '14', label: 'Commentary available', icon: '\u{1F399}',
+    desc: 'This feature is intended to communicate when your game offers a special mode for players to discover developer commentary within the game.' },
+  { id: '43', label: 'Remote Play on TV', icon: '\u{1F4FA}',
+    desc: 'Setting this feature means that you have tested streaming your game to a TV, your application has full controller support, and you use large fonts and UI elements suitable for viewing at a distance on a TV.' },
+  { id: '44', label: 'Remote Play Together', icon: '\u{1F4E1}',
+    desc: 'Setting this feature means that your game allows players to invite their Steam friends to play with them via streaming. One instance of the game runs on the host machine while other friends connect their controllers and view the game through the Internet.' },
+  /* STEAM DRAWS "HDR" AS LETTERS, not a picture — verified on God of War
+     Ragnarök's own Features list, where the icon column reads HDR. There
+     is no emoji for it and inventing one (a rainbow?) would say something
+     the store page does not. */
+  { id: '61', label: 'HDR available', icon: 'HDR', iconText: true,
+    desc: 'Setting this feature means that your game supports HDR output (HDR10 (PQ)/scRGB) to supported HDR displays. Games that render internally as HDR and tonemap to SDR should not set this.' },
+  { id: '63', label: 'Steam Timeline', icon: '\u23F1',
+    desc: 'Select this feature if your game makes use of the Timeline Markers APIs.' },
+];
+
+/* THE TWO LEFT OUT, by request — kept as ids rather than deleted so the
+   scrape can say "known, and deliberately not offered" instead of
+   silently dropping a category it did not recognise. */
+const STEAM_SUPPORTED_EXCLUDED = ['41', '42'];   // Remote Play on Phone / on Tablet
+
+/* The chosen features as objects, in the store page's order. One accessor
+   so the Technical section, the preview and any test agree about what is
+   selected and in what order. */
+function steamSupportedSelected(ids) {
+  const picked = new Set((ids || []).map(String));
+  return STEAM_SUPPORTED_FEATURES.filter(f => picked.has(f.id));
+}
+
 const STEAM_ACCESS_CATEGORIES = [
   { id: 'gameplay', label: 'Gameplay' },
   { id: 'audio',    label: 'Audio'    },
@@ -7984,6 +8085,11 @@ function makeBlankSteamAnswers() {
     steamInputAPI:      null,
     // Accessibility
     accessibilityFeatures: [],
+    /* Steamworks' Supported Features (v9.01) — Steam category ids, see
+       STEAM_SUPPORTED_FEATURES. A real empty: [] means nobody has picked
+       yet, which is what lets the scrape seed it without clobbering an
+       answer (see _applySteamCategories, app.js). */
+    supportedFeatures: [],
     // Store Preview
     storePreviewSeen:   false,
     privacyPolicyUrl:   '',

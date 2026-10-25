@@ -22600,11 +22600,43 @@ function buildSteamTechnicalSection() {
     </div>`;
   }).join('');
 
+  /* ══ SUPPORTED FEATURES (v9.01) ═══════════════════════════════════════
+     Steamworks' own list and its own words — see STEAM_SUPPORTED_FEATURES
+     (state.js) for where both came from and which three orderings are
+     inferred rather than measured.
+
+     EVERY ROW CARRIES ITS DESCRIPTION AS A TOOLTIP, which is what was
+     asked for and is also the only honest place to put it: the portal
+     prints the sentence under the row, and seventeen sentences stacked
+     down a card is a wall nobody reads. The sentences are the portal's,
+     verbatim, minus the "Go to X configuration" link each one trails —
+     there is nothing behind that link here.
+
+     A TOOLTIP, NOT A title= ATTRIBUTE, unlike the Accessibility rows
+     directly below. Those say a short phrase; these run to three lines,
+     and a native tooltip truncates, waits a second before appearing and
+     cannot be read by anyone navigating with a keyboard. */
+  const supported = a.supportedFeatures || [];
+  const supportedRows = STEAM_SUPPORTED_FEATURES.map(f => {
+    const checked = supported.includes(f.id);
+    return `<label class="cq-check-row steam-supported-row${checked ? ' is-checked' : ''}">
+      <input type="checkbox" ${checked ? 'checked' : ''}
+             onchange="toggleSteamSupportedFeature('${f.id}', this.checked)">
+      <span>${escHtml(f.label)}</span>
+      <span class="tooltip-anchor" onclick="event.preventDefault(); event.stopPropagation();"
+            ><span class="tooltip-icon">?</span><span class="tooltip-body">${escHtml(f.desc)}</span></span>
+    </label>`;
+  }).join('');
+
   return `
     ${playersHtml}
     <div class="ios-content-step-label">General Input Support</div>
     ${inputHtml}
     ${gamepadBlock}
+    <div class="ios-q-divider"></div>
+    <div class="ios-content-step-label">Supported Features</div>
+    <p class="form-hint steam-supported-intro">${escHtml(STEAM_SUPPORTED_INTRO)}</p>
+    <div class="cq-check-list"><div class="cq-checkboxes">${supportedRows}</div></div>
     <div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Accessibility Features <span style="font-weight:400;text-transform:none;font-size:11px;letter-spacing:0;">(Optional — select all that apply)</span></div>
     <div class="cq-check-list">${accessChecks}</div>`;
@@ -23610,6 +23642,26 @@ function buildSteamStorePreviewPrototypeSection() {
   const playerFeatureBadgesHtml = computeSteamPlayerBadges()
     .map(b => `<div class="steam-spp-feature"><span class="steam-spp-feature-icon">${b.icon}</span><span>${escHtml(b.label)}</span></div>`)
     .join('');
+
+  /* ══ THE SUPPORTED FEATURES, AS CHIPS (v9.01) ══════════════════════════
+     Steam prints them in this same Features block, as rows exactly like
+     the player badges above, immediately after them — the order on every
+     product page surveyed (Portal 2, Team Fortress 2, Civilization VI,
+     Warframe, Cyberpunk 2077, God of War Ragnarök, The Last of Us Part I,
+     Hades II) is players, then these, then Family Sharing, then the
+     accessibility expander.
+
+     NOT IN THE ORDER THEY WERE TICKED, and not in the Steamworks editor's
+     order either: STEAM_SUPPORTED_FEATURES is already in the store page's
+     order, which is a third order again, so filtering it preserves what
+     Steam would print. (The Full Controller Support group below keeps the
+     position it was given in v8.x — none of the pages surveyed for this
+     version declared it, so there was nothing new to move it by.) */
+  const supportedFeatureChipsHtml = ((typeof steamSupportedSelected === 'function')
+      ? steamSupportedSelected(ssa.supportedFeatures) : [])
+    .map(f => `<div class="steam-spp-feature"><span class="steam-spp-feature-icon${
+      f.iconText ? ' is-text' : ''}">${escHtml(f.icon)}</span><span>${escHtml(f.label)}</span></div>`)
+    .join('');
   /* ══ ACCESSIBILITY IS THE LAST ROW OF FEATURES (v9.00) ════════════════
      Not a block of its own. Steam puts it inside #category_block — the
      same box as Single-player, Steam Achievements, Steam Cloud and Family
@@ -23671,6 +23723,7 @@ function buildSteamStorePreviewPrototypeSection() {
       <div class="steam-spp-side-heading">Features</div>
       <div class="steam-spp-features-row">
         ${playerFeatureBadgesHtml}
+        ${supportedFeatureChipsHtml}
         ${showFullControllerGroup ? `
         <div class="steam-spp-feature-subheading">Full Controller Support</div>
         ${hasXboxSupport ? `<div class="steam-spp-feature"><span class="steam-spp-feature-icon">🎮</span><span>Xbox Controllers</span></div>` : ''}
