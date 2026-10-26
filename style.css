@@ -32483,6 +32483,17 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   color: #8f98a0;
 }
 .steam-tags .steam-tag-total.is-over { color: var(--magenta, #d6409f); }
+/* At the cap rather than over it (v9.16): not an error, so not the error
+   colour — the checklist's own mark, the same one the panel's counter
+   turns. */
+.steam-tags .steam-tag-total.is-full { color: var(--guide-mark); }
+
+/* A TAG THE TWENTY WOULD REFUSE (v9.16). The same half-strength the
+   pickers' own capped rows wear (.steam-tag-dd-grid .giarc-dd-item
+   .is-disabled), so one cap does not look different from another. Only
+   ever set by Steam's twenty — the two-pick cap still swaps. */
+.steam-top-pills .ob-preset-pill.is-disabled { opacity: .35; cursor: not-allowed; }
+.steam-top-pills .ob-preset-pill.is-disabled:hover { background: none; }
 
 /* The shared social marks (v9.11, SM_BRAND_MARKS): one 24×24 canvas, so one
    size per surface. */
@@ -32515,10 +32526,24 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   gap: 4px;
   min-width: 0;
 }
+/* THE ROW IS NOT PRESSABLE AND MUST NOT LOOK IT (v9.16). `.gd-task` is
+   written for a button — pointer cursor, a hover plate across the whole
+   row — and since the pills became the buttons, the row is a div whose
+   only job is to hold them. A plate that lights under the cursor and does
+   nothing when pressed is a promise the row cannot keep. */
+.gd-task.gd-task-pills { cursor: default; }
+.gd-task.gd-task-pills:hover { background: none; }
+
+/* EACH PILL REMOVES ITS TAG (v9.16, by request), so each is a button and
+   carries the one mark that says so. The × is shown at .45 rather than on
+   hover alone: hover is not a thing a reader can look for, and the whole
+   point of listing the tags here is that you can act on them from here. */
 .gd-tagpill {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  gap: 5px;
+  padding: 2px 6px 2px 8px;
+  border: 0;
   border-radius: 999px;
   background: rgba(255, 255, 255, .09);
   font-family: var(--mono);
@@ -32527,5 +32552,43 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   letter-spacing: 0;
   color: var(--text-dim);
   white-space: nowrap;
+  cursor: pointer;
+  transition: background .12s, color .12s;
 }
-.gd-task.gd-task-pills:hover .gd-tagpill { background: rgba(255, 255, 255, .16); }
+.gd-tagpill-x { display: inline-flex; opacity: .45; transition: opacity .12s; }
+.gd-tagpill-x svg { display: block; width: 8px; height: 8px; }
+.gd-tagpill:hover { background: rgba(255, 255, 255, .18); color: var(--text); }
+.gd-tagpill:hover .gd-tagpill-x { opacity: 1; }
+.gd-tagpill:focus-visible { outline: 2px solid var(--guide-mark); outline-offset: 1px; }
+
+/* ── THE TWENTY, AT THE TOP OF THE PANEL (v9.16) ──────────────────────────
+   Inserted after `.guide-eyebrow`, the slot the step panel's other status
+   lines take (`.sm-cr-line-moved`), so the counter is the first thing under
+   the panel's name and the list of chosen tags begins under it.
+
+   The bar is 4px and shares the checklist's own two marks — `--guide-mark`
+   filled against `--guide-mark-dim` — rather than introducing a third
+   progress colour into a 254px column that already has one. */
+.gd-tagcap { margin: 9px 0 14px; }
+.gd-tagcap-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0;
+  text-transform: uppercase; line-height: 1.2; color: var(--text-dim);
+}
+.gd-tagcap-n b { font-weight: 500; color: var(--text); }
+.gd-tagcap-track {
+  height: 4px; margin-top: 7px; border-radius: 999px;
+  background: var(--guide-mark-dim); overflow: hidden;
+}
+.gd-tagcap-track i {
+  display: block; height: 100%; border-radius: 999px;
+  background: var(--guide-mark); transition: width .18s;
+}
+.gd-tagcap-note {
+  margin-top: 7px; font-size: 12px; line-height: 16px;
+  letter-spacing: 0; color: var(--text-dim);
+}
+.gd-tagcap.is-full .gd-tagcap-n b { color: var(--guide-mark); }
+.gd-tagcap.is-over .gd-tagcap-n b,
+.gd-tagcap.is-over .gd-tagcap-note { color: var(--magenta); }
+.gd-tagcap.is-over .gd-tagcap-track i { background: var(--magenta); }

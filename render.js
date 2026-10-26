@@ -4234,6 +4234,18 @@ function renderGuide() {
        done/current still decide the rest. */
     const cls = (i.done ? ' is-done' : (idx === currentIdx ? ' is-current' : ''))
               + (i.cls ? ' ' + i.cls : '');
+    /* AND `i.plain` MAKES IT A DIV (v9.16). Steam - Tags' pills row holds a
+       button per tag — pressing one takes that tag off — and a button
+       inside a button is not markup a browser keeps: it closes the outer
+       one early and the pills end up as siblings of the row. A row that
+       owns pressable things is not itself pressable, which is also the
+       honest shape: a hover plate that lights and does nothing is a
+       promise the press does not keep. */
+    if (i.plain) return `
+    <div class="gd-task${cls}">
+      <span class="gd-task-box">${i.done ? GUIDE_CHECK_SVG : ''}</span>
+      <span class="gd-task-label">${i.label}</span>
+    </div>`;
     return `
     <button class="gd-task${cls}" onclick="${i.step ? `chkGoStep('${i.step}')` : `chkGo('${view}','${i.anchor || ''}','${i.section || ''}')`}">
       <span class="gd-task-box">${i.done ? GUIDE_CHECK_SVG : ''}</span>
@@ -22165,7 +22177,12 @@ function _steamTagPicker(field, list, max, question, tip) {
   const items = list.map(pair => {
     const [tagid, g] = pair;
     const on  = cur.includes(g);
-    const off = !on && full;
+    /* TWO CAPS GREY A ROW (v9.16): this question's own `max`, and Steam's
+       twenty across every question. Asked of the answer the tick would
+       leave behind, so a label already carried in another section — Steam
+       counts it once — stays available at the cap. */
+    const off = !on && (full || (typeof steamTagsOverMax === 'function'
+                                 && steamTagsOverMax(field, cur.concat([g]))));
     return `<button type="button" class="loc-dd-item giarc-dd-item${on ? ' is-on' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
                     data-tagid="${escHtml(tagid)}"
                     onclick="event.stopPropagation(); ${off ? '' : `toggleSteamTag('${field}','${egsJsStr(g)}',${!on},${max})`}">
@@ -22215,11 +22232,21 @@ function _steamTopGenrePills() {
   /* Through the same filter and sort as every other section (v9.14):
      "Software" is a top-level genre on Steam and is one of the eight
      STEAM_SOFTWARE_TAG_IDS, so it is not offered here. */
+  /* AND NOW ONE THING DOES (v9.16), which is not the note above in
+     reverse. That note is about the TWO: five pills at half strength
+     because you have made your two picks read as breakage, and a third
+     press is legal there anyway — it swaps. This is Steam's twenty, where
+     the press is genuinely refused, and a pill that looks ordinary and
+     does nothing is worse than one that says it cannot. `steamTopGenreBlocked`
+     is the same pair of functions `setSteamTopGenre` returns early on, so
+     a pill greys exactly when the handler would refuse it — never for the
+     two-pick cap, which still swaps. */
   const pills = steamSectionTags(STEAM_TAG_SECTIONS[0]).map(([tagid, g]) => {
-    const on = cur.includes(g);
-    return `<button type="button" class="ob-preset-pill${on ? ' is-active' : ''}"
+    const on  = cur.includes(g);
+    const off = !on && typeof steamTopGenreBlocked === 'function' && steamTopGenreBlocked(g);
+    return `<button type="button" class="ob-preset-pill${on ? ' is-active' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
                     data-tagid="${escHtml(tagid)}"
-                    onclick="setSteamTopGenre('${egsJsStr(g)}')">${escHtml(g)}</button>`;
+                    onclick="${off ? '' : `setSteamTopGenre('${egsJsStr(g)}')`}">${escHtml(g)}</button>`;
   }).join('');
   return `
     <div class="giarc-card giarc-depth-1 giarc-inline steam-top-genres" data-key="steam:topGenres">
@@ -22251,8 +22278,16 @@ function _steamTopGenrePills() {
 
    THE TWENTY IS STEAM'S (`maxTags`), counted across every section and
    deduped — several tags sit in more than one list, and Steam counts each
-   once. It is stated rather than enforced: the wizard lets a title go
-   over and tells it so. */
+   once.
+
+   IT IS ENFORCED SINCE v9.16: at twenty, every row that would add a
+   twenty-first greys out and its handler refuses. The wizard itself lets a
+   title sail past and merely says so, which is the behaviour this line was
+   written for; a store page that cannot be submitted is not a better place
+   to find out. The line stays, and Shippy carries a live copy of the same
+   count at the top of its panel (`.gd-tagcap`, app.js) — this one is at
+   the foot of seven sections of scrolling, which is the wrong end of the
+   page to learn what the cap is. */
 function buildSteamStoreTagsSection() {
   const head = (label, first, tip) => `${first ? '' : '<div class="ios-q-divider"></div>'}<div class="ios-content-step-label giarc-group-head"${first ? ' style="margin-top:0;"' : ''}>${escHtml(label)}${tip ? ` <span class="tooltip-anchor" data-tip="${escHtml(tip)}"><span class="tooltip-icon">?</span></span>` : ''}</div>`;
 
@@ -22264,12 +22299,15 @@ function buildSteamStoreTagsSection() {
 
   const all  = (typeof steamWizardTags === 'function') ? steamWizardTags() : [];
   const over = all.length > STEAM_TAG_TOTAL_MAX;
+  const full = !over && all.length >= STEAM_TAG_TOTAL_MAX;
 
   return `
     <div class="giarc-root giarc-flat steam-tags">
       ${sections}
-      <div class="steam-tag-total${over ? ' is-over' : ''}">${all.length} of ${
-        STEAM_TAG_TOTAL_MAX} tags${over ? ' — Steam accepts twenty' : ''}</div>
+      <div class="steam-tag-total${over ? ' is-over' : (full ? ' is-full' : '')}">${
+        all.length} of ${STEAM_TAG_TOTAL_MAX} tags${
+        over ? ' — Steam accepts twenty' :
+        full ? ' — remove one to add another' : ''}</div>
     </div>`;
 }
 

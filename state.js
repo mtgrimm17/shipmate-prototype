@@ -7729,6 +7729,46 @@ function steamWizardTags() {
   return out;
 }
 
+/* ══ THE TWENTY IS ENFORCED, NOT ANNOUNCED (v9.16) ════════════════════════
+   `maxTags` is Steam's cap on the tags a title carries, and until now the
+   card stated it at its foot and let you sail past. These three are what
+   every control asks before it lets a tag on, so the pill that greys out
+   and the handler that refuses are deciding the same thing from the same
+   code rather than each carrying its own arithmetic.
+
+   COUNTED THE WAY steamWizardTags COUNTS — deduped across sections. Several
+   tags sit in more than one of Steam's lists and Steam counts each once, so
+   ticking a label you already carry elsewhere costs nothing and must not be
+   refused at the cap.
+
+   It asks about a PROSPECTIVE answer rather than a tag, because the one
+   control that does not simply add — the top tier, where a third press
+   evicts the older of two — can be at the cap and still have a legal
+   press. */
+function steamTagsOverMax(field, nextArr) {
+  const a = state.steamSubmitAnswers || {};
+  const seen = new Set();
+  STEAM_TAG_SECTIONS.forEach(s =>
+    (s.key === field ? nextArr : (a[s.key] || [])).forEach(l => seen.add(l)));
+  return seen.size > STEAM_TAG_TOTAL_MAX;
+}
+/* What a press on a top-level genre would leave behind: off if it is on, on
+   if it is not, and a third press drops the older of the two. */
+function steamTopGenreNext(g) {
+  const cur = ((state.steamSubmitAnswers || {}).topGenres || []).slice();
+  const i = cur.indexOf(g);
+  if (i >= 0) { cur.splice(i, 1); return cur; }
+  cur.push(g);
+  while (cur.length > 2) cur.shift();
+  return cur;
+}
+/* Would that press be refused? A press that REMOVES never is, however far
+   over the title already sits. */
+function steamTopGenreBlocked(g) {
+  return !((state.steamSubmitAnswers || {}).topGenres || []).includes(g)
+      && steamTagsOverMax('topGenres', steamTopGenreNext(g));
+}
+
 const STEAM_AI_LIVE_TYPES = ['Code','Text','Textures','3D Models','Sound Effects','Music','Voice','Other'];
 
 /* ══ ACCESSIBILITY, IN STEAM'S OWN FOUR GROUPS (v8.93) ═══════════

@@ -25005,9 +25005,14 @@ function toggleSteamTag(field, value, checked, maxCount) {
   if (!Array.isArray(state.steamSubmitAnswers[field])) state.steamSubmitAnswers[field] = [];
   const arr = state.steamSubmitAnswers[field];
   if (checked) {
-    // Add only if under the cap
-    if ((maxCount === -1 || arr.length < maxCount) && !arr.includes(value)) arr.push(value);
-    // If at cap, silently ignore (chip stays un-on; re-render shows correct state)
+    /* Add only if under this section's cap AND under Steam's twenty (v9.16).
+       Two different caps: `maxCount` is how many this one question takes,
+       `steamTagsOverMax` is how many tags the title carries in all. Neither
+       press leaves a trace — the row that would be refused is already drawn
+       greyed and its onclick stripped (_steamTagPicker), so this is the
+       floor under the UI rather than the thing the user meets. */
+    if ((maxCount === -1 || arr.length < maxCount) && !arr.includes(value)
+        && !steamTagsOverMax(field, arr.concat([value]))) arr.push(value);
   } else {
     state.steamSubmitAnswers[field] = arr.filter(v => v !== value);
   }
@@ -33512,7 +33517,11 @@ function egsCrSearchGo(i) {
      cr:<heading>    — a heading in the section (Content's groups), the
                        Content step's own locator;
      hd:<heading>    — any other heading (Tags, Info, Steam Assets);
-     tag:<key>       — the pills under a category (Tags);
+     tag:<key>       — the pills under a category (Tags). An IDENTITY, not
+                       a destination: since v9.16 that row is a div whose
+                       pills remove tags, so nothing presses it. It stays
+                       because renderGuide maps its rows by step and two
+                       rows sharing one would collide;
      tab:<set>:<id>  — a tab (Features' four, System Requirements' three);
      sfx:<id>        — a field (Business's price).
    ══════════════════════════════════════════════════════════════════════════ */
@@ -33553,7 +33562,19 @@ function _smSteamFlipItems(flip) {
        ALWAYS DONE. It is not an outstanding task; it is the answer,
        listed. And its step is unique per section because renderGuide's
        decoration pass maps rows BY step and duplicates would collide —
-       `tag:<key>` with no tag name, since one row now covers them all. */
+       `tag:<key>` with no tag name, since one row now covers them all.
+
+       EACH PILL IS ITS OWN BUTTON, AND THE ROW IS NOT (v9.16, by request):
+       pressing a pill takes that tag off. A button inside a button is not
+       markup a browser keeps, so the row asks renderGuide for a div
+       (`plain`) and the pills are the only pressable things in it — the
+       category's own row, directly above, is still the way into the
+       section, so nothing is lost by the row itself going quiet.
+
+       ESCAPED TWICE, ON PURPOSE. `egsJsStr` makes the label safe inside the
+       JS string literal, `escHtml` makes that safe inside the attribute;
+       the browser decodes the entity before the handler is parsed, so
+       "Point & Click" arrives at the handler whole. */
     case 'tags': {
       const secs = (typeof STEAM_TAG_SECTIONS !== 'undefined') ? STEAM_TAG_SECTIONS : [];
       const out = [];
@@ -33566,9 +33587,13 @@ function _smSteamFlipItems(flip) {
            fallback that quietly stopped escaping would put "Point & Click"
            into the panel as markup. */
         const pills = picked.map(tag =>
-          `<span class="gd-tagpill">${escHtml(tag)}</span>`).join('');
+          `<button type="button" class="gd-tagpill" title="Remove ${escHtml(tag)}"` +
+          ` aria-label="Remove ${escHtml(tag)}"` +
+          ` onclick="removeSteamGuideTag('${escHtml(egsJsStr(sec.key))}','${escHtml(egsJsStr(tag))}')">` +
+          `${escHtml(tag)}<span class="gd-tagpill-x" aria-hidden="true">${SM_CLEAR_SVG}</span></button>`
+        ).join('');
         out.push(Object.assign(row(pills, true, 'tag:' + sec.key),
-                               { cls: 'gd-task-pills' }));
+                               { cls: 'gd-task-pills', plain: true }));
       });
       return out;
     }
@@ -33615,6 +33640,71 @@ function _smSteamFlipItems(flip) {
   return [row(SM_STEAM_FLIP_TITLES[flip] || 'This section', false, null)];
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   THE TWENTY, AT THE TOP OF SHIPPY (v9.16, by request).
+
+   Steam caps a title at twenty tags. The card said so at its FOOT, under
+   seven sections of scrolling, which is the wrong end of the page: by the
+   time you read the number you had already made the choice it was about.
+   It belongs where the panel's other status lines go — first thing under
+   the eyebrow, beside the list of what you have picked — and it is live,
+   because every pill added or removed repaints this panel.
+
+   THREE PARTS, AND EACH EARNS ITS ROOM: the count answers "how many", the
+   bar answers "how close", and the sentence appears only at the cap, where
+   there is finally something to say. Under twenty it is two lines.
+
+   OUTERMOST, AND IT DRAWS ONLY IN TAGS. This is the last of the arms that
+   wrap renderGuide, so it runs on the finished panel. It removes nothing
+   first and does not need to: renderGuide rewrites `#app-guide`'s innerHTML
+   on every paint, so the card this inserts into is a new one each time and
+   leaving Tags simply means the next paint does not draw a counter. (A
+   defensive sweep was written here and taken out again — measured, it could
+   never match anything, and a line that cannot run is worse than no line
+   because it reads as a guarantee.) */
+const _smTagCapOrigGuide = window.renderGuide;
+window.renderGuide = function () {
+  const out = _smTagCapOrigGuide.apply(this, arguments);
+  const card = document.querySelector('#app-guide > .guide-card');
+  if (!card) return out;
+  const sm = (typeof _smOpenStep === 'function') ? _smOpenStep() : null;
+  const on = sm && sm.platformId === 'steam'
+          && typeof _smFlipTarget === 'function'
+          && _smFlipTarget(sm.platformId) === 'tags';
+  if (!on || typeof steamWizardTags !== 'function') return out;
+
+  const n   = steamWizardTags().length;
+  const max = STEAM_TAG_TOTAL_MAX;
+  const el  = document.createElement('div');
+  el.className = 'gd-tagcap' + (n > max ? ' is-over' : (n >= max ? ' is-full' : ''));
+  /* OVER IS STILL DRAWN, though nothing in the UI can get you there any
+     more: a scrape can, and a title that arrives at twenty-three needs to
+     be told how many to drop rather than shown a bar pinned at full. */
+  const note = n > max ? `Steam accepts twenty — remove ${n - max}.`
+             : n === max ? 'All twenty used. Remove one to add another.'
+             : '';
+  el.innerHTML =
+    `<div class="gd-tagcap-row"><span>Tags</span>` +
+    `<span class="gd-tagcap-n"><b>${n}</b> / ${max}</span></div>` +
+    `<div class="gd-tagcap-track"><i style="width:${
+       Math.min(100, Math.round(n / max * 100))}%"></i></div>` +
+    (note ? `<div class="gd-tagcap-note">${escHtml(note)}</div>` : '');
+  /* AND IT TAKES THE RESERVED SLOT'S ROOM RATHER THAN ADDING TO IT. The
+     modal arm inserts an EMPTY `.sm-cr-line-slot` under the eyebrow in
+     every step, holding open the room a status line would need so the
+     checklist starts at one height wherever you are. This counter is that
+     line for this step, so paying for both would push Tags' list 48px down
+     a column whose whole argument is that it fits. Only the empty
+     placeholder goes; a slot carrying real text is another step's line and
+     is left where it is. */
+  card.querySelectorAll(':scope > .sm-cr-line-slot').forEach(n => {
+    if (!n.textContent.trim()) n.remove();
+  });
+  const eb = card.querySelector(':scope > .guide-eyebrow');
+  card.insertBefore(el, eb ? eb.nextSibling : card.firstChild);
+  return out;
+};
+
 /* Light a run of the section and bring it up under the top edge — the same
    deep dim the search results use, so a block nested inside .qs-section
    still stands alone. */
@@ -33658,16 +33748,12 @@ function _smTabGo(set, id) {
   window.chkGoStep = function (step) {
     if (typeof step === 'string') {
       if (step.slice(0, 3) === 'hd:')  return _smHeadGo(step.slice(3));
-      /* tag:<sectionKey> — the pills under a category in Steam - Tags
-         (v9.15). Where it goes is that section's heading, same as the
-         category row above it. (The split survives a trailing name: v9.14
-         put one there when each tag had its own row.) */
-      if (step.slice(0, 4) === 'tag:') {
-        const key = step.slice(4).split(':')[0];
-        const sec = (typeof STEAM_TAG_SECTIONS !== 'undefined' ? STEAM_TAG_SECTIONS : [])
-          .find(x => x.key === key);
-        return sec ? _smHeadGo(sec.label) : false;
-      }
+      /* `tag:` HAD A BRANCH HERE AND IT IS GONE (v9.16). v9.15's pills row
+         was a button that jumped to the section; its pills now remove tags
+         and the row is a div, so nothing in the app can reach this step —
+         and an unreachable branch left behind is the debt the collapse
+         feature was deleted whole to avoid. The step id itself still has a
+         job: it is the row's identity in renderGuide's by-step map. */
       if (step.slice(0, 4) === 'tab:') { const [, set, id] = step.split(':'); return _smTabGo(set, id); }
       if (step.slice(0, 4) === 'sfx:') {
         const el = document.getElementById(step.slice(4));
@@ -33704,15 +33790,28 @@ function _smTabGo(set, id) {
 
 /* Steam's top-level genre pills (v9.08, _steamTopGenrePills): a press toggles
    the genre; a third pick replaces the older of the two already lit. */
+/* THE SWAP IS WHY THIS GOES THROUGH A PROSPECTIVE ANSWER (v9.16). A third
+   press here does not add a tag, it replaces one — so at twenty of twenty
+   this control can still be legal where every other section's is not, and
+   a flat "at the cap, refuse" would have locked the one tier Steam
+   requires. `steamTopGenreNext` computes the resulting pair and
+   `steamTopGenreBlocked` asks whether it fits; the pills read the same two
+   so a pill greys out exactly when this returns early. */
 function setSteamTopGenre(g) {
-  const a = state.steamSubmitAnswers;
-  const cur = (a.topGenres || []).slice();
-  const i = cur.indexOf(g);
-  if (i >= 0) cur.splice(i, 1);
-  else { cur.push(g); while (cur.length > 2) cur.shift(); }
-  a.topGenres = cur;
+  if (typeof steamTopGenreBlocked === 'function' && steamTopGenreBlocked(g)) return;
+  state.steamSubmitAnswers.topGenres = steamTopGenreNext(g);
   reRenderStepModal();
   if (typeof updateSteamCard === 'function') updateSteamCard();
+}
+
+/* A PILL IN SHIPPY IS A REMOVE BUTTON (v9.16, by request). The guide listed
+   what you had chosen and the only way to undo one was to go back into the
+   section, open the right picker and find it again. Every section stores
+   its picks in a plain array of labels — the top tier included — so one
+   handler takes a tag off whichever list it came from. Uncapped on the way
+   out: a removal can never breach a maximum. */
+function removeSteamGuideTag(field, label) {
+  toggleSteamTag(field, label, false, -1);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
