@@ -2191,6 +2191,7 @@ function contactHref(key, handle){
   if(key === 'x')        return 'https://x.com/' + h.replace(/^@/,'');
   if(key === 'instagram')return 'https://instagram.com/' + h.replace(/^@/,'');
   if(key === 'bluesky')  return 'https://bsky.app/profile/' + h.replace(/^@/,'');
+  if(key === 'tiktok')   return 'https://www.tiktok.com/@' + h.replace(/^@/,'');
   if(key === 'mastodon'){ const [,u,s] = h.match(/^@?([^@]+)@(.+)$/) || []; return u ? `https://${s}/@${u}` : 'https://' + h; }
   return 'https://' + h.replace(/^\/+/,'');
 }
@@ -2957,6 +2958,15 @@ const CONTACT_ICONS = {
   web:    { label:'Website', hint:'your own site',
     svg:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.4 9h17.2M3.4 15h17.2"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>` },
 };
+
+/* The brand channels take the one shared set of marks (SM_BRAND_MARKS,
+   platform-icons.js, v9.11): every mark on one 24×24 canvas at one optical
+   size, where this table had a mix of hand-drawn outlines and exported art
+   on 127×96 that CSS had to size by class. TikTok joins the channels. */
+if (typeof SM_BRAND_MARKS !== 'undefined') {
+  for (const k of Object.keys(SM_BRAND_MARKS)) if (CONTACT_ICONS[k]) CONTACT_ICONS[k].svg = SM_BRAND_MARKS[k];
+  CONTACT_ICONS.tiktok = { label:'TikTok', hint:'a handle', svg: SM_BRAND_MARKS.tiktok };
+}
 
 function layoutHero(){
   const stage = site.querySelector('.hero-stage');

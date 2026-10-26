@@ -108,6 +108,7 @@ const _WP_CHANNELS = [
   ['youtube',   /(^|\.)(youtube\.com|youtu\.be)/i],
   ['instagram', /(^|\.)instagram\.com/i],
   ['bluesky',   /(^|\.)bsky\.(app|social)/i],
+  ['tiktok',    /(^|\.)tiktok\.com/i],
   ['x',         /(^|\.)(twitter\.com|x\.com)/i],
   ['reddit',    /(^|\.)reddit\.com/i],
   ['mastodon',  /(^|\.)(mastodon|mstdn|mas)\.[a-z]/i],
@@ -118,7 +119,7 @@ const _WP_CHANNELS = [
    rest. Email is last because it has its own field on the factsheet; it is
    here only so a row that was already labelled that way still resolves. */
 const _WP_CHANNEL_ORDER = ['web', 'x', 'discord', 'reddit',
-                           'youtube', 'instagram', 'bluesky', 'mastodon', 'email'];
+                           'youtube', 'instagram', 'tiktok', 'bluesky', 'mastodon', 'email'];
 
 /* A link's URL usually says what it is, and for a long time that was the only
    thing asked — a dropdown would have been the developer repeating themselves.
@@ -142,7 +143,7 @@ function _wpStatedChannel(label) {
     'discord server':'discord', 'discord invite':'discord',
     subreddit:'reddit', 'reddit community':'reddit',
     yt:'youtube', 'youtube channel':'youtube',
-    bsky:'bluesky', insta:'instagram', ig:'instagram',
+    bsky:'bluesky', insta:'instagram', ig:'instagram', 'tik tok':'tiktok',
     mail:'email', 'e-mail':'email', 'contact':'email',
   };
   return alias[l] || null;

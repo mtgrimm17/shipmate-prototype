@@ -8334,7 +8334,16 @@ function isSteamSectionComplete(sectionId) {
     return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
   }
   if (sectionId === 'improveSubmission') return !!state.steamSubmitAnswers.improveSubmissionSeen;
-  if (sectionId === 'storePreviewPrototype') return !!state.steamSubmitAnswers.storePreviewPrototypeSeen;
+  /* THE STORE PAGE IS DONE WHEN ITS PAGE IS (v9.10). Jaco: "the store marks
+     as done even if I just added one tag." It was visit-based — opening the
+     preview once ticked the card's step — from when this page was a stub.
+     It is the page now, with its own fifteen rows (sppRequiredElements,
+     steam branch), so the step asks the same question Shippy's list does:
+     every required row filled. Being seen is still required, as before. */
+  if (sectionId === 'storePreviewPrototype') {
+    if (!state.steamSubmitAnswers.storePreviewPrototypeSeen) return false;
+    return typeof sppAllRequiredDone === 'function' ? sppAllRequiredDone('steam') : false;
+  }
   /* Visit-based, because it is a stub — see PLATFORMS.steam.steps for why
      the row exists at all, and why "you have seen this" is the only claim a
      stub can honestly make yet. Kept out of the questionnaire roll-up below

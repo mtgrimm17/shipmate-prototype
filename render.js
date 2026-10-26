@@ -2551,7 +2551,14 @@ const BC_GEAR = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" str
 
 function bcAllDests() { return BC_GROUPS.flatMap(g => g.dests); }
 function bcDest(id)   { return bcAllDests().find(d => d.id === id); }
-function bcIcon(d)    { return `<span class="bc-ico" style="--c:${d.color}">${d.mono || d.name[0]}</span>`; }
+/* The channels that have a brand mark wear it (v9.11, SM_BRAND_MARKS) — the
+   rest keep their letter, white on the brand colour either way. */
+const BC_MARK_OF = { x: 'x', bluesky: 'bluesky', instagram: 'instagram', tiktok: 'tiktok',
+                     ytcomm: 'youtube', discord: 'discord', reddit: 'reddit', email: 'email' };
+function bcIcon(d) {
+  const m = typeof SM_BRAND_MARKS !== 'undefined' && SM_BRAND_MARKS[BC_MARK_OF[d.id]];
+  return `<span class="bc-ico${m ? ' has-mark' : ''}" style="--c:${d.color}">${m || d.mono || d.name[0]}</span>`;
+}
 function bcMessage()  { return state.broadcast.message || ''; }
 
 // Storefront channels auto-derived from the distribution plan (activePlatforms).
@@ -10426,7 +10433,8 @@ function sppRequiredElements(pid, lang) {
       { id: 'headerImage',    label: 'Header Image',          required: true,  done: !!(state.uploads && state.uploads.steamHeaderImage) },
       { id: 'subtitle',       label: 'Short Description',     required: true,  done: !!sv('description') },
       { id: 'devpub',         label: 'Developer & Publisher', required: true,  done: !!(sv('developer') && sv('publisher')) },
-      { id: 'tags',           label: 'Tags',                  required: true,  done: tags.length > 0 },
+      // Steam requires a top-level genre; a genre or sub-genre alone is not a tagged page.
+      { id: 'tags',           label: 'Tags',                  required: true,  done: (ssa.topGenres || []).length > 0 },
       { id: 'business',       label: 'Business',              required: true,  done: !!(ws.price || '').trim() },
       { id: 'technical',      label: 'Features',              required: true,  done: isSteamSectionComplete('technical') },
       { id: 'languages',      label: 'Languages',             required: true,  done: !!ssa.languages },
@@ -24114,7 +24122,12 @@ function buildSteamStorePreviewPrototypeSection() {
   const steamSocialLinks = (ws.links || []).filter(l => l && l.name && l.name.trim() && l.url && l.url.trim());
   const externalLinkIconSvg = `<svg class="steam-spp-extlink-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 3h6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 14L21 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const steamSocialLinksHtml = steamSocialLinks.map(l => `
-      <a class="steam-spp-linkbar steam-spp-social-linkbar" href="${escHtml(_steamLinkHref(l.url.trim()))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(l.name.trim())} ${externalLinkIconSvg}</a>`).join('');
+      <a class="steam-spp-linkbar steam-spp-social-linkbar" href="${escHtml(_steamLinkHref(l.url.trim()))}" target="_blank" rel="noopener" onclick="event.stopPropagation()"><span class="steam-spp-social-mark">${typeof _wsLinkMarkHTML === 'function' ? _wsLinkMarkHTML(l) : ''}</span>${escHtml(l.name.trim())} ${externalLinkIconSvg}</a>`).join('');
+  /* AND NOW EACH ONE WEARS ITS MARK (v9.11). Jaco: "add them on Steam." The
+     note above was right that a typed name says nothing about the site — but
+     the URL does, and _wsLinkMarkHTML already reads it (the same sniffer the
+     Info section's link rows and the marketing page use), falling back to the
+     globe for a site it cannot name. */
 
   /* ══ THE INFO BOX PRINTS FACTS, OR NOTHING (v8.96) ═══════════════
      Four rows here were echoing the placeholder a field shows while it is

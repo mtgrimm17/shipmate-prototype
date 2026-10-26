@@ -32483,3 +32483,10 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   color: #8f98a0;
 }
 .steam-tags .steam-tag-total.is-over { color: var(--magenta, #d6409f); }
+
+/* The shared social marks (v9.11, SM_BRAND_MARKS): one 24×24 canvas, so one
+   size per surface. */
+.steam-spp-social-mark { display: inline-flex; width: 14px; height: 14px; flex: none; }
+.steam-spp-social-mark > svg { width: 14px; height: 14px; display: block; }
+.steam-spp-social-linkbar { gap: 7px; }
+.bc-ico.has-mark > svg { width: 62%; height: 62%; display: block; color: #fff; }
