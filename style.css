@@ -32452,3 +32452,24 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .steam-tags .steam-tag-block .steam-tag-dd { left: 0; right: 0; width: auto; max-width: none; }
 .steam-tags .steam-tag-block .steam-tag-dd-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .steam-tags .giarc-group-head .tooltip-anchor { vertical-align: middle; text-transform: none; }
+
+/* Steam's two header actions wear the app's pill (v9.09). Jaco: "the
+   Localizations and Review buttons on the store page preview should be the
+   same style as the original pills — same height, corner radius,
+   everything." They were their own grey buttons, 33px with 6px corners,
+   beside the language pill's 34px and 8px. Now they are the resting pill
+   (.ob-preset-pill's off state): --field-h, --field-radius, the pill-off
+   fill, border and ink, the pill-off hover. Steam only. */
+.submit-modal-steam-spp .ias-all-locs-btn,
+.submit-modal-steam-spp .loc-review-toggle-btn {
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+  height: var(--field-h); padding: 0 13px;
+  border-radius: var(--field-radius);
+  border: 1px solid var(--pill-off-border);
+  background: var(--pill-off-bg);
+  color: var(--pill-off-color);
+  font-family: inherit; font-size: 12px; font-weight: 500; line-height: 1;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.submit-modal-steam-spp .ias-all-locs-btn:hover,
+.submit-modal-steam-spp .loc-review-toggle-btn:hover { background: var(--pill-off-bg-hover); color: var(--text); }
