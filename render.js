@@ -4228,7 +4228,12 @@ function renderGuide() {
   // The current task = the first one not yet done (purple ring, per §4).
   const currentIdx = items.findIndex(i => !i.done);
   const tasks = items.map((i, idx) => {
-    const cls = i.done ? ' is-done' : (idx === currentIdx ? ' is-current' : '');
+    /* `i.cls` rides along so a caller can mark a row as something other
+       than a plain task — Steam - Tags uses it to hang each selected tag
+       under its own category (v9.14). Appended rather than replacing, so
+       done/current still decide the rest. */
+    const cls = (i.done ? ' is-done' : (idx === currentIdx ? ' is-current' : ''))
+              + (i.cls ? ' ' + i.cls : '');
     return `
     <button class="gd-task${cls}" onclick="${i.step ? `chkGoStep('${i.step}')` : `chkGo('${view}','${i.anchor || ''}','${i.section || ''}')`}">
       <span class="gd-task-box">${i.done ? GUIDE_CHECK_SVG : ''}</span>
@@ -22207,7 +22212,10 @@ function _steamTopGenrePills() {
      tier, which is not the one the wizard's own Top-Level Genres question
      offers — that one has nine, adding Racing and Sports and Software. The
      pills are v9.08's; only what they are drawn from changed. */
-  const pills = STEAM_TAG_SUPERGENRES.map(([tagid, g]) => {
+  /* Through the same filter and sort as every other section (v9.14):
+     "Software" is a top-level genre on Steam and is one of the eight
+     STEAM_SOFTWARE_TAG_IDS, so it is not offered here. */
+  const pills = steamSectionTags(STEAM_TAG_SECTIONS[0]).map(([tagid, g]) => {
     const on = cur.includes(g);
     return `<button type="button" class="ob-preset-pill${on ? ' is-active' : ''}"
                     data-tagid="${escHtml(tagid)}"
@@ -22252,7 +22260,7 @@ function buildSteamStoreTagsSection() {
       ${head(sec.label, i === 0, i === 0 ? '' : sec.hint)}
       ${sec.pills
         ? _steamTopGenrePills()
-        : _steamTagPicker(sec.key, sec.tags, sec.max, sec.label, sec.hint)}`).join('');
+        : _steamTagPicker(sec.key, steamSectionTags(sec), sec.max, sec.label, sec.hint)}`).join('');
 
   const all  = (typeof steamWizardTags === 'function') ? steamWizardTags() : [];
   const over = all.length > STEAM_TAG_TOTAL_MAX;

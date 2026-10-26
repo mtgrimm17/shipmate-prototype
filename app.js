@@ -33512,6 +33512,7 @@ function egsCrSearchGo(i) {
      cr:<heading>    — a heading in the section (Content's groups), the
                        Content step's own locator;
      hd:<heading>    — any other heading (Tags, Info, Steam Assets);
+     tag:<key>:<tag> — a chosen tag, listed under its category (Tags);
      tab:<set>:<id>  — a tab (Features' four, System Requirements' three);
      sfx:<id>        — a field (Business's price).
    ══════════════════════════════════════════════════════════════════════════ */
@@ -33534,10 +33535,33 @@ function _smSteamFlipItems(flip) {
        that goes stale the next time one is added. STEAM_TAG_SECTIONS is
        the one source, and `hd:` + the label is the heading this already
        targets. */
-    case 'tags':
-      return (typeof STEAM_TAG_SECTIONS !== 'undefined' ? STEAM_TAG_SECTIONS : [])
-        .map(sec => row(sec.label, (a[sec.key] || []).length,
-                        'hd:' + sec.label, !sec.required));
+    /* EVERY TAG, UNDER THE CATEGORY IT CAME FROM (v9.14, by request). The
+       seven section rows are still here and still tick on their own
+       counts; beneath each one, a row per tag currently chosen in it,
+       appearing and disappearing as they are picked. The panel is
+       recomputed from state on every repaint (_chkGroups is wrapped, not
+       cached), so nothing has to push an update — a tag row exists
+       exactly while its tag is selected.
+
+       A TAG ROW IS ALWAYS DONE. It is not an outstanding task; it is the
+       answer, listed. `gd-task-sub` is what makes it read as belonging to
+       the row above rather than as an eighth category.
+
+       EACH STEP IS UNIQUE, because renderGuide's decoration pass maps its
+       rows BY step (`byStep`) and duplicates would collide. `tag:` carries
+       the section key so the press can find the heading to jump to. */
+    case 'tags': {
+      const secs = (typeof STEAM_TAG_SECTIONS !== 'undefined') ? STEAM_TAG_SECTIONS : [];
+      const out = [];
+      secs.forEach(sec => {
+        const picked = a[sec.key] || [];
+        out.push(row(sec.label, picked.length, 'hd:' + sec.label, !sec.required));
+        picked.forEach(tag => out.push(Object.assign(
+          row(tag, true, 'tag:' + sec.key + ':' + tag),
+          { cls: 'gd-task-sub' })));
+      });
+      return out;
+    }
     case 'technical': {
       const p = a.players || {};
       return [row('Players', Object.keys(p).some(k => p[k]), 'tab:tech:players'),
@@ -33624,6 +33648,15 @@ function _smTabGo(set, id) {
   window.chkGoStep = function (step) {
     if (typeof step === 'string') {
       if (step.slice(0, 3) === 'hd:')  return _smHeadGo(step.slice(3));
+      /* tag:<sectionKey>:<label> — a chosen tag in Steam - Tags (v9.14).
+         The label is only there to keep the step unique per row; where it
+         goes is its section's heading, same as the category row above it. */
+      if (step.slice(0, 4) === 'tag:') {
+        const key = step.slice(4).split(':')[0];
+        const sec = (typeof STEAM_TAG_SECTIONS !== 'undefined' ? STEAM_TAG_SECTIONS : [])
+          .find(x => x.key === key);
+        return sec ? _smHeadGo(sec.label) : false;
+      }
       if (step.slice(0, 4) === 'tab:') { const [, set, id] = step.split(':'); return _smTabGo(set, id); }
       if (step.slice(0, 4) === 'sfx:') {
         const el = document.getElementById(step.slice(4));

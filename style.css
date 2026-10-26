@@ -32490,3 +32490,23 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .steam-spp-social-mark > svg { width: 14px; height: 14px; display: block; }
 .steam-spp-social-linkbar { gap: 7px; }
 .bc-ico.has-mark > svg { width: 62%; height: 62%; display: block; color: #fff; }
+
+/* A chosen tag, hung under its category in Shippy's list (v9.14). Indented
+   to the category's label rather than its tick, and a shade quieter: the
+   row above is the task, these are what has been done about it. */
+.gd-task.gd-task-sub {
+  padding-left: 34px;
+  font-size: 12px;
+  opacity: .78;
+}
+.gd-task.gd-task-sub .gd-task-box { display: none; }
+.gd-task.gd-task-sub .gd-task-label::before {
+  content: '';
+  display: inline-block;
+  width: 5px; height: 5px;
+  margin-right: 8px;
+  vertical-align: 1px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .5;
+}

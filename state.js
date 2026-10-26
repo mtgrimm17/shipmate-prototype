@@ -7661,6 +7661,62 @@ const STEAM_TAG_SECTIONS = [
     hint: 'Optional. Who plays, and together or alone.' },
 ];
 
+/* ── THE SOFTWARE GENRES, WHICH THIS IS NOT FOR (v9.14) ──────────────────
+   Steam's taxonomy serves its whole store, and that includes the
+   applications it sells alongside games: Design & Illustration, Photo
+   Editing, Utilities and the rest are genres a Blender or an Audition
+   would tick. Shipmate submits games.
+
+   THE LIST IS STEAM'S OWN, not a judgement about which names sound like
+   software. The Tag Wizard's `categoriesByTag` marks each tag with the
+   families it belongs to, and exactly eight carry `software_genre` —
+   these eight, ids and all. Two of them are ones a reader would probably
+   not have struck out by eye: Education, which is also offered under
+   Themes & Moods, and Audio Production.
+
+   EDUCATION GOES FROM THEMES & MOODS TOO, which is the one consequence
+   worth naming. There is no separate "Education (theme)" tag — id 1036
+   appears in both questions and is the same tag, so a game ticking it
+   there is applying Steam's software genre. It is dropped wherever it
+   appears rather than in some places and not others.
+
+   FILTERED, NOT DELETED. The arrays above stay exactly as the wizard
+   serves them, so steam914's hashes keep checking them against the live
+   page; this is the one place that says what Shipmate declines to offer
+   and why. If Valve adds a software genre, the hash goes red and this
+   list is where the answer goes. */
+const STEAM_SOFTWARE_TAG_IDS = [
+  '84',    // Design & Illustration
+  '87',    // Utilities
+  '784',   // Video Production
+  '809',   // Photo Editing
+  '872',   // Animation & Modeling
+  '1027',  // Audio Production
+  '1036',  // Education      (also listed under Themes & Moods)
+  '8013',  // Software       (a top-level genre)
+];
+
+/* WHAT A SECTION ACTUALLY OFFERS: its list, minus the software genres,
+   in alphabetical order.
+
+   ALPHABETICAL IS OURS, NOT STEAM'S (v9.14, by request). The wizard
+   prints each list in an order of Valve's own that is neither
+   alphabetical nor by id, and which nothing on the page explains; a
+   hundred and seventy-four themes in an order you cannot predict is a
+   list you can only read by scanning all of it. The arrays keep Steam's
+   order — that is what the hashes are taken over — and the sort happens
+   here, on the way to the screen.
+
+   `numeric` so "2D Fighter" comes before "3D Fighter" and "4X" rather
+   than after both, and `sensitivity: 'base'` so "eSports" files under E
+   with everything else instead of after "Word Game". */
+function steamSectionTags(sec) {
+  const drop = new Set(STEAM_SOFTWARE_TAG_IDS);
+  return (sec.tags || [])
+    .filter(pair => !drop.has(pair[0]))
+    .sort((a, b) => a[1].localeCompare(b[1], 'en', { numeric: true, sensitivity: 'base' }));
+}
+
 /* Every tag the title carries, deduped, in the wizard's own section order —
    which is what the twenty-tag cap counts. */
 function steamWizardTags() {
