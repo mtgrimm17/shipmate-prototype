@@ -22106,49 +22106,96 @@ function buildSteamContentRatingSection() {
 }
 
 /* ── Steam: Store Tags (PDF 9) ──────────────────────── */
-function buildSteamStoreTagsSection() {
-  const a = state.steamSubmitAnswers;
-
-  const topGenreChecks = STEAM_TOP_GENRES.map(g => {
-    const checked = a.topGenres.includes(g);
-    return `<label class="cq-check-row${checked ? ' is-checked' : ''}">
-      <input type="checkbox" ${checked ? 'checked' : ''}
-             onchange="toggleSteamTag('topGenres','${g}',this.checked,2)">
-      <span>${escHtml(g)}</span></label>`;
+/* STEAM'S TAGS IN OUR OWN SHAPE (v9.08). Jaco: "vamos a adaptarlo a nuestro
+   estilo. Mismos encabezados que en las content rating de Epic, y para el
+   multipicker, coge el mismo estilo de multipicker, pero en 2 columnas, así
+   podremos ver todas las categorías del Genre y Sub-genre."
+   Three checkbox lists — two of them 69 and 82 long, in 200px scroll boxes —
+   become Epic's questionnaire: a group heading (.giarc-group-head), then one
+   row with the question on the left and Epic's picker on the right
+   (.giarc-picker, the Presentation picker's pill and tick list), whose
+   dropdown here lays its options out in two columns. The caps are the Tag
+   Wizard's own (2, 2, 3): once a list is full its other options grey out
+   rather than silently refusing a tick. Storage is unchanged —
+   steamSubmitAnswers.topGenres / genres / subGenres via toggleSteamTag — so
+   the store page's tag pills and Shippy's rows read it as before. */
+function _steamTagPicker(field, list, max, question, tip) {
+  const cur  = state.steamSubmitAnswers[field] || [];
+  const key  = 'steam:' + field;
+  const open = state.giarcPickerOpen === key;
+  const full = cur.length >= max;
+  // Every pick by name (v9.08: "use a wider pill, so the selected ones can be
+  // read fully") — the pill is wider here and wraps rather than truncating.
+  const summary = !cur.length ? `Select up to ${max}` : cur.join(', ');
+  const items = list.map(g => {
+    const on  = cur.includes(g);
+    const off = !on && full;
+    return `<button type="button" class="loc-dd-item giarc-dd-item${on ? ' is-on' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
+                    onclick="event.stopPropagation(); ${off ? '' : `toggleSteamTag('${field}','${egsJsStr(g)}',${!on},${max})`}">
+              <span class="giarc-dd-box"></span><span class="loc-dd-name">${escHtml(g)}</span>
+            </button>`;
   }).join('');
-
-  const genreChecks = STEAM_GENRES.map(g => {
-    const checked = a.genres.includes(g);
-    return `<label class="cq-check-row${checked ? ' is-checked' : ''}">
-      <input type="checkbox" ${checked ? 'checked' : ''}
-             onchange="toggleSteamTag('genres','${g}',this.checked,2)">
-      <span>${escHtml(g)}</span></label>`;
-  }).join('');
-
-  const subGenreChecks = STEAM_SUB_GENRES.map(g => {
-    const checked = a.subGenres.includes(g);
-    return `<label class="cq-check-row${checked ? ' is-checked' : ''}">
-      <input type="checkbox" ${checked ? 'checked' : ''}
-             onchange="toggleSteamTag('subGenres','${g}',this.checked,3)">
-      <span>${escHtml(g)}</span></label>`;
-  }).join('');
-
-  const genreCount = a.genres.length;
-  const subCount   = a.subGenres.length;
-
+  /* UNDER ITS HEADING, THE FULL WIDTH (v9.08). Jaco: "should the 2nd and 3rd
+     genres go below their section titles, and as an even wider multipicker
+     in 3 columns?" The heading already asks the question, so the row's own
+     label went; the pill spans the section and its list opens just as wide,
+     three columns across, so 69 and 82 options read in a third of the
+     height. The heading carries the hint now. */
   return `
-    <div class="ios-content-step-label" style="margin-top:0;">Top-Level Genre
-      <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">Required. Choose one or two top-level genres to categorize your title on Steam.</span></span>
-    </div>
-    <div class="cq-check-list">${topGenreChecks}</div>
-
-    <div class="ios-q-divider"></div>
-    <div class="ios-content-step-label">Genre <span style="font-weight:400;text-transform:none;font-size:11px;letter-spacing:0;">(Optional — up to 2${genreCount > 0 ? ', ' + genreCount + ' selected' : ''})</span></div>
-    <div class="cq-check-list" style="max-height:200px;overflow-y:auto;">${genreChecks}</div>
-
-    <div class="ios-q-divider"></div>
-    <div class="ios-content-step-label">Sub-genre <span style="font-weight:400;text-transform:none;font-size:11px;letter-spacing:0;">(Optional — up to 3${subCount > 0 ? ', ' + subCount + ' selected' : ''})</span></div>
-    <div class="cq-check-list" style="max-height:200px;overflow-y:auto;">${subGenreChecks}</div>`;
+    <div class="giarc-card giarc-depth-1 giarc-inline steam-tag-block" data-key="${key}">
+      <div class="giarc-row">
+        <div class="loc-primary-wrap sw-select-wrap giarc-picker steam-tag-picker${open ? ' is-open' : ''}" data-giarc-picker="${key}">
+          <button type="button" class="loc-primary-pill${cur.length ? '' : ' is-empty'}" onclick="toggleGiarcPicker(event,'${key}')">
+            <span class="loc-primary-name">${escHtml(summary)}</span>
+            <svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="loc-dropdown steam-tag-dd">
+            <div class="steam-tag-dd-head">${cur.length} of ${max} selected</div>
+            <div class="steam-tag-dd-grid">${items}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+/* THE TOP TIER IS ON SHOW, NOT IN A PICKER (v9.08). Jaco: "en el top-level
+   genre, las opciones no deberían estar en el multipicker, sino a la vista,
+   porque es la más importante." Seven options, the only required tier: all
+   seven as the app's pills under the question, two of them litable, the
+   rest greying out once two are lit — the same cap the pickers show. */
+function _steamTopGenrePills() {
+  const cur = state.steamSubmitAnswers.topGenres || [];
+  /* NOTHING GREYS OUT HERE (v9.08). Jaco, of the capped row: "¿no ves que se
+     sigue viendo extraño?" — five of seven pills at half strength read as a
+     row that had broken, not as a limit. They stay ordinary pills; a third
+     press swaps out the older of the two (setSteamTopGenre, app.js), which
+     is how a two-pick choice is changed without having to undo one first. */
+  const pills = STEAM_TOP_GENRES.map(g => {
+    const on = cur.includes(g);
+    return `<button type="button" class="ob-preset-pill${on ? ' is-active' : ''}"
+                    onclick="setSteamTopGenre('${egsJsStr(g)}')">${escHtml(g)}</button>`;
+  }).join('');
+  return `
+    <div class="giarc-card giarc-depth-1 giarc-inline steam-top-genres" data-key="steam:topGenres">
+      <div class="giarc-row">
+        <div class="giarc-row-label"><span class="giarc-title">What kind of game is it?</span><span class="tooltip-anchor" data-tip="Required. Choose one or two top-level genres to categorize your title on Steam."><span class="tooltip-icon">?</span></span></div>
+        <div class="steam-top-count">${cur.length ? `${cur.length} of 2` : 'Pick up to 2'}</div>
+      </div>
+      <div class="ob-preset-pills steam-top-pills">${pills}</div>
+    </div>`;
+}
+function buildSteamStoreTagsSection() {
+  const head = (label, first, tip) => `${first ? '' : '<div class="ios-q-divider"></div>'}<div class="ios-content-step-label giarc-group-head"${first ? ' style="margin-top:0;"' : ''}>${escHtml(label)}${tip ? ` <span class="tooltip-anchor" data-tip="${escHtml(tip)}"><span class="tooltip-icon">?</span></span>` : ''}</div>`;
+  return `
+    <div class="giarc-root giarc-flat steam-tags">
+      ${head('Top-Level Genre', true)}
+      ${_steamTopGenrePills()}
+      ${head('Genre', false, 'Optional. Up to two more specific genres, shown with your top-level genre.')}
+      ${_steamTagPicker('genres', STEAM_GENRES, 2, 'Genres (optional)',
+        'Optional. Up to two more specific genres, shown with your top-level genre.')}
+      ${head('Sub-genre', false, 'Optional. Up to three sub-genres — the most specific tags, which lead your store page.')}
+      ${_steamTagPicker('subGenres', STEAM_SUB_GENRES, 3, 'Sub-genres (optional)',
+        'Optional. Up to three sub-genres — the most specific tags, which lead your store page.')}
+    </div>`;
 }
 
 /* Derives the ordered list of player-mode badges (icon + label) from

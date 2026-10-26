@@ -33641,3 +33641,16 @@ function _smTabGo(set, id) {
     clearTimeout(t); t = setTimeout(check, 160);
   }, true));
 })();
+
+/* Steam's top-level genre pills (v9.08, _steamTopGenrePills): a press toggles
+   the genre; a third pick replaces the older of the two already lit. */
+function setSteamTopGenre(g) {
+  const a = state.steamSubmitAnswers;
+  const cur = (a.topGenres || []).slice();
+  const i = cur.indexOf(g);
+  if (i >= 0) cur.splice(i, 1);
+  else { cur.push(g); while (cur.length > 2) cur.shift(); }
+  a.topGenres = cur;
+  reRenderStepModal();
+  if (typeof updateSteamCard === 'function') updateSteamCard();
+}

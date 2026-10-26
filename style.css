@@ -32420,3 +32420,35 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .steam-spp-proto .steam-spp-media-hero.is-spp-hover,
 .steam-spp-proto .steam-spp-capsule-wrap.is-spp-hover,
 .steam-spp-proto .steam-spp-sysreq.is-spp-hover { outline: 1px solid var(--purple); outline-offset: 2px; }
+
+/* Steam's Tags pickers (v9.08, _steamTagPicker): Epic's tick list, laid out
+   in two columns so the long Genre and Sub-genre lists read across instead of
+   down; capped lists grey out what can no longer be ticked. */
+.steam-tags .giarc-row .giarc-picker { width: 340px; min-width: 340px; max-width: 340px; }
+.steam-tags .giarc-picker .loc-primary-pill { width: 100%; justify-content: space-between; text-align: left; }
+.steam-tags .giarc-picker .loc-primary-name { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.35; }
+.steam-tags .steam-tag-dd {
+  min-width: 0; width: 500px; max-width: min(500px, 80vw); padding: 6px 0 6px;
+  max-height: min(60vh, 520px); overflow-y: auto; overscroll-behavior: contain;
+}
+.steam-tag-dd-head { padding: 4px 14px 6px; font: 11px/1.2 var(--mono); color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; }
+.steam-tag-dd-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 4px; }
+.steam-tag-dd-grid .giarc-dd-item { min-width: 0; }
+.steam-tag-dd-grid .loc-dd-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.steam-tag-dd-grid .giarc-dd-item.is-disabled { opacity: .35; cursor: not-allowed; }
+.steam-tag-dd-grid .giarc-dd-item.is-disabled:hover { background: none; }
+.steam-top-genres .steam-top-count { flex: none; font: 11px/1 var(--mono); color: var(--text-faint); text-transform: uppercase; letter-spacing: .04em; }
+.steam-top-pills { padding: 4px 2px 6px; }
+
+/* "Como si estuvieran afectadas por un top gradient invisible" — they were:
+   .giarc-root::before is Epic's sticky fade under its pinned Unanswered/All
+   bar. Steam's Tags borrows the root class and has no bar, so the 36px fade
+   sat across the top-level genre pills. */
+.giarc-root.steam-tags::before { display: none; }
+/* v9.08: Genre and Sub-genre sit under their heading, full width, and open a
+   three-column list as wide as the section. */
+.steam-tags .steam-tag-block .giarc-row { padding: 2px 0 6px; }
+.steam-tags .steam-tag-block .giarc-picker { width: 100%; min-width: 0; max-width: none; flex: 1; }
+.steam-tags .steam-tag-block .steam-tag-dd { left: 0; right: 0; width: auto; max-width: none; }
+.steam-tags .steam-tag-block .steam-tag-dd-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.steam-tags .giarc-group-head .tooltip-anchor { vertical-align: middle; text-transform: none; }
