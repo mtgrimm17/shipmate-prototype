@@ -10400,6 +10400,45 @@ function sppRequiredElements(pid, lang) {
         done: typeof isEgsSectionComplete === 'function' && isEgsSectionComplete('productDetails') },
     ];
   }
+  /* STEAM'S PAGE ANSWERS FOR ITSELF TOO (v9.07). Jaco: "Adam has submitted a
+     lot of changes to the Steam store. Can you make it so that we follow the
+     same example from Epic — an updated checklist on Shippy, the
+     auto-scrolling, and then selecting the second layer to fill content?"
+     Steam fell through to the App Store's eight rows, which name fields this
+     page does not have. These are Steam's own, in the order the page reads
+     (measured y: title 285, carousel 313 beside the header image, short
+     description 423, developer/publisher 479, tags 537, purchase 643 beside
+     Features, Languages 683, About This Game 742, Achievements 794, System
+     Requirements 800, Legal 860, Info 872, Content 1077). Each tick is the
+     predicate the page's own .is-todo ring already uses, so the two cannot
+     disagree. The page's blocks carry data-spp-el, so a row that is a field
+     takes you to it and a row that is a block opens its section. */
+  if (pid === 'steam') {
+    const ssa = state.steamSubmitAnswers || {}, fd = state.formData || {}, ws = state.webSite || {};
+    const sv  = f => (typeof _steamFieldValue === 'function' ? (_steamFieldValue(f, lang) || '') : '').trim();
+    const primary = fd.primaryLanguage || 'en';
+    const about = sv('aboutGame') || (lang === primary ? (fd.description || '').trim() : '');
+    const tags  = [...(ssa.subGenres || []), ...(ssa.genres || []), ...(ssa.topGenres || [])];
+    const title = (typeof _iasFieldValue === 'function' ? (_iasFieldValue('title', lang) || '') : (fd.title || '')).trim();
+    return [
+      { id: 'title',          label: 'Title',                 required: true,  done: !!title },
+      { id: 'screenshots',    label: 'Media Carousel',        required: true,  done: isSteamSectionComplete('screenshots') },
+      { id: 'headerImage',    label: 'Header Image',          required: true,  done: !!(state.uploads && state.uploads.steamHeaderImage) },
+      { id: 'subtitle',       label: 'Short Description',     required: true,  done: !!sv('description') },
+      { id: 'devpub',         label: 'Developer & Publisher', required: true,  done: !!(sv('developer') && sv('publisher')) },
+      { id: 'tags',           label: 'Tags',                  required: true,  done: tags.length > 0 },
+      { id: 'business',       label: 'Business',              required: true,  done: !!(ws.price || '').trim() },
+      { id: 'technical',      label: 'Features',              required: true,  done: isSteamSectionComplete('technical') },
+      { id: 'languages',      label: 'Languages',             required: true,  done: !!ssa.languages },
+      { id: 'description',    label: 'About This Game',       required: true,  done: !!about },
+      { id: 'achievements',   label: 'Achievements',          required: false,
+        done: typeof steamAchievementsFilled === 'function' ? !!steamAchievementsFilled() : false },
+      { id: 'sysreq',         label: 'System Requirements',   required: true,  done: typeof steamSysreqDone === 'function' && !!steamSysreqDone() },
+      { id: 'legal',          label: 'Legal',                 required: false, done: !!(ssa.legalNotice || '').trim() },
+      { id: 'info',           label: 'Info',                  required: true,  done: !!(state.storePreviewSectionSeen?.steam?.info) },
+      { id: 'content',        label: 'Content',               required: true,  done: isSteamSectionComplete('contentRating') },
+    ];
+  }
   const complete   = pid === 'macos' ? isMacSectionComplete : isIOSSectionComplete;
   const fieldValue = pid === 'macos' ? _masFieldValue       : _iasFieldValue;
   const seen       = state.storePreviewSectionSeen?.[pid] || {};
@@ -23325,7 +23364,7 @@ function buildSteamStorePreviewPrototypeSection() {
            row it already shares with Community Hub, it costs no vertical
            space at all and the field gives up the width instead. -->
       <div class="steam-spp-titlerow">
-        <input type="text" class="steam-spp-apphub-name steam-spp-edit${titleRaw ? '' : ' is-todo'}${
+        <input type="text" data-spp-el="title" class="steam-spp-apphub-name steam-spp-edit${titleRaw ? '' : ' is-todo'}${
                  titleRaw.length > STEAM_PAGE_LIMITS.name ? ' is-over-limit' : ''}" id="steam-spp-title-input"
                value="${escHtml(titleRaw)}" placeholder="Your Game Title"
                oninput="_steamSppTitleInput(this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.name})">
@@ -23385,8 +23424,8 @@ function buildSteamStorePreviewPrototypeSection() {
   // thumbnail strip's own layout gets broken by accident.
   const heroGlowClass = '';
   const heroHtml = firstCarouselItem
-    ? `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero" data-kind="${firstCarouselItem.kind}" onclick="_steamSppCarouselItemClick(this.dataset.kind)">${heroInnerHtml}</div></div>`
-    : `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero steam-spp-media-empty" onclick="_steamSppOpenAssetsSection('steam-assets-screenshots-section')">No screenshots yet</div></div>`;
+    ? `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero" data-spp-el="screenshots" data-kind="${firstCarouselItem.kind}" onclick="_steamSppCarouselItemClick(this.dataset.kind)">${heroInnerHtml}</div></div>`
+    : `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero steam-spp-media-empty" data-spp-el="screenshots" onclick="_steamSppOpenAssetsSection('steam-assets-screenshots-section')">No screenshots yet</div></div>`;
 
   // Thumbs row + scrollbar are ALWAYS rendered (even with 0 or 1 items),
   // rather than gated behind carouselItems.length, so there's always a
@@ -23442,7 +23481,7 @@ function buildSteamStorePreviewPrototypeSection() {
   // field uses, since object-fit:cover means a background-color behind the
   // image would never actually show through it.
   const capsuleHtml = `
-    <div class="steam-spp-capsule-wrap" onclick="openSteamHeaderCapsuleSection()" title="Edit Header Capsule">
+    <div class="steam-spp-capsule-wrap" data-spp-el="headerImage" onclick="openSteamHeaderCapsuleSection()" title="Edit Header Capsule">
       ${headerImgSrc
         ? `<img src="${headerImgSrc}" class="steam-spp-capsule-img" alt="">`
         : `<div class="steam-spp-capsule-img steam-spp-media-empty">Header Image</div>`}
@@ -23472,7 +23511,7 @@ function buildSteamStorePreviewPrototypeSection() {
     <div class="steam-spp-glance">
       ${capsuleHtml}
       <div class="steam-spp-fieldrow">
-        <textarea class="steam-spp-shortdesc steam-spp-autogrow steam-spp-edit${
+        <textarea data-spp-el="subtitle" class="steam-spp-shortdesc steam-spp-autogrow steam-spp-edit${
                     shortDescRaw ? '' : ' is-todo'}${
                     shortDescRaw.length > STEAM_SHORTDESC_MAX ? ' is-over-limit' : ''}" rows="1"
                   placeholder="No short description yet."
@@ -23496,7 +23535,7 @@ function buildSteamStorePreviewPrototypeSection() {
         <span class="steam-spp-printed" id="steam-spp-releasedate">${escHtml(releaseDateText)}</span></div>
       <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span>
         <div class="steam-spp-fieldrow steam-spp-devfield">
-          <input type="text" class="steam-spp-inline-input steam-spp-edit${devRaw ? '' : ' is-todo'}${
+          <input type="text" data-spp-el="devpub" class="steam-spp-inline-input steam-spp-edit${devRaw ? '' : ' is-todo'}${
                    devRaw.length > STEAM_PAGE_LIMITS.developer ? ' is-over-limit' : ''}" id="steam-spp-dev-input" value="${escHtml(devRaw)}"
                  placeholder="Developer Name"
                  oninput="_steamSppDevPubInput('developer', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.developer})">
@@ -23505,7 +23544,7 @@ function buildSteamStorePreviewPrototypeSection() {
       ${devStatusHtml}
       <div class="steam-spp-devrow steam-spp-devrow-close"><span class="steam-spp-label">Publisher:</span>
         <div class="steam-spp-fieldrow steam-spp-devfield">
-          <input type="text" class="steam-spp-inline-input steam-spp-edit${pubRaw ? '' : ' is-todo'}${
+          <input type="text" data-spp-el="devpub" class="steam-spp-inline-input steam-spp-edit${pubRaw ? '' : ' is-todo'}${
                    pubRaw.length > STEAM_PAGE_LIMITS.publisher ? ' is-over-limit' : ''}" id="steam-spp-pub-input" value="${escHtml(pubRaw)}"
                  placeholder="Publisher Name"
                  oninput="_steamSppDevPubInput('publisher', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.publisher})">
@@ -23513,7 +23552,7 @@ function buildSteamStorePreviewPrototypeSection() {
         </div></div>
       ${pubStatusHtml}
       <div class="steam-spp-tags">
-        <div class="steam-spp-tags-inner steam-spp-hit${hasTags ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','tags')">
+        <div data-spp-el="tags" class="steam-spp-tags-inner steam-spp-hit${hasTags ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','tags')">
           ${tagsBodyHtml}
         </div>
       </div>
@@ -23592,7 +23631,7 @@ function buildSteamStorePreviewPrototypeSection() {
      look like a paid one. `is-free` picks the green in the stylesheet. */
   const purchaseAreaHtml = isFreeGame
     ? `
-      <div class="steam-spp-purchase is-free steam-spp-hit${businessDone ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','business')">
+      <div data-spp-el="business" class="steam-spp-purchase is-free steam-spp-hit${businessDone ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','business')">
         <div class="steam-spp-purchase-top">
           <div class="steam-spp-purchase-title">Play <span id="steam-spp-purchase-title-text">${escHtml(purchaseTitleText)}</span></div>
           <div class="steam-spp-purchase-icons">${purchaseIconsHtml}</div>
@@ -23605,7 +23644,7 @@ function buildSteamStorePreviewPrototypeSection() {
         </div>
       </div>`
     : `
-      <div class="steam-spp-purchase steam-spp-hit${businessDone ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','business')">
+      <div data-spp-el="business" class="steam-spp-purchase steam-spp-hit${businessDone ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','business')">
         <div class="steam-spp-purchase-top">
           <div class="steam-spp-purchase-title">Buy <span id="steam-spp-purchase-title-text">${escHtml(purchaseTitleText)}</span></div>
           <div class="steam-spp-purchase-icons">${purchaseIconsHtml}</div>
@@ -23691,7 +23730,7 @@ function buildSteamStorePreviewPrototypeSection() {
   const steamLegalRaw = (state.steamSubmitAnswers.legalNotice || '');
   const legalBlockHtml = `
     <div class="steam-spp-legal-wrap">
-      <textarea class="steam-spp-legal steam-spp-autogrow steam-spp-edit${
+      <textarea data-spp-el="legal" class="steam-spp-legal steam-spp-autogrow steam-spp-edit${
                   steamLegalRaw ? '' : ' is-todo'}"
                 id="steam-spp-legal" rows="1" maxlength="${STEAM_LEGAL_MAX}"
                 placeholder="Copyright and trademark lines, printed at the foot of the store page."
@@ -23706,7 +23745,7 @@ function buildSteamStorePreviewPrototypeSection() {
     <div class="steam-spp-section">
       <h2 class="steam-spp-h2">About This Game</h2>
       <div class="steam-spp-fieldrow">
-        <textarea class="steam-spp-about-textarea steam-spp-autogrow steam-spp-edit${
+        <textarea data-spp-el="description" class="steam-spp-about-textarea steam-spp-autogrow steam-spp-edit${
                     aboutGameRaw ? '' : ' is-todo'}${
                     aboutGameRaw.length > STEAM_ABOUT_MAX ? ' is-over-limit' : ''}" rows="3"
                   placeholder="Your game description will appear here once you fill in the Description field in Game Details."
@@ -23833,7 +23872,7 @@ function buildSteamStorePreviewPrototypeSection() {
              title="${escHtml(f.desc || '')}"><span>${escHtml(f.label)}</span></div>`).join('')}`).join('') : ''}` : '';
 
   const featuresHtml = `
-    <div class="steam-spp-side-block steam-spp-features-block steam-spp-hit${technicalDone ? '' : ' is-todo'}"
+    <div data-spp-el="technical" class="steam-spp-side-block steam-spp-features-block steam-spp-hit${technicalDone ? '' : ' is-todo'}"
          onclick="openStorePreviewSection('steam','technical')">
       <div class="steam-spp-side-heading">Features</div>
       <div class="steam-spp-features-row">
@@ -23861,7 +23900,7 @@ function buildSteamStorePreviewPrototypeSection() {
       <tr><td class="steam-spp-lang-name">${escHtml(OB_LANG_NAMES[l.code] || l.code)}</td><td class="steam-spp-lang-check">${l.interface ? '✓' : '—'}</td><td class="steam-spp-lang-check">${l.fullAudio ? '✓' : '—'}</td><td class="steam-spp-lang-check">${l.subtitles ? '✓' : '—'}</td></tr>`).join('');
   const languagesDone = !!ssa.languages;
   const languagesHtml = `
-    <div class="steam-spp-side-block steam-spp-languages-block steam-spp-hit${languagesDone ? '' : ' is-todo'}"
+    <div data-spp-el="languages" class="steam-spp-side-block steam-spp-languages-block steam-spp-hit${languagesDone ? '' : ' is-todo'}"
          onclick="openStorePreviewSection('steam','languages')">
       <div class="steam-spp-side-heading">Languages</div>
       <table class="steam-spp-lang-table">
@@ -23925,7 +23964,7 @@ function buildSteamStorePreviewPrototypeSection() {
           : '')
     : new Array(STEAM_ACH_CELLS).fill('<div class="steam-spp-ach-tile is-empty"></div>').join('');
   const achievementsHtml = `
-    <div class="steam-spp-side-block steam-spp-ach-block steam-spp-hit${steamAchDone ? '' : ' is-todo'}"
+    <div data-spp-el="achievements" class="steam-spp-side-block steam-spp-ach-block steam-spp-hit${steamAchDone ? '' : ' is-todo'}"
          onclick="openStorePreviewSection('steam','achievements')">
       <div class="steam-spp-ach-label">Steam Achievements</div>
       <div class="steam-spp-ach-grid">${steamAchGridHtml}</div>
@@ -23992,7 +24031,7 @@ function buildSteamStorePreviewPrototypeSection() {
 
      Steam's own box has no "Info" heading either; the rows are the block. */
   const infoBlockHtml = `
-    <div class="steam-spp-side-block steam-spp-info-block steam-spp-hit${infoDone ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','info')">
+    <div data-spp-el="info" class="steam-spp-side-block steam-spp-info-block steam-spp-hit${infoDone ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','info')">
       <div class="steam-spp-info-line"><strong>Title:</strong> <span id="steam-spp-info-title">${escHtml(titleRaw)}</span></div>
       <div class="steam-spp-info-line"><strong>Genre:</strong> <span id="steam-spp-info-genre">${escHtml(infoGenreText)}</span></div>
       <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text" id="steam-spp-devname-info">${escHtml(devRaw)}</span></div>
@@ -24023,7 +24062,7 @@ function buildSteamStorePreviewPrototypeSection() {
   // into their well once filled in.
   const contentDone = isSteamSectionComplete('contentRating');
   const contentSectionHtml = `
-    <div class="steam-spp-side-block steam-spp-content-block steam-spp-hit${contentDone ? '' : ' is-todo'}"
+    <div data-spp-el="content" class="steam-spp-side-block steam-spp-content-block steam-spp-hit${contentDone ? '' : ' is-todo'}"
          onclick="openStorePreviewSection('steam','content')">
       <div class="steam-spp-side-heading">Content</div>
       <div class="steam-spp-reason">Mature content, AI usage, and age rating</div>

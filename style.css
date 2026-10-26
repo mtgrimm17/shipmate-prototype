@@ -32411,3 +32411,12 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
    up to full and above its siblings while it is open. */
 .giarc-flat .giarc-preview > .giarc-card:has(.giarc-picker.is-open) { opacity: 1; position: relative; z-index: 20; }
 .giarc-flat .giarc-card:has(.giarc-picker.is-open) { position: relative; z-index: 20; }
+
+/* Shippy's hover on Steam's page (v9.07): the row's target wears the purple
+   line — a ring on a block, the border on a field, an outline on the two
+   media boxes — with nothing moving. */
+.steam-spp-proto .steam-spp-hit.is-spp-hover { box-shadow: inset 0 0 0 1px var(--purple) !important; }
+.steam-spp-proto .steam-spp-edit.is-spp-hover { border-color: var(--purple) !important; }
+.steam-spp-proto .steam-spp-media-hero.is-spp-hover,
+.steam-spp-proto .steam-spp-capsule-wrap.is-spp-hover,
+.steam-spp-proto .steam-spp-sysreq.is-spp-hover { outline: 1px solid var(--purple); outline-offset: 2px; }

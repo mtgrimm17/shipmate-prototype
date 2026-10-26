@@ -28316,7 +28316,8 @@ function _smFlipTarget(pid) {
      different depending on where you were ten seconds ago is the flattest
      version of "the navigation is not coherent". */
   const sm = _smOpenStep();
-  if (!sm || sm.platformId !== pid || sm.stepId !== 'storePreview') return null;
+  if (!sm || sm.platformId !== pid) return null;
+  if (sm.stepId !== 'storePreview' && !(pid === 'steam' && sm.stepId === 'storePreviewPrototype')) return null;
   return (state.storePreviewFlipTarget && state.storePreviewFlipTarget[pid]) || null;
 }
 
@@ -28349,13 +28350,14 @@ function _smBusinessItems(pid) {
 function _smStepItems() {
   if (!_smShippyStep) return null;
   const sm = _smOpenStep();
-  if (!sm || sm.stepId !== 'storePreview') return null;
+  if (!sm || (sm.stepId !== 'storePreview' && !(sm.stepId === 'storePreviewPrototype' && sm.platformId === 'steam'))) return null;
   if (typeof sppRequiredElements !== 'function') return null;
   /* A flip is a different question, so it gets a different list. Unknown
      targets fall through to the eight sections rather than emptying the panel:
      you are still on the product page, and the parent context is a better
      answer than none. */
   const flip = _smFlipTarget(sm.platformId);
+  if (flip && sm.platformId === 'steam') return _smSteamFlipItems(flip);
   if (flip === 'business') { const b = _smBusinessItems(sm.platformId); if (b) return b; }
   const lang = (state.formData && state.formData.primaryLanguage) || 'en';
   const els = sppRequiredElements(sm.platformId, lang) || [];
@@ -28407,7 +28409,7 @@ window._chkGroups = function () {
 /* setEgsPreviewTab joins the openers (v8.69): on Epic's page Shippy's
    Achievements row is the Achievements TAB beside Overview, so pressing the
    row switches to it, and hovering it outlines the tab. */
-const SM_ROW_NAV = /^\s*(openStorePreviewSection|openStepModal|setEgsPreviewTab)\s*\(/;
+const SM_ROW_NAV = /^\s*(openStorePreviewSection|openStepModal|setEgsPreviewTab|_steamSppOpenAssetsSection|openSteamHeaderCapsuleSection|_steamSppCarouselItemClick)\s*\(/;
 
 function _smRowAction(id) {
   let n = document.querySelector('[data-spp-el="' + id + '"]');
@@ -28469,8 +28471,8 @@ async function _smDoorGo(id, act) {
     { const mm = document.getElementById('submit-modal');
       if (mm && typeof _smIosArm === 'function' && _smIosArm()) _smIosPre = { box: _smIosSnap(mm), t: performance.now() }; }
     // 3. push
-    if (/^\s*(openStorePreviewSection|openStepModal)\s*\(/.test(oc)) {
-      act.click();                                   // both push by themselves
+    if (/^\s*(openStorePreviewSection|openStepModal|_steamSppOpenAssetsSection|openSteamHeaderCapsuleSection|_steamSppCarouselItemClick)\s*\(/.test(oc)) {
+      act.click();                                   // all of these push by themselves
     } else {
       const m = document.getElementById('submit-modal');
       if (m) { m.classList.add('is-flip-exit'); await wait(160); m.classList.remove('is-flip-exit'); }
@@ -28494,6 +28496,32 @@ async function _smDoorGo(id, act) {
   }
 }
 
+/* A FIELD ROW ON STEAM'S PAGE GOES TO THE FIELD (v9.07). The same first two
+   beats as a door — dim everything but it, travel there eased — and then,
+   instead of a push, the caret: the field is the second layer, so it is
+   focused and ready to type into. The dim lifts once you are in it. Steam
+   only: the App Store and Mac pages keep setStorePreviewFocus. */
+async function _smFieldGo(id) {
+  const els = [...document.querySelectorAll('[data-spp-el="' + id + '"]')];
+  const el = els[0];
+  if (!el) return;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const host = el.closest('.ios-step-body-content') || el.closest('.submit-modal-scroll');
+  const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (host && !still) { host.classList.add('sm-door-spot', 'is-spotlight'); els.forEach(e => e.classList.add('is-spotlit', 'is-spp-hover')); }
+  const sc = typeof _smNearestScroller === 'function' && _smNearestScroller(el);
+  if (sc) {
+    const max = Math.max(0, sc.scrollHeight - sc.clientHeight);
+    const r = el.getBoundingClientRect(), s = sc.getBoundingClientRect();
+    const to = Math.max(0, Math.min(max, Math.round(sc.scrollTop + (r.top - s.top) - (sc.clientHeight - r.height) / 2)));
+    if (Math.abs(to - sc.scrollTop) > 2) { if (still) sc.scrollTop = to; else { _smScrollTo(sc, to); await wait(440); } }
+  }
+  if (el.focus) { el.focus({ preventScroll: true }); try { const n = (el.value || '').length; el.setSelectionRange(n, n); } catch (_) {} }
+  await wait(still ? 0 : 700);
+  if (host) host.classList.remove('sm-door-spot', 'is-spotlight');
+  els.forEach(e => e.classList.remove('is-spotlit', 'is-spp-hover'));
+}
+
 const _smOrigChkGoStep = window.chkGoStep;
 window.chkGoStep = function (step) {
   if (typeof step === 'string' && step.slice(0, 4) === 'spp:') {
@@ -28506,6 +28534,7 @@ window.chkGoStep = function (step) {
        the definition of what that door does, and a copy here is a second one
        that can drift. */
     if (act) return _smDoorGo(id, act);
+    if (sm.platformId === 'steam') return _smFieldGo(id);
     if (typeof setStorePreviewFocus === 'function') {
       return setStorePreviewFocus(sm.platformId, id);   // a field: go to it
     }
@@ -28588,7 +28617,9 @@ window.renderGuide = function () {
     null:     { t: "Let's make your store page shine",
                 s: 'Press a line to jump straight to it.' },
   };
-  const hero = HERO[flip] || HERO.null;
+  const hero = (sm && sm.platformId === 'steam' && flip)
+    ? { t: SM_STEAM_FLIP_TITLES[flip] || 'This section', s: 'Press a line to jump straight to it.' }
+    : (HERO[flip] || HERO.null);
   const ti = el.querySelector('.guide-title');
   const su = el.querySelector('.guide-sub');
   if (ti) ti.textContent = hero.t;
@@ -32667,7 +32698,7 @@ document.addEventListener('pointerdown', e => {
     const m = row && /chkGoStep\('spp:([A-Za-z]+)'\)/.exec(row.getAttribute('onclick') || '');
     return m ? m[1] : null;
   };
-  const paint = (id, on) => document.querySelectorAll(`.egs-sp [data-spp-el="${id}"]`)
+  const paint = (id, on) => document.querySelectorAll(`.egs-sp [data-spp-el="${id}"], .steam-spp-proto [data-spp-el="${id}"]`)
     .forEach(el => el.classList.toggle('is-spp-hover', on));
   document.addEventListener('mouseover', e => {
     const id = rowId(e.target); if (!id) return;
@@ -32757,6 +32788,7 @@ function _smIosSnap(m, area) {
     [...c.querySelectorAll('*')].forEach((e, i) => { if (e.scrollTop) scrolls.push([k, i, e.scrollTop]); });
     if (c.scrollTop) scrolls.push([k, -1, c.scrollTop]);
     k.removeAttribute('id'); k.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+    k.style.removeProperty('opacity'); k.style.removeProperty('transition');
     Object.assign(k.style, { position: 'absolute', left: (r.left - area.abs.L) + 'px', top: (r.top - area.abs.T) + 'px',
       width: r.width + 'px', height: r.height + 'px', margin: '0', boxSizing: 'border-box', animation: 'none', transform: 'none' });
     box.appendChild(k);
@@ -32784,11 +32816,8 @@ function _smIosReleaseFades(m) {
   requestAnimationFrame(() => requestAnimationFrame(() =>
     m.querySelectorAll('.submit-modal-body-wrap').forEach(w => w.classList.remove('no-fade-anim'))));
 }
-function _smIosPlay(m, oldBox, back) {
-  _smIosSettleFades(m);
-  _smGuidePlay(back);
-  const area = _smIosArea(m);
-  const newBox = _smIosSnap(m, area);
+/* The still window the push happens behind, laid over the step's area. */
+function _smIosWin(m, area) {
   const bg = getComputedStyle(m).backgroundColor;
   const R = parseFloat(getComputedStyle(m).borderTopLeftRadius) || 0;
   const near = (a, b) => Math.abs(a - b) < 2;
@@ -32800,22 +32829,65 @@ function _smIosPlay(m, oldBox, back) {
   Object.assign(win.style, { position: 'absolute', left: area.left + 'px', top: area.top + 'px',
     width: area.width + 'px', height: area.height + 'px', overflow: 'hidden', zIndex: '5',
     borderRadius: rad.map(x => x + 'px').join(' '), background: bg, pointerEvents: 'auto' });
-  [oldBox, newBox].forEach(b => { b.style.background = bg; });
-  /* Forward the new screen is on top; back the leaving one is. */
-  win.appendChild(back ? newBox : oldBox);
-  win.appendChild(back ? oldBox : newBox);
   const posWas = m.style.position;
   if (getComputedStyle(m).position === 'static') m.style.position = 'relative';
   m.appendChild(win);
-  _smIosRestoreScroll(oldBox); _smIosRestoreScroll(newBox);
+  return { win, bg, area, posWas };
+}
+/* HIDDEN BY OPACITY, NOT VISIBILITY. `visibility` is inherited and the
+   pills carry `transition: all`, so every one of them ran its own
+   hidden→visible transition when the step came back — and that transition
+   spends its first frame at `hidden`. The pills blinked out for a frame
+   exactly as the slide settled (Jaco: "da un flashazo al entrar"). Opacity
+   on the layer itself, with its own transition off, does not cascade. */
+function _smIosHide(m) { _smIosLayers(m).forEach(k => { k.style.transition = 'none'; k.style.opacity = '0'; }); }
+function _smIosShow(m) {
   const layers = _smIosLayers(m);
-  /* HIDDEN BY OPACITY, NOT VISIBILITY. `visibility` is inherited and the
-     pills carry `transition: all`, so every one of them ran its own
-     hidden→visible transition when the step came back — and that transition
-     spends its first frame at `hidden`. The pills blinked out for a frame
-     exactly as the slide settled (Jaco: "da un flashazo al entrar"). Opacity
-     on the layer itself, with its own transition off, does not cascade. */
-  layers.forEach(k => { k.style.transition = 'none'; k.style.opacity = '0'; });
+  layers.forEach(k => { k.style.opacity = ''; });
+  requestAnimationFrame(() => layers.forEach(k => { k.style.transition = ''; }));
+}
+/* THE OLD SCREEN IS COVERED THE MOMENT IT STARTS TO LEAVE (v9.07). Jaco:
+   "corrígeme un pequeño bump que hace la página, por ejemplo al dar a
+   Business." The sub-section openers scroll the step back to its top on
+   their way to the exit (scrollContentToTop), and the window only went up
+   when the NEW screen arrived — so for the 170ms between, the real page sat
+   visible, jumped from where you were to its top, and then slid away.
+   Measured on Steam's Business: 103px → 0 at the exit, window at +170ms.
+   Now the photograph taken before the jump is laid over the step as soon as
+   the exit starts, and the push plays inside that same window. */
+function _smIosCover(m, box) {
+  const c = _smIosWin(m, _smIosArea(m));
+  box.style.background = c.bg;
+  c.win.appendChild(box);
+  _smIosRestoreScroll(box);
+  _smIosHide(m);
+  c.safety = setTimeout(() => {               // an exit that never arrives anywhere
+    if (!c.win.isConnected) return;
+    c.win.remove(); m.style.position = c.posWas; _smIosShow(m);
+    if (_smIosGhost && _smIosGhost.cover === c) _smIosGhost = null;
+  }, 2600);
+  return c;
+}
+function _smIosPlay(m, oldBox, back, cover) {
+  _smIosSettleFades(m);
+  _smGuidePlay(back);
+  if (cover) clearTimeout(cover.safety);
+  const c = cover && cover.win.isConnected ? cover : null;
+  // The new screen is photographed with the real layers showing — a clone of
+  // a hidden layer would carry its inline opacity:0.
+  const wasHidden = !!c;
+  if (wasHidden) _smIosLayers(m).forEach(k => { k.style.opacity = ''; });
+  const area = c ? c.area : _smIosArea(m);
+  const newBox = _smIosSnap(m, area);
+  const w = c || _smIosWin(m, area);
+  const win = w.win;
+  [oldBox, newBox].forEach(b => { b.style.background = w.bg; });
+  /* Forward the new screen is on top; back the leaving one is. */
+  if (!oldBox.isConnected || oldBox.parentNode !== win) win.appendChild(oldBox);
+  if (back) win.insertBefore(newBox, oldBox); else win.appendChild(newBox);
+  if (!c) _smIosRestoreScroll(oldBox);
+  _smIosRestoreScroll(newBox);
+  _smIosHide(m);
   const W = area.width, d = Math.round(W * 0.3);
   const o = { duration: SM_IOS_MS, easing: SM_IOS_EASE, fill: 'both' };
   const anims = back
@@ -32827,10 +32899,9 @@ function _smIosPlay(m, oldBox, back) {
   const done = () => {
     if (over) return; over = true;
     _smIosSettleFades(m);
-    layers.forEach(k => { k.style.opacity = ''; });
+    _smIosShow(m);
     win.remove();
-    requestAnimationFrame(() => layers.forEach(k => { k.style.transition = ''; }));
-    m.style.position = posWas;
+    m.style.position = w.posWas;
     _smIosReleaseFades(m);
   };
   Promise.all(anims.map(a => a.finished.catch(() => {}))).then(done);
@@ -32948,7 +33019,14 @@ function _smGuidePlay(back) {
   if (typeof orig !== 'function') return;
   window.openStorePreviewSection = function () {
     const ov = document.getElementById('submit-overlay');
-    if (ov && !ov.classList.contains('hidden')) _smGuideFreeze();
+    if (ov && !ov.classList.contains('hidden')) {
+      _smGuideFreeze();
+      /* Photographed BEFORE the opener scrolls the step to its top, so the
+         screen that slides away is the one you were looking at (v9.07). */
+      const mm = document.getElementById('submit-modal');
+      if (mm && _smIosArm() && !(_smIosPre && performance.now() - _smIosPre.t < 1500))
+        _smIosPre = { box: _smIosSnap(mm), t: performance.now() };
+    }
     return orig.apply(this, arguments);
   };
 })();
@@ -32969,10 +33047,11 @@ if (typeof MutationObserver === 'function') {
         const pre = _smIosPre && performance.now() - _smIosPre.t < 1500 ? _smIosPre.box : null;
         _smIosPre = null;
         _smIosGhost = { box: pre || _smIosSnap(m), back: document.body.classList.contains('sm-nav-back'), t: performance.now() };
+        _smIosGhost.cover = _smIosCover(m, _smIosGhost.box);
         _smGuideFreeze();
       } else if (m.classList.contains('is-flip-enter') && !/\bis-flip-enter\b/.test(was) && _smIosGhost) {
-        const { box, back, t } = _smIosGhost; _smIosGhost = null;
-        if (performance.now() - t < 2500) _smIosPlay(m, box, back || document.body.classList.contains('sm-nav-back'));
+        const { box, back, t, cover } = _smIosGhost; _smIosGhost = null;
+        if (performance.now() - t < 2500) _smIosPlay(m, box, back || document.body.classList.contains('sm-nav-back'), cover);
         else _smGuideThaw();
       }
     }
@@ -33009,7 +33088,7 @@ if (typeof MutationObserver === 'function') {
                 && _smIosArm();
     if (!change) return orig.apply(this, arguments);
     _smGuideFreeze();
-    if (typeof _smNavDir === 'function') _smNavDir(stepId === 'storePreview');
+    if (typeof _smNavDir === 'function') _smNavDir(stepId === 'storePreview' || stepId === 'storePreviewPrototype');
     const m = document.getElementById('submit-modal');
     if (m) { m.classList.add('is-flip-exit'); await new Promise(r => setTimeout(r, 160)); m.classList.remove('is-flip-exit'); }
     const out = await orig.apply(this, arguments);
@@ -33391,4 +33470,174 @@ function egsCrSearchGo(i) {
     }
     return out;
   };
+})();
+
+/* The way back photographs first too (v9.07): closeStorePreviewSection also
+   scrolls the step to its top before its exit, so a sub-section you had
+   scrolled down in jumped to its top and then slid away. */
+(() => {
+  const orig = window.closeStorePreviewSection;
+  if (typeof orig !== 'function') return;
+  window.closeStorePreviewSection = function () {
+    const ov = document.getElementById('submit-overlay');
+    const mm = document.getElementById('submit-modal');
+    if (ov && !ov.classList.contains('hidden') && mm && typeof _smIosArm === 'function' && _smIosArm()
+        && !(_smIosPre && performance.now() - _smIosPre.t < 1500))
+      _smIosPre = { box: _smIosSnap(mm), t: performance.now() };
+    return orig.apply(this, arguments);
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   INSIDE A STEAM SECTION, SHIPPY LISTS THAT SECTION (v9.07).
+
+   Jaco: "en Steam, asegúrate de que cada vez que entro en un modal específico
+   (Business, etc.) no me repites la checklist principal de la store."
+
+   `_smFlipTarget` only knew the App Store's step id, so on Steam's
+   storePreviewPrototype every sub-section read as "no flip" and Shippy kept
+   the page's fifteen rows while you were filling in one of them. Each
+   section now has its own short list, ticked off the same state its own
+   form reads, and each row takes you to its place in the section:
+     cr:<heading>    — a heading in the section (Content's groups), the
+                       Content step's own locator;
+     hd:<heading>    — any other heading (Tags, Info, Steam Assets);
+     tab:<set>:<id>  — a tab (Features' four, System Requirements' three);
+     sfx:<id>        — a field (Business's price).
+   ══════════════════════════════════════════════════════════════════════════ */
+const SM_STEAM_FLIP_TITLES = {
+  business: 'Business', tags: 'Tags', technical: 'Features', languages: 'Languages',
+  achievements: 'Achievements', sysreq: 'System Requirements', info: 'Info',
+  steamAssets: 'Steam Assets', content: 'Content', localization: 'Localizations',
+};
+function _smSteamFlipItems(flip) {
+  const a  = state.steamSubmitAnswers || {};
+  const ws = state.webSite || {};
+  const up = state.uploads || {};
+  const row = (label, done, step, optional) => ({ label: label + (optional ? ' (optional)' : ''), done: !!done, bad: false, step: step || 'spp:__status' });
+  switch (flip) {
+    case 'business':
+      return [row('Price', (ws.price || '').trim(), 'sfx:steam-price')];
+    case 'tags':
+      return [row('Top-Level Genre', (a.topGenres || []).length, 'hd:Top-Level Genre'),
+              row('Genre', (a.genres || []).length, 'hd:Genre', true),
+              row('Sub-genre', (a.subGenres || []).length, 'hd:Sub-genre', true)];
+    case 'technical': {
+      const p = a.players || {};
+      return [row('Players', Object.keys(p).some(k => p[k]), 'tab:tech:players'),
+              row('Supported Features', (a.supportedFeatures || []).length, 'tab:tech:supported', true),
+              row('Controller Support', a.inputSupport, 'tab:tech:controller'),
+              row('Accessibility Features', (a.accessibilityFeatures || []).length, 'tab:tech:access', true)];
+    }
+    case 'sysreq': {
+      const sr = typeof _steamSysreq === 'function' ? _steamSysreq() : {};
+      return (typeof STEAM_SYSREQ_OS !== 'undefined' ? STEAM_SYSREQ_OS : []).map(o => {
+        const r = sr[o.id] || {};
+        const done = r.supported === 'no' || (r.supported === 'yes' && typeof _steamSysreqOsFilled === 'function' && _steamSysreqOsFilled(o.id));
+        return row(o.label, done, 'tab:sys:' + o.id);
+      });
+    }
+    case 'languages':
+      return [row('Interface, audio & subtitles', a.languages && a.languages.length, 'hd:Languages')];
+    case 'achievements':
+      return [row('Achievements', typeof steamAchievementsFilled === 'function' && steamAchievementsFilled(), null, true)];
+    case 'info':
+      return [row('Genres', (a.infoGenres || []).length, 'hd:Genres'),
+              row('Links', (ws.links || []).some(l => (l.url || '').trim()), 'hd:Links', true)];
+    case 'steamAssets':
+      return [row('Screenshots', isSteamSectionComplete('screenshots'), 'hd:Screenshots'),
+              row('Trailer', up.steamTrailer, 'hd:Trailer', true),
+              row('Header Capsule', up.steamHeaderImage, 'hd:Header Capsule')];
+    case 'content': {
+      const sca = a.steamContentAnswers || {};
+      const has = id => sca[id] === 'yes' || sca[id] === 'no';
+      const rows = (typeof STEAM_CONTENT_CATEGORIES !== 'undefined' ? STEAM_CONTENT_CATEGORIES : [])
+        .map(g => row(g.group, g.items.every(i => has(i.id)), 'cr:' + g.group));
+      const mature = ['gen_mature', 'freq_violence', 'some_nudity', 'freq_nudity', 'adult_sexual'].every(has)
+        && (sca.gen_mature !== 'yes' || ((a.matureDescription || '').trim() && (a.matureAccess || '').trim()));
+      rows.push(row('Mature Content', mature, 'cr:Mature Content'));
+      rows.push(row('Generative AI', a.usesAI === 'yes' || a.usesAI === 'no', 'cr:Generative AI'));
+      return rows;
+    }
+    case 'localization':
+      return [row('Review every language', a.localizationsSeen, null)];
+  }
+  return [row(SM_STEAM_FLIP_TITLES[flip] || 'This section', false, null)];
+}
+
+/* Light a run of the section and bring it up under the top edge — the same
+   deep dim the search results use, so a block nested inside .qs-section
+   still stands alone. */
+function _smSteamSpot(targets, anchor) {
+  const host = _smStepQ('.ios-step-body-content') || _smStepQ('.submit-modal-scroll');
+  if (host && typeof _smSpotlight === 'function') {
+    host.classList.add('sm-cr-deep');
+    clearTimeout(_smSteamSpot._t);
+    _smSpotlight(host, targets.filter(Boolean), 1400);
+    _smSteamSpot._t = setTimeout(() => host.classList.remove('sm-cr-deep'), 1400 + 320);
+  }
+  if (typeof _smEgsScrollToTop === 'function') _smEgsScrollToTop(anchor || targets[0]);
+}
+function _smHeadGo(text) {
+  const scope = _smStepScope() || document;
+  const heads = [...scope.querySelectorAll('.ios-content-step-label, .form-label, .task-content-label, .pk-edit-group-label')];
+  const el = heads.find(h => h.textContent.trim().indexOf(text) === 0);
+  if (!el) return false;
+  const run = [el];
+  if (el.classList.contains('ios-content-step-label') || el.classList.contains('task-content-label')) {
+    for (let n = el.nextElementSibling; n && !n.matches('.ios-content-step-label, .task-content-label, .pk-edit-group-label'); n = n.nextElementSibling) run.push(n);
+  } else {
+    run.splice(0, 1, el.closest('.form-group') || el);
+  }
+  _smSteamSpot(run, el);
+  return true;
+}
+function _smTabGo(set, id) {
+  if (set === 'tech' && typeof setSteamTechnicalTab === 'function') setSteamTechnicalTab(id);
+  if (set === 'sys'  && typeof setSteamSysreqTab === 'function') setSteamSysreqTab(id);
+  const scope = _smStepScope() || document;
+  const tabs = scope.querySelector(set === 'tech' ? '.steam-tech-tabs' : '.steam-sysreq-tabs:not(.steam-tech-tabs)');
+  if (!tabs) return false;
+  const run = [tabs];
+  for (let n = tabs.nextElementSibling; n; n = n.nextElementSibling) run.push(n);
+  _smSteamSpot(run, tabs);
+  return true;
+}
+(() => {
+  const orig = window.chkGoStep;
+  window.chkGoStep = function (step) {
+    if (typeof step === 'string') {
+      if (step.slice(0, 3) === 'hd:')  return _smHeadGo(step.slice(3));
+      if (step.slice(0, 4) === 'tab:') { const [, set, id] = step.split(':'); return _smTabGo(set, id); }
+      if (step.slice(0, 4) === 'sfx:') {
+        const el = document.getElementById(step.slice(4));
+        if (el) { el.setAttribute('data-spp-el', el.getAttribute('data-spp-el') || ('sfx-' + el.id)); return _smFieldGo(el.getAttribute('data-spp-el')); }
+        return;
+      }
+    }
+    return orig.apply(this, arguments);
+  };
+})();
+
+/* THE TICKS FOLLOW WHAT YOU TYPE (v9.07). In this arm the guide is not
+   repainted by the step's own renders, so a Steam row stayed grey after its
+   field was filled until something else redrew the panel. Any input, change
+   or click inside the step re-reads the list a beat later and repaints the
+   guide only if a row actually changed. */
+(() => {
+  let last = '', t = null;
+  const check = () => {
+    t = null;
+    const sm = typeof _smOpenStep === 'function' && _smOpenStep();
+    if (!sm || sm.platformId !== 'steam' || sm.stepId !== 'storePreviewPrototype') { last = ''; return; }
+    const items = typeof _smStepItems === 'function' ? _smStepItems() : null;
+    const sig = JSON.stringify(items || []);
+    if (sig === last) return;
+    last = sig;
+    try { renderGuide(); } catch (_) {}
+  };
+  ['input', 'change', 'click'].forEach(ev => document.addEventListener(ev, e => {
+    if (!e.target.closest || !e.target.closest('#submit-overlay')) return;
+    clearTimeout(t); t = setTimeout(check, 160);
+  }, true));
 })();
