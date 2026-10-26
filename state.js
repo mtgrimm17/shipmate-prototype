@@ -7455,52 +7455,223 @@ const STEAM_INFO_GENRES = [
    card offers all three tiers in full, as it always has. The lists are
    now Steam's; the narrowing is a behaviour change nobody asked for yet.
    The wizard also caps a title at twenty tags in total. */
-const STEAM_TOP_GENRES = [
-  'Action', 'Adventure', 'Arcade', 'RPG', 'Simulation', 'Strategy',
-  'Survival',
+/* ══ THE TAG WIZARD'S TAXONOMY (v9.10) ═══════════════════════════════════
+   partner.steamgames.com/taxonomy/tagwizard asks nine questions. This card
+   offered three, over lists that came from `genreHierarchy` — a different
+   structure on the same page that is not what any of those questions
+   actually offers. Four whole sections were missing with it: Visuals &
+   Viewpoint, Themes & Moods, Features and Players.
+
+   WHERE THESE CAME FROM. Each question's choices are a `fill|<category>`
+   directive the page resolves at render time, so the lists below are
+   getQuestionChoices() called on the wizard's own question objects, tag id
+   and all. All 396 were checked back against the live page by hash before
+   being written down — the lesson of v8.95, where a list taken from markup
+   turned out not to be the list a developer sees.
+
+     Top-Level Genres    9     Visuals & Viewpoint   28
+     Genres             53     Themes & Moods       174
+     Sub-Genres         69     Features              53
+                               Players               10
+
+   THE IDS ARE STEAM'S. Selections are stored as labels, because every
+   other part of this app already reads these arrays as labels; the ids
+   ride along so a future importer can join on a number rather than a name,
+   the way Supported Features does.
+
+   TWO OF THE NINE ARE NOT HERE, and could not be. "What Else" offers tags
+   Steam found in the title's own store description, and "User Tags" offers
+   tags the community has already applied — both are per-game data out of
+   Valve's corpus, which this prototype has no source for. Inventing either
+   would be inventing an answer. Also not modelled: the wizard brightens
+   the tags common among titles similar to yours, which is a recommendation
+   computed from that same corpus. */
+const STEAM_TAG_TOTAL_MAX = 20;          // `maxTags` on the wizard
+
+
+const STEAM_TAG_SUPERGENRES = [
+  ['9', 'Strategy'], ['19', 'Action'], ['21', 'Adventure'], ['122', 'RPG'], ['597', 'Casual'],
+  ['599', 'Simulation'], ['699', 'Racing'], ['701', 'Sports'], ['8013', 'Software'],
 ];
 
-const STEAM_GENRES = [
-  '4X', 'Action RPG', 'Action-Adventure', 'Auto Battler', 'Automobile Sim',
-  'Battle Royale', "Beat 'em up", 'Board Game', 'Bullet Heaven',
-  'Bullet Hell', 'Card Battler', 'Card Game', 'Character Action Game',
-  'Choose Your Own Adventure', 'City Builder', 'Collectathon',
-  'Colony Sim', 'Cooking', 'Creature Collector', 'CRPG', 'Dating Sim',
-  'Dungeon Crawler', 'Farming Sim', 'Fighting', 'God Game',
-  'Grand Strategy', 'Hobby Sim', 'Immersive Sim', 'Interactive Fiction',
-  'Job Simulator', 'JRPG', 'Life Sim', 'Medical Sim', 'Metroidvania',
-  'MMORPG', 'MOBA', 'Musou', 'On-Rails Shooter',
-  'Open World Survival Craft', 'Outbreak Sim', 'Party Game',
-  'Party-Based RPG', 'Pinball', 'Platformer', 'Political Sim', 'Racing',
-  'Real Time Tactics', 'Rhythm', 'Roguelike', 'Roguelite', 'RTS',
-  "Shoot 'Em Up", 'Shooter', 'Shop Keeper', 'Souls-like', 'Space Sim',
-  'Sports', 'Strategy RPG', 'Survival Horror', 'Tactical', 'Tactical RPG',
-  'Top-Down Shooter', 'Tower Defense', 'Trading Card Game',
-  'Turn-Based Strategy', 'Twin Stick Shooter', 'Visual Novel',
-  'Walking Simulator', 'Wargame',
+const STEAM_TAG_GENRES = [
+  ['84', 'Design & Illustration'], ['87', 'Utilities'], ['784', 'Video Production'],
+  ['809', 'Photo Editing'], ['872', 'Animation & Modeling'], ['1027', 'Audio Production'],
+  ['1036', 'Education'], ['1625', 'Platformer'], ['1645', 'Tower Defense'], ['1664', 'Puzzle'],
+  ['1666', 'Card Game'], ['1670', '4X'], ['1676', 'RTS'], ['1698', 'Point & Click'],
+  ['1716', 'Roguelike'], ['1718', 'MOBA'], ['1741', 'Turn-Based Strategy'], ['1752', 'Rhythm'],
+  ['1754', 'MMORPG'], ['1770', 'Board Game'], ['1773', 'Arcade'], ['1774', 'Shooter'],
+  ['3799', 'Visual Novel'], ['3810', 'Sandbox'], ['4106', 'Action-Adventure'],
+  ['4158', 'Beat \'em up'], ['4231', 'Action RPG'], ['4328', 'City Builder'],
+  ['4364', 'Grand Strategy'], ['4434', 'JRPG'], ['4736', '2D Fighter'], ['5055', 'eSports'],
+  ['5300', 'God Game'], ['5900', 'Walking Simulator'], ['6506', '3D Fighter'],
+  ['7178', 'Party Game'], ['9551', 'Dating Sim'], ['10235', 'Life Sim'], ['10437', 'Trivia'],
+  ['10695', 'Party-Based RPG'], ['11014', 'Interactive Fiction'], ['16598', 'Space Sim'],
+  ['17305', 'Strategy RPG'], ['17389', 'Tabletop'], ['24003', 'Word Game'],
+  ['35079', 'Job Simulator'], ['42804', 'Action Roguelike'], ['87918', 'Farming Sim'],
+  ['176981', 'Battle Royale'], ['220585', 'Colony Sim'], ['1084988', 'Auto Battler'],
+  ['1100687', 'Automobile Sim'], ['1220528', 'Hobby Sim'],
 ];
 
-const STEAM_SUB_GENRES = [
-  '2D Fighter', '2D Platformer', '3D Fighter', '3D Platformer',
-  'Action Roguelike', 'Archery', 'Arena Shooter', 'Auto Battler',
-  'Automobile Sim', 'Baseball', 'Basketball', 'Battle Royale',
-  "Beat 'em up", 'Billiards', 'BMX', 'Boomer Shooter', 'Bowling', 'Boxing',
-  'Bullet Heaven', 'Bullet Hell', 'Card Battler', 'Character Action Game',
-  'Chess', 'Collectathon', 'Combat Racing', 'Cricket', 'Cycling',
-  'Deckbuilding', 'Driving', 'Dungeon Crawler', 'eSports',
-  'Extraction Shooter', 'Farming Sim', 'Fishing', 'Football (American)',
-  'Football (Soccer)', 'FPS', 'Golf', 'Hack and Slash', 'Hero Shooter',
-  'Hockey', 'Hunting', 'Looter Shooter', 'Mahjong', 'Martial Arts',
-  'Metroidvania', 'Mini Golf', 'MOBA', 'Motocross', 'Mystery Dungeon',
-  'On-Rails Shooter', 'Open World Survival Craft', 'Parkour', 'Party Game',
-  'Poker', 'Precision Platformer', 'Puzzle Platformer', 'Racing',
-  'Roguelike Deckbuilder', 'Roguelite', 'Rugby', 'Runner', 'Sailing',
-  "Shoot 'Em Up", 'Skateboarding', 'Skating', 'Skiing', 'Snowboarding',
-  'Solitaire', 'Souls-like', 'Spectacle fighter', 'Survival Horror',
-  'Tabletop', 'Tennis', 'Third-Person Shooter', 'Top-Down Shooter',
-  'Tower Defense', 'Trading Card Game', 'Traditional Roguelike',
-  'Twin Stick Shooter', 'Volleyball', 'Wrestling',
+const STEAM_TAG_SUBGENRES = [
+  ['1628', 'Metroidvania'], ['1646', 'Hack and Slash'], ['1663', 'FPS'], ['1665', 'Match 3'],
+  ['1674', 'Typing'], ['1720', 'Dungeon Crawler'], ['1723', 'Action RTS'], ['1730', 'Sokoban'],
+  ['1738', 'Hidden Object'], ['1776', 'Espionage'], ['3798', 'Side Scroller'],
+  ['3813', 'Real Time Tactics'], ['3814', 'Third-Person Shooter'], ['3834', 'Exploration'],
+  ['3877', 'Precision Platformer'], ['3959', 'Roguelite'], ['4102', 'Combat Racing'],
+  ['4255', 'Shoot \'Em Up'], ['4474', 'CRPG'], ['4486', 'Choose Your Own Adventure'],
+  ['4637', 'Top-Down Shooter'], ['4684', 'Wargame'], ['4758', 'Twin Stick Shooter'],
+  ['4777', 'Spectacle fighter'], ['4885', 'Bullet Hell'], ['5379', '2D Platformer'],
+  ['5395', '3D Platformer'], ['5537', 'Puzzle Platformer'], ['5547', 'Arena Shooter'],
+  ['5652', 'Collectathon'], ['6835', 'Poker'], ['8666', 'Runner'], ['9204', 'Immersive Sim'],
+  ['9271', 'Trading Card Game'], ['13070', 'Solitaire'], ['14139', 'Turn-Based Tactics'],
+  ['15045', 'Flight'], ['16689', 'Time Management'], ['21635', 'Language Learning'],
+  ['21725', 'Tactical RPG'], ['26921', 'Political Sim'], ['29482', 'Souls-like'],
+  ['33572', 'Mahjong'], ['35079', 'Job Simulator'], ['37376', 'Falling Blocks'],
+  ['42804', 'Action Roguelike'], ['49213', 'Rugby'], ['56690', 'On-Rails Shooter'],
+  ['71389', 'Spelling'], ['91114', 'Shop Keeper'], ['158638', 'Cricket'],
+  ['198631', 'Mystery Dungeon'], ['323922', 'Musou'], ['353880', 'Looter Shooter'],
+  ['454187', 'Traditional Roguelike'], ['560542', 'Incremental'], ['615955', 'Idler'],
+  ['620519', 'Hero Shooter'], ['723991', 'Bullet Heaven'], ['769306', 'Escape Room'],
+  ['791774', 'Card Battler'], ['847164', 'Volleyball'], ['916648', 'Creature Collector'],
+  ['1023537', 'Boomer Shooter'], ['1091588', 'Roguelike Deckbuilder'],
+  ['1100686', 'Outbreak Sim'], ['1100688', 'Medical Sim'], ['1199779', 'Extraction Shooter'],
+  ['1220528', 'Hobby Sim'],
 ];
+
+const STEAM_TAG_VISUALS = [
+  ['1697', 'Third Person'], ['1714', 'Psychedelic'], ['1732', 'Voxel'], ['1751', 'Comic Book'],
+  ['3839', 'First-Person'], ['3871', '2D'], ['3964', 'Pixel Graphics'], ['4085', 'Anime'],
+  ['4094', 'Minimalist'], ['4145', 'Cinematic'], ['4175', 'Realistic'], ['4191', '3D'],
+  ['4195', 'Cartoony'], ['4252', 'Stylized'], ['4305', 'Colorful'], ['4400', 'Abstract'],
+  ['4562', 'Cartoon'], ['4726', 'Cute'], ['4791', 'Top-Down'], ['4975', '2.5D'],
+  ['5851', 'Isometric'], ['6052', 'Noir'], ['6815', 'Hand-drawn'], ['10816', 'Split Screen'],
+  ['18594', 'FMV'], ['21978', 'VR'], ['31275', 'Text-Based'], ['776177', '360 Video'],
+];
+
+const STEAM_TAG_THEME_MOOD = [
+  ['699', 'Racing'], ['701', 'Sports'], ['1036', 'Education'], ['1616', 'Trains'],
+  ['1637', 'Dogs'], ['1643', 'Building'], ['1644', 'Driving'], ['1647', 'Western'],
+  ['1651', 'Satire'], ['1659', 'Zombies'], ['1662', 'Survival'], ['1667', 'Horror'],
+  ['1671', 'Superhero'], ['1673', 'Aliens'], ['1678', 'War'], ['1680', 'Heist'],
+  ['1681', 'Pirates'], ['1684', 'Fantasy'], ['1687', 'Stealth'], ['1688', 'Ninja'],
+  ['1702', 'Crafting'], ['1708', 'Tactical'], ['1710', 'Surreal'], ['1746', 'Basketball'],
+  ['1751', 'Comic Book'], ['1753', 'Skateboarding'], ['1755', 'Space'], ['1777', 'Steampunk'],
+  ['3835', 'Post-apocalyptic'], ['3854', 'Lore-Rich'], ['3916', 'Old School'],
+  ['3920', 'Cooking'], ['3942', 'Sci-fi'], ['3952', 'Gothic'], ['3978', 'Survival Horror'],
+  ['3987', 'Historical'], ['4004', 'Retro'], ['4036', 'Parkour'], ['4046', 'Dragons'],
+  ['4057', 'Magic'], ['4064', 'Thriller'], ['4115', 'Cyberpunk'], ['4137', 'Transhumanism'],
+  ['4150', 'World War II'], ['4168', 'Military'], ['4172', 'Medieval'], ['4236', 'Loot'],
+  ['4291', 'Spaceships'], ['4295', 'Futuristic'], ['4342', 'Dark'], ['4520', 'Farming'],
+  ['4535', 'Dwarves'], ['4598', 'Alternate History'], ['4604', 'Dark Fantasy'],
+  ['4608', 'Swordplay'], ['4695', 'Economy'], ['4821', 'Mechs'], ['4845', 'Capitalism'],
+  ['4852', 'Billiards'], ['4878', 'Parody'], ['4947', 'Romance'], ['5030', 'Dystopian'],
+  ['5160', 'Dinosaurs'], ['5179', 'Cold War'], ['5350', 'Family Friendly'],
+  ['5363', 'Destruction'], ['5372', 'Conspiracy'], ['5382', 'World War I'],
+  ['5432', 'Programming'], ['5502', 'Hacking'], ['5613', 'Detective'], ['5673', 'Modern'],
+  ['5716', 'Mystery'], ['5727', 'Baseball'], ['5752', 'Robots'], ['5794', 'Science'],
+  ['5914', 'Tennis'], ['5981', 'Mining'], ['6041', 'Horses'], ['6054', 'Elves'],
+  ['6129', 'Logic'], ['6214', 'Birds'], ['6310', 'Diplomacy'], ['6378', 'Crime'],
+  ['6691', '1990\'s'], ['6702', 'Mars'], ['6910', 'Naval'], ['6915', 'Martial Arts'],
+  ['6948', 'Rome'], ['7038', 'Golf'], ['7108', 'Party'], ['7309', 'Skiing'],
+  ['7328', 'Bowling'], ['7423', 'Sniper'], ['7432', 'Lovecraftian'], ['7622', 'Offroad'],
+  ['7743', '1980s'], ['7926', 'Artificial Intelligence'], ['8369', 'Investigation'],
+  ['9157', 'Underwater'], ['9541', 'Demons'], ['9564', 'Hunting'], ['9626', 'Animals'],
+  ['9803', 'Snow'], ['10383', 'Transportation'], ['10397', 'Memes'], ['10617', 'Samurai'],
+  ['10679', 'Time Travel'], ['10808', 'Supernatural'], ['11634', 'Vikings'],
+  ['12190', 'Boxing'], ['12472', 'Management'], ['12686', 'Vampires'], ['13276', 'Tanks'],
+  ['13382', 'Archery'], ['13577', 'Sailing'], ['13906', 'Game Development'],
+  ['15045', 'Flight'], ['15277', 'Philosophical'], ['15564', 'Fishing'], ['15868', 'Motocross'],
+  ['16094', 'Mythology'], ['16250', 'Gambling'], ['17015', 'Werewolves'], ['17337', 'Lemmings'],
+  ['17894', 'Cats'], ['19568', 'Cycling'], ['19780', 'Submarine'], ['20486', 'Wolves'],
+  ['21006', 'Underground'], ['22602', 'Agriculture'], ['22955', 'Mini Golf'],
+  ['23491', 'Cleaning'], ['25959', 'Wuxia'], ['28444', 'Snowboarding'], ['30358', 'Nature'],
+  ['31579', 'Otome'], ['44868', 'LGBTQ+'], ['46348', 'Zoo'], ['47827', 'Wrestling'],
+  ['49213', 'Rugby'], ['52406', 'Cult'], ['96359', 'Skating'], ['97070', 'Assassins'],
+  ['97376', 'Cozy'], ['123332', 'Bikes'], ['129761', 'ATV'], ['180368', 'Faith'],
+  ['198913', 'Motorbike'], ['252854', 'BMX'], ['255534', 'Automation'], ['324176', 'Hockey'],
+  ['507423', 'Foxes'], ['552282', 'Wholesome'], ['760247', 'Xianxia'], ['847164', 'Volleyball'],
+  ['889937', 'Decorating'], ['1239876', 'Organizing'], ['1254546', 'Football (Soccer)'],
+  ['1254552', 'Football (American)'], ['1352486', 'Capybaras'], ['1654', 'Relaxing'],
+  ['1714', 'Psychedelic'], ['1719', 'Comedy'], ['1721', 'Psychological Horror'],
+  ['3934', 'Immersive'], ['4136', 'Funny'], ['4166', 'Atmospheric'], ['5186', 'Psychological'],
+  ['5608', 'Emotional'], ['5923', 'Dark Humor'], ['6052', 'Noir'], ['14720', 'Nostalgia'],
+  ['19995', 'Dark Comedy'],
+];
+
+const STEAM_TAG_FEATURES = [
+  ['1646', 'Hack and Slash'], ['1669', 'Moddable'], ['1687', 'Stealth'], ['1695', 'Open World'],
+  ['1702', 'Crafting'], ['1717', 'Hex Grid'], ['1742', 'Story Rich'], ['1759', 'Perma Death'],
+  ['1775', 'PvP'], ['3968', 'Physics'], ['3993', 'Combat'], ['4155', 'Class-Based'],
+  ['4202', 'Trading'], ['4325', 'Turn-Based Combat'], ['4559', 'Quick-Time Events'],
+  ['4747', 'Character Customization'], ['4835', '6DOF'], ['4994', 'Naval Combat'],
+  ['5125', 'Procedural Generation'], ['5154', 'Score Attack'], ['5711', 'Team-Based'],
+  ['5765', 'Gun Customization'], ['5796', 'Bullet Time'], ['6276', 'Inventory Management'],
+  ['6426', 'Choices Matter'], ['6625', 'Time Manipulation'], ['6730', 'PvE'],
+  ['6869', 'Nonlinear'], ['6971', 'Multiple Endings'], ['7208', 'Female Protagonist'],
+  ['7250', 'Linear'], ['7332', 'Base Building'], ['7481', 'Controller'], ['7556', 'Dice'],
+  ['7569', 'Grid-Based Movement'], ['7702', 'Narrative'], ['7926', 'Artificial Intelligence'],
+  ['8122', 'Level Editor'], ['8253', 'Music-Based Procedural Generation'],
+  ['8945', 'Resource Management'], ['9592', 'Dynamic Narration'], ['11095', 'Boss Rush'],
+  ['11104', 'Vehicular Combat'], ['12057', 'Tutorial'], ['14139', 'Turn-Based Tactics'],
+  ['17389', 'Tabletop'], ['18594', 'FMV'], ['31275', 'Text-Based'], ['32322', 'Deckbuilding'],
+  ['42089', 'Jump Scare'], ['42152', 'Dialogue Heavy'], ['255534', 'Automation'],
+  ['856791', 'Asymmetric VR'],
+];
+
+const STEAM_TAG_PLAYERS = [
+  ['128', 'Massively Multiplayer'], ['1685', 'Co-op'], ['3841', 'Local Co-Op'],
+  ['3843', 'Online Co-Op'], ['3859', 'Multiplayer'], ['4182', 'Singleplayer'],
+  ['4508', 'Co-op Campaign'], ['4840', '4 Player Local'], ['7368', 'Local Multiplayer'],
+  ['17770', 'Asynchronous Multiplayer'],
+];
+
+
+/* ── THE SEVEN SECTIONS ──────────────────────────────────────────────────
+   One row per taxonomy question, in the wizard's order, carrying the cap
+   this card applies and the hint its heading prints.
+
+   THE CAPS ARE THE DESIGN'S, NOT THE FORM'S, for the first three — and
+   they are deliberately the tighter pair of two numbers that disagree on
+   Steam's own page. The wizard PRINTS "choose one or two top-level
+   genres", "Select one or two genres", "Select up to three sub-genres";
+   its validator ACCEPTS 3, 5 and 6. v9.08/v9.09 built this section's pills
+   and pickers against 2, 2 and 3 — the printed numbers — and those went
+   through design review. So the printed numbers stand, and the ones the
+   form would accept are recorded here beside them rather than silently
+   swapped in. If the looser caps are ever wanted, `max` is the only edit.
+
+   THE OTHER FOUR ARE UNCAPPED, which is the form's answer and the printed
+   one both: select_max is -1 and the prompt says "any relevant". */
+const STEAM_TAG_SECTIONS = [
+  { key: 'topGenres', label: 'Top-Level Genre', max: 2, formMax: 3,
+    tags: STEAM_TAG_SUPERGENRES, pills: true, required: true,
+    hint: 'Required. Choose one or two top-level genres to categorize your title.' },
+  { key: 'genres', label: 'Genre', max: 2, formMax: 5, tags: STEAM_TAG_GENRES,
+    hint: 'Optional. Up to two more specific genres, shown with your top-level genre.' },
+  { key: 'subGenres', label: 'Sub-genre', max: 3, formMax: 6, tags: STEAM_TAG_SUBGENRES,
+    hint: 'Optional. Up to three sub-genres — the most specific tags, which lead your store page.' },
+  { key: 'visuals', label: 'Visuals & Viewpoint', max: -1, formMax: -1, tags: STEAM_TAG_VISUALS,
+    hint: 'Optional. How your title looks, and the viewpoint it is played from.' },
+  { key: 'themeMood', label: 'Themes & Moods', max: -1, formMax: -1, tags: STEAM_TAG_THEME_MOOD,
+    hint: 'Optional. What your title is about, and how it feels to play.' },
+  { key: 'features', label: 'Features', max: -1, formMax: -1, tags: STEAM_TAG_FEATURES,
+    hint: 'Optional. What a player does, and what the game does back.' },
+  { key: 'playerTags', label: 'Players', max: -1, formMax: -1, tags: STEAM_TAG_PLAYERS,
+    hint: 'Optional. Who plays, and together or alone.' },
+];
+
+/* Every tag the title carries, deduped, in the wizard's own section order —
+   which is what the twenty-tag cap counts. */
+function steamWizardTags() {
+  const a = state.steamSubmitAnswers;
+  const seen = new Set();
+  const out = [];
+  STEAM_TAG_SECTIONS.forEach(s => (a[s.key] || []).forEach(label => {
+    if (!seen.has(label)) { seen.add(label); out.push(label); }
+  }));
+  return out;
+}
 
 const STEAM_AI_LIVE_TYPES = ['Code','Text','Textures','3D Models','Sound Effects','Music','Voice','Other'];
 
@@ -8085,9 +8256,18 @@ function makeBlankSteamAnswers() {
     aiAvailabilityDesc: '',
     aiMonetizationDesc: '',
     // Tag Wizard
+    /* The Tag Wizard's seven taxonomy sections (v9.10). Labels, not ids —
+       see STEAM_TAG_SECTIONS. The first three names are unchanged so
+       everything that already reads them (the preview's tag chips, the
+       submission card's risk check, v9.08's pills and pickers) keeps
+       working. */
     topGenres:          [],
     genres:             [],
     subGenres:          [],
+    visuals:            [],
+    themeMood:          [],
+    features:           [],
+    playerTags:         [],
     /* Steam's own Genres checkbox list (STEAM_INFO_GENRES), which is the
        store form's question and NOT the Tag Wizard's top tier above
        (v8.93). Kept apart because Steam keeps them apart. */

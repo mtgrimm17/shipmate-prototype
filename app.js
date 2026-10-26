@@ -24994,11 +24994,19 @@ function toggleSteamAIType(typeId, checked) {
   updateSteamCard();
 }
 
+/* -1 IS NO CAP (v9.10). Four of the wizard's seven sections — Visuals &
+   Viewpoint, Themes & Moods, Features, Players — have no select_max at
+   all, and before this a `maxCount` of -1 would have made every row
+   unclickable (`arr.length < -1` is never true). The capped sections are
+   unchanged: their rows grey out at the cap and a click on a grey row is
+   dropped, which is v9.08's behaviour and what its pickers are drawn
+   for. */
 function toggleSteamTag(field, value, checked, maxCount) {
+  if (!Array.isArray(state.steamSubmitAnswers[field])) state.steamSubmitAnswers[field] = [];
   const arr = state.steamSubmitAnswers[field];
   if (checked) {
     // Add only if under the cap
-    if (arr.length < maxCount && !arr.includes(value)) arr.push(value);
+    if ((maxCount === -1 || arr.length < maxCount) && !arr.includes(value)) arr.push(value);
     // If at cap, silently ignore (chip stays un-on; re-render shows correct state)
   } else {
     state.steamSubmitAnswers[field] = arr.filter(v => v !== value);
@@ -33518,10 +33526,16 @@ function _smSteamFlipItems(flip) {
   switch (flip) {
     case 'business':
       return [row('Price', (ws.price || '').trim(), 'sfx:steam-price')];
+    /* SEVEN ROWS, FROM THE SAME TABLE THE SECTION IS DRAWN FROM (v9.10).
+       These were three, written out, and the section now has seven; a
+       guide that lists a subset of the headings it scrolls to is a guide
+       that goes stale the next time one is added. STEAM_TAG_SECTIONS is
+       the one source, and `hd:` + the label is the heading this already
+       targets. */
     case 'tags':
-      return [row('Top-Level Genre', (a.topGenres || []).length, 'hd:Top-Level Genre'),
-              row('Genre', (a.genres || []).length, 'hd:Genre', true),
-              row('Sub-genre', (a.subGenres || []).length, 'hd:Sub-genre', true)];
+      return (typeof STEAM_TAG_SECTIONS !== 'undefined' ? STEAM_TAG_SECTIONS : [])
+        .map(sec => row(sec.label, (a[sec.key] || []).length,
+                        'hd:' + sec.label, !sec.required));
     case 'technical': {
       const p = a.players || {};
       return [row('Players', Object.keys(p).some(k => p[k]), 'tab:tech:players'),

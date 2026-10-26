@@ -22119,18 +22119,34 @@ function buildSteamContentRatingSection() {
    rather than silently refusing a tick. Storage is unchanged —
    steamSubmitAnswers.topGenres / genres / subGenres via toggleSteamTag — so
    the store page's tag pills and Shippy's rows read it as before. */
+/* ── THE SAME PICKER, OVER THE WHOLE TAXONOMY (v9.10) ─────────────────────
+   v9.08 built this for three lists of names and a hard cap. The wizard has
+   seven lists, four of which Steam does not cap at all, and each entry is
+   now a [tagid, label] pair rather than a bare string. Both are widened
+   here rather than copied into a second picker: `max === -1` means
+   uncapped, and the id rides onto the row as data-tagid so a later
+   importer can match on Steam's number instead of its wording.
+
+   Everything a reader can see is v9.08's and unchanged — the wide pill
+   that wraps, the three-column list, the count in the dropdown head, the
+   heading carrying the hint. */
 function _steamTagPicker(field, list, max, question, tip) {
-  const cur  = state.steamSubmitAnswers[field] || [];
-  const key  = 'steam:' + field;
-  const open = state.giarcPickerOpen === key;
-  const full = cur.length >= max;
+  const cur    = state.steamSubmitAnswers[field] || [];
+  const key    = 'steam:' + field;
+  const open   = state.giarcPickerOpen === key;
+  const capped = max !== -1;
+  const full   = capped && cur.length >= max;
   // Every pick by name (v9.08: "use a wider pill, so the selected ones can be
   // read fully") — the pill is wider here and wraps rather than truncating.
-  const summary = !cur.length ? `Select up to ${max}` : cur.join(', ');
-  const items = list.map(g => {
+  const summary = !cur.length
+    ? (capped ? `Select up to ${max}` : 'Select any that apply')
+    : cur.join(', ');
+  const items = list.map(pair => {
+    const [tagid, g] = pair;
     const on  = cur.includes(g);
     const off = !on && full;
     return `<button type="button" class="loc-dd-item giarc-dd-item${on ? ' is-on' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
+                    data-tagid="${escHtml(tagid)}"
                     onclick="event.stopPropagation(); ${off ? '' : `toggleSteamTag('${field}','${egsJsStr(g)}',${!on},${max})`}">
               <span class="giarc-dd-box"></span><span class="loc-dd-name">${escHtml(g)}</span>
             </button>`;
@@ -22150,7 +22166,9 @@ function _steamTagPicker(field, list, max, question, tip) {
             <svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="loc-dropdown steam-tag-dd">
-            <div class="steam-tag-dd-head">${cur.length} of ${max} selected</div>
+            <div class="steam-tag-dd-head">${capped
+              ? `${cur.length} of ${max} selected`
+              : `${cur.length} selected`}</div>
             <div class="steam-tag-dd-grid">${items}</div>
           </div>
         </div>
@@ -22169,9 +22187,14 @@ function _steamTopGenrePills() {
      row that had broken, not as a limit. They stay ordinary pills; a third
      press swaps out the older of the two (setSteamTopGenre, app.js), which
      is how a two-pick choice is changed without having to undo one first. */
-  const pills = STEAM_TOP_GENRES.map(g => {
+  /* NINE, NOT SEVEN (v9.10). The list this read was `genreHierarchy`'s top
+     tier, which is not the one the wizard's own Top-Level Genres question
+     offers — that one has nine, adding Racing and Sports and Software. The
+     pills are v9.08's; only what they are drawn from changed. */
+  const pills = STEAM_TAG_SUPERGENRES.map(([tagid, g]) => {
     const on = cur.includes(g);
     return `<button type="button" class="ob-preset-pill${on ? ' is-active' : ''}"
+                    data-tagid="${escHtml(tagid)}"
                     onclick="setSteamTopGenre('${egsJsStr(g)}')">${escHtml(g)}</button>`;
   }).join('');
   return `
@@ -22183,18 +22206,46 @@ function _steamTopGenrePills() {
       <div class="ob-preset-pills steam-top-pills">${pills}</div>
     </div>`;
 }
+/* ══ SEVEN SECTIONS, v9.08'S CONTROLS (v9.10) ═════════════════════════════
+   The wizard asks seven taxonomy questions; this card asked three. The
+   four that were missing — Visuals & Viewpoint, Themes & Moods, Features
+   and Players — are here now, and every section is driven off
+   STEAM_TAG_SECTIONS (state.js) rather than written out, so a list can
+   never be offered under the wrong heading or with the wrong cap.
+
+   NOTHING ABOUT THE SURFACE CHANGED. The top tier is still pills on show
+   (Jaco: "las opciones no deberían estar en el multipicker, sino a la
+   vista, porque es la más importante"), the rest are still the wide
+   wrapping pill and its three-column list, the headings still carry the
+   hints, and the caps on the first three are still 2 / 2 / 3. What is
+   underneath them is the wizard's real taxonomy.
+
+   FLAT, NOT STEPPED. Steam's own wizard walks one question at a time with
+   a running summary beside it. This card shows all seven at once because
+   that is the shape v9.08 and v9.09 took through design review, and the
+   whole point of this version was to keep that surface.
+
+   THE TWENTY IS STEAM'S (`maxTags`), counted across every section and
+   deduped — several tags sit in more than one list, and Steam counts each
+   once. It is stated rather than enforced: the wizard lets a title go
+   over and tells it so. */
 function buildSteamStoreTagsSection() {
   const head = (label, first, tip) => `${first ? '' : '<div class="ios-q-divider"></div>'}<div class="ios-content-step-label giarc-group-head"${first ? ' style="margin-top:0;"' : ''}>${escHtml(label)}${tip ? ` <span class="tooltip-anchor" data-tip="${escHtml(tip)}"><span class="tooltip-icon">?</span></span>` : ''}</div>`;
+
+  const sections = STEAM_TAG_SECTIONS.map((sec, i) => `
+      ${head(sec.label, i === 0, i === 0 ? '' : sec.hint)}
+      ${sec.pills
+        ? _steamTopGenrePills()
+        : _steamTagPicker(sec.key, sec.tags, sec.max, sec.label, sec.hint)}`).join('');
+
+  const all  = (typeof steamWizardTags === 'function') ? steamWizardTags() : [];
+  const over = all.length > STEAM_TAG_TOTAL_MAX;
+
   return `
     <div class="giarc-root giarc-flat steam-tags">
-      ${head('Top-Level Genre', true)}
-      ${_steamTopGenrePills()}
-      ${head('Genre', false, 'Optional. Up to two more specific genres, shown with your top-level genre.')}
-      ${_steamTagPicker('genres', STEAM_GENRES, 2, 'Genres (optional)',
-        'Optional. Up to two more specific genres, shown with your top-level genre.')}
-      ${head('Sub-genre', false, 'Optional. Up to three sub-genres — the most specific tags, which lead your store page.')}
-      ${_steamTagPicker('subGenres', STEAM_SUB_GENRES, 3, 'Sub-genres (optional)',
-        'Optional. Up to three sub-genres — the most specific tags, which lead your store page.')}
+      ${sections}
+      <div class="steam-tag-total${over ? ' is-over' : ''}">${all.length} of ${
+        STEAM_TAG_TOTAL_MAX} tags${over ? ' — Steam accepts twenty' : ''}</div>
     </div>`;
 }
 
@@ -22906,9 +22957,9 @@ function buildSteamLanguagesEditSection() {
        Details' Title field (and every other echo of it: breadcrumb,
        purchase strip) stays in sync no matter which input the edit
        started from.
-     - Genre IS the Top-Level Genre checkbox picker from Steam - Tags
-       (buildSteamStoreTagsSection, STEAM_TOP_GENRES + toggleSteamTag) —
-       not a separate value copied from it. Checking/unchecking here
+     - Genre IS the Top-Level Genre picker from Steam - Tags
+       (buildSteamStoreTagsSection, STEAM_TAG_SUPERGENRES +
+       setSteamTopGenre) — not a separate value copied from it. Checking/unchecking here
        mutates state.steamSubmitAnswers.topGenres, the exact same array
        Tags edits, so the two stay identical by construction.
      - Developer/Publisher write through _steamSppDevPubInput (app.js), the
@@ -22926,11 +22977,10 @@ function buildSteamInfoEditSection() {
   const ssa = state.steamSubmitAnswers;
 
   /* ══ GENRES, FROM STEAMWORKS' OWN CHECKBOX LIST (v8.93) ══════════
-     This offered STEAM_TOP_GENRES, which is the top tier of the TAG
-     wizard, not the Genres field the store form asks for. Steam asks
-     both questions and they are not the same list: the genre list has
-     Adventure, Indie and Massively Multiplayer, which the tag tier does
-     not, and has no "Software", which the tag tier does. Read off the
+     This offered the Tag Wizard's top tier (STEAM_TAG_SUPERGENRES
+     now), not the Genres field the store form asks for. Steam asks both
+     questions and they are not the same list: the genre list has Indie
+     and Massively Multiplayer, which the tag tier does not. Read off the
      Store edit page's own Genres checkboxes. */
   const genreChecks = STEAM_INFO_GENRES.map(g => {
     const checked = (ssa.infoGenres || []).includes(g);

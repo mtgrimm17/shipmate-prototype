@@ -32473,3 +32473,13 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 }
 .submit-modal-steam-spp .ias-all-locs-btn:hover,
 .submit-modal-steam-spp .loc-review-toggle-btn:hover { background: var(--pill-off-bg-hover); color: var(--text); }
+
+/* The twenty-tag total under Steam - Tags (v9.10). `maxTags` on the
+   wizard, counted across all seven sections and deduped. Stated, not
+   enforced — Steam's own wizard lets a title go over and says so. */
+.steam-tags .steam-tag-total {
+  margin-top: 16px;
+  font-size: 12px;
+  color: #8f98a0;
+}
+.steam-tags .steam-tag-total.is-over { color: var(--magenta, #d6409f); }
