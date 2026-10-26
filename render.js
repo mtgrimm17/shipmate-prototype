@@ -10427,24 +10427,32 @@ function sppRequiredElements(pid, lang) {
     const about = sv('aboutGame') || (lang === primary ? (fd.description || '').trim() : '');
     const tags  = [...(ssa.subGenres || []), ...(ssa.genres || []), ...(ssa.topGenres || [])];
     const title = (typeof _iasFieldValue === 'function' ? (_iasFieldValue('title', lang) || '') : (fd.title || '')).trim();
+    /* THE ROWS JACO ASKED FOR (v9.12): "Title, Media (carousel & header),
+       Short description, Dev & Publisher info, Tags, Business price,
+       Features & About this game & Languages, Achievements, System
+       Requirements, Social Links, Content Rating." Eleven, where there were
+       fifteen: the two media boxes are one row, the three side-by-side blocks
+       in the page's middle band are one row (it lights all three and opens
+       none — pick the one you mean), Legal and the Info box's Genres left the
+       list, and the Info box is reached as Social Links, which is what it
+       holds. */
+    const links = (ws.links || []).filter(l => l && (l.url || '').trim());
     return [
-      { id: 'title',          label: 'Title',                 required: true,  done: !!title },
-      { id: 'screenshots',    label: 'Media Carousel',        required: true,  done: isSteamSectionComplete('screenshots') },
-      { id: 'headerImage',    label: 'Header Image',          required: true,  done: !!(state.uploads && state.uploads.steamHeaderImage) },
-      { id: 'subtitle',       label: 'Short Description',     required: true,  done: !!sv('description') },
-      { id: 'devpub',         label: 'Developer & Publisher', required: true,  done: !!(sv('developer') && sv('publisher')) },
+      { id: 'title',     label: 'Title',                        required: true,  done: !!title },
+      { id: 'media',     label: 'Media (Carousel & Header)',    required: true,
+        done: isSteamSectionComplete('screenshots') && !!(state.uploads && state.uploads.steamHeaderImage) },
+      { id: 'subtitle',  label: 'Short Description',            required: true,  done: !!sv('description') },
+      { id: 'devpub',    label: 'Developer & Publisher',        required: true,  done: !!(sv('developer') && sv('publisher')) },
       // Steam requires a top-level genre; a genre or sub-genre alone is not a tagged page.
-      { id: 'tags',           label: 'Tags',                  required: true,  done: (ssa.topGenres || []).length > 0 },
-      { id: 'business',       label: 'Business',              required: true,  done: !!(ws.price || '').trim() },
-      { id: 'technical',      label: 'Features',              required: true,  done: isSteamSectionComplete('technical') },
-      { id: 'languages',      label: 'Languages',             required: true,  done: !!ssa.languages },
-      { id: 'description',    label: 'About This Game',       required: true,  done: !!about },
-      { id: 'achievements',   label: 'Achievements',          required: false,
+      { id: 'tags',      label: 'Tags',                         required: true,  done: (ssa.topGenres || []).length > 0 },
+      { id: 'business',  label: 'Price',                        required: true,  done: !!(ws.price || '').trim() },
+      { id: 'featabout', label: 'Features, About & Languages',  required: true,
+        done: isSteamSectionComplete('technical') && !!about && !!ssa.languages },
+      { id: 'achievements', label: 'Achievements',              required: false,
         done: typeof steamAchievementsFilled === 'function' ? !!steamAchievementsFilled() : false },
-      { id: 'sysreq',         label: 'System Requirements',   required: true,  done: typeof steamSysreqDone === 'function' && !!steamSysreqDone() },
-      { id: 'legal',          label: 'Legal',                 required: false, done: !!(ssa.legalNotice || '').trim() },
-      { id: 'info',           label: 'Info',                  required: true,  done: !!(state.storePreviewSectionSeen?.steam?.info) },
-      { id: 'content',        label: 'Content',               required: true,  done: isSteamSectionComplete('contentRating') },
+      { id: 'sysreq',    label: 'System Requirements',          required: true,  done: typeof steamSysreqDone === 'function' && !!steamSysreqDone() },
+      { id: 'social',    label: 'Social Links',                 required: false, done: links.length > 0 },
+      { id: 'content',   label: 'Content Rating',               required: true,  done: isSteamSectionComplete('contentRating') },
     ];
   }
   const complete   = pid === 'macos' ? isMacSectionComplete : isIOSSectionComplete;
@@ -23529,8 +23537,8 @@ function buildSteamStorePreviewPrototypeSection() {
   // thumbnail strip's own layout gets broken by accident.
   const heroGlowClass = '';
   const heroHtml = firstCarouselItem
-    ? `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero" data-spp-el="screenshots" data-kind="${firstCarouselItem.kind}" onclick="_steamSppCarouselItemClick(this.dataset.kind)">${heroInnerHtml}</div></div>`
-    : `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero steam-spp-media-empty" data-spp-el="screenshots" onclick="_steamSppOpenAssetsSection('steam-assets-screenshots-section')">No screenshots yet</div></div>`;
+    ? `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero" data-spp-el="media" data-kind="${firstCarouselItem.kind}" onclick="_steamSppCarouselItemClick(this.dataset.kind)">${heroInnerHtml}</div></div>`
+    : `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero steam-spp-media-empty" data-spp-el="media" onclick="_steamSppOpenAssetsSection('steam-assets-screenshots-section')">No screenshots yet</div></div>`;
 
   // Thumbs row + scrollbar are ALWAYS rendered (even with 0 or 1 items),
   // rather than gated behind carouselItems.length, so there's always a
@@ -23586,7 +23594,7 @@ function buildSteamStorePreviewPrototypeSection() {
   // field uses, since object-fit:cover means a background-color behind the
   // image would never actually show through it.
   const capsuleHtml = `
-    <div class="steam-spp-capsule-wrap" data-spp-el="headerImage" onclick="openSteamHeaderCapsuleSection()" title="Edit Header Capsule">
+    <div class="steam-spp-capsule-wrap" data-spp-el="media" onclick="openSteamHeaderCapsuleSection()" title="Edit Header Capsule">
       ${headerImgSrc
         ? `<img src="${headerImgSrc}" class="steam-spp-capsule-img" alt="">`
         : `<div class="steam-spp-capsule-img steam-spp-media-empty">Header Image</div>`}
@@ -23835,7 +23843,7 @@ function buildSteamStorePreviewPrototypeSection() {
   const steamLegalRaw = (state.steamSubmitAnswers.legalNotice || '');
   const legalBlockHtml = `
     <div class="steam-spp-legal-wrap">
-      <textarea data-spp-el="legal" class="steam-spp-legal steam-spp-autogrow steam-spp-edit${
+      <textarea class="steam-spp-legal steam-spp-autogrow steam-spp-edit${
                   steamLegalRaw ? '' : ' is-todo'}"
                 id="steam-spp-legal" rows="1" maxlength="${STEAM_LEGAL_MAX}"
                 placeholder="Copyright and trademark lines, printed at the foot of the store page."
@@ -23850,7 +23858,7 @@ function buildSteamStorePreviewPrototypeSection() {
     <div class="steam-spp-section">
       <h2 class="steam-spp-h2">About This Game</h2>
       <div class="steam-spp-fieldrow">
-        <textarea data-spp-el="description" class="steam-spp-about-textarea steam-spp-autogrow steam-spp-edit${
+        <textarea data-spp-el="featabout" class="steam-spp-about-textarea steam-spp-autogrow steam-spp-edit${
                     aboutGameRaw ? '' : ' is-todo'}${
                     aboutGameRaw.length > STEAM_ABOUT_MAX ? ' is-over-limit' : ''}" rows="3"
                   placeholder="Your game description will appear here once you fill in the Description field in Game Details."
@@ -23977,7 +23985,7 @@ function buildSteamStorePreviewPrototypeSection() {
              title="${escHtml(f.desc || '')}"><span>${escHtml(f.label)}</span></div>`).join('')}`).join('') : ''}` : '';
 
   const featuresHtml = `
-    <div data-spp-el="technical" class="steam-spp-side-block steam-spp-features-block steam-spp-hit${technicalDone ? '' : ' is-todo'}"
+    <div data-spp-el="featabout" class="steam-spp-side-block steam-spp-features-block steam-spp-hit${technicalDone ? '' : ' is-todo'}"
          onclick="openStorePreviewSection('steam','technical')">
       <div class="steam-spp-side-heading">Features</div>
       <div class="steam-spp-features-row">
@@ -24005,7 +24013,7 @@ function buildSteamStorePreviewPrototypeSection() {
       <tr><td class="steam-spp-lang-name">${escHtml(OB_LANG_NAMES[l.code] || l.code)}</td><td class="steam-spp-lang-check">${l.interface ? '✓' : '—'}</td><td class="steam-spp-lang-check">${l.fullAudio ? '✓' : '—'}</td><td class="steam-spp-lang-check">${l.subtitles ? '✓' : '—'}</td></tr>`).join('');
   const languagesDone = !!ssa.languages;
   const languagesHtml = `
-    <div data-spp-el="languages" class="steam-spp-side-block steam-spp-languages-block steam-spp-hit${languagesDone ? '' : ' is-todo'}"
+    <div data-spp-el="featabout" class="steam-spp-side-block steam-spp-languages-block steam-spp-hit${languagesDone ? '' : ' is-todo'}"
          onclick="openStorePreviewSection('steam','languages')">
       <div class="steam-spp-side-heading">Languages</div>
       <table class="steam-spp-lang-table">
@@ -24141,7 +24149,7 @@ function buildSteamStorePreviewPrototypeSection() {
 
      Steam's own box has no "Info" heading either; the rows are the block. */
   const infoBlockHtml = `
-    <div data-spp-el="info" class="steam-spp-side-block steam-spp-info-block steam-spp-hit${infoDone ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','info')">
+    <div data-spp-el="social" class="steam-spp-side-block steam-spp-info-block steam-spp-hit${infoDone ? '' : ' is-todo'}" onclick="openStorePreviewSection('steam','info')">
       <div class="steam-spp-info-line"><strong>Title:</strong> <span id="steam-spp-info-title">${escHtml(titleRaw)}</span></div>
       <div class="steam-spp-info-line"><strong>Genre:</strong> <span id="steam-spp-info-genre">${escHtml(infoGenreText)}</span></div>
       <div class="steam-spp-info-line"><strong>Developer:</strong> <span class="steam-spp-link-text" id="steam-spp-devname-info">${escHtml(devRaw)}</span></div>

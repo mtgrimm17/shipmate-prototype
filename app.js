@@ -28509,7 +28509,7 @@ async function _smDoorGo(id, act) {
    instead of a push, the caret: the field is the second layer, so it is
    focused and ready to type into. The dim lifts once you are in it. Steam
    only: the App Store and Mac pages keep setStorePreviewFocus. */
-async function _smFieldGo(id) {
+async function _smFieldGo(id, noFocus) {
   const els = [...document.querySelectorAll('[data-spp-el="' + id + '"]')];
   const el = els[0];
   if (!el) return;
@@ -28524,8 +28524,8 @@ async function _smFieldGo(id) {
     const to = Math.max(0, Math.min(max, Math.round(sc.scrollTop + (r.top - s.top) - (sc.clientHeight - r.height) / 2)));
     if (Math.abs(to - sc.scrollTop) > 2) { if (still) sc.scrollTop = to; else { _smScrollTo(sc, to); await wait(440); } }
   }
-  if (el.focus) { el.focus({ preventScroll: true }); try { const n = (el.value || '').length; el.setSelectionRange(n, n); } catch (_) {} }
-  await wait(still ? 0 : 700);
+  if (!noFocus && el.focus) { el.focus({ preventScroll: true }); try { const n = (el.value || '').length; el.setSelectionRange(n, n); } catch (_) {} }
+  await wait(still ? 0 : (noFocus ? 1400 : 700));
   if (host) host.classList.remove('sm-door-spot', 'is-spotlight');
   els.forEach(e => e.classList.remove('is-spotlit', 'is-spp-hover'));
 }
@@ -28541,6 +28541,8 @@ window.chkGoStep = function (step) {
     /* .click() rather than re-implementing the call: the element's handler is
        the definition of what that door does, and a copy here is a second one
        that can drift. */
+    // A row that stands for several blocks lights them all and opens none.
+    if (sm.platformId === 'steam' && id === 'featabout') return _smFieldGo(id, true);
     if (act) return _smDoorGo(id, act);
     if (sm.platformId === 'steam') return _smFieldGo(id);
     if (typeof setStorePreviewFocus === 'function') {
