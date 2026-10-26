@@ -33670,3 +33670,59 @@ function setSteamTopGenre(g) {
   reRenderStepModal();
   if (typeof updateSteamCard === 'function') updateSteamCard();
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LANGUAGES COME FROM GAME DETAILS, ON EPIC AND ON STEAM (v9.13).
+
+   Jaco: "¿podemos hacer que Languages, tanto en Epic como en la store, se
+   rellene con la info de Game Details?"
+
+   Steam's language table was seeded only the first time its Languages
+   section was opened, so the store page's Languages block — and Shippy's
+   row for it — sat empty until you went in and came straight back out.
+   Epic's Text languages, the one Epic requires, were narrowed to the game's
+   languages and then left for you to tick again one by one.
+
+   Both now FOLLOW Game Details while you have not touched them: the primary
+   language plus every supported one, refreshed each time a step opens, so a
+   language added in Game Details shows up on both pages without a visit.
+   Steam keeps any flags already set on a language that stays. The first
+   edit — a Steam flag or removal, an Epic Text tick — hands the list to you
+   (`languagesAuto` / `textLanguagesAuto` go false) and it is never
+   overwritten again. Epic's Audio is left alone: a voice track is not
+   implied by a store localisation. */
+function smSyncLanguagesFromDetails() {
+  const fd = state.formData || {};
+  const codes = Array.from(new Set([fd.primaryLanguage || 'en', ...(fd.localizations || [])]));
+  const ssa = state.steamSubmitAnswers;
+  if (ssa && (!ssa.languages || ssa.languagesAuto)) {
+    const prev = new Map((ssa.languages || []).map(l => [l.code, l]));
+    ssa.languages = codes.map(code => prev.get(code) || { code, interface: true, fullAudio: false, subtitles: false });
+    ssa.languagesAuto = true;
+  }
+  const ea = state.egsSubmitAnswers;
+  if (ea && Array.isArray(ea.textLanguages) && typeof egsGameLanguageNames === 'function'
+      && (ea.textLanguagesAuto || (!ea.textLanguages.length && ea.textLanguagesAuto !== false))) {
+    ea.textLanguages = egsGameLanguageNames();
+    ea.textLanguagesAuto = true;
+  }
+}
+// Steam's old one-time seed is the same thing now.
+window._steamSeedLanguagesIfNeeded = function () { smSyncLanguagesFromDetails(); };
+(() => {
+  const hand = (name, mark) => {
+    const orig = window[name];
+    if (typeof orig !== 'function') return;
+    window[name] = function () { mark.apply(this, arguments); return orig.apply(this, arguments); };
+  };
+  hand('toggleSteamLanguageFlag', () => { if (state.steamSubmitAnswers) state.steamSubmitAnswers.languagesAuto = false; });
+  hand('removeSteamLanguage',     () => { if (state.steamSubmitAnswers) state.steamSubmitAnswers.languagesAuto = false; });
+  hand('toggleEgsProductList', listId => { if (listId === 'textLanguages' && state.egsSubmitAnswers) state.egsSubmitAnswers.textLanguagesAuto = false; });
+  const open = window.openStepModal;
+  if (typeof open === 'function') {
+    window.openStepModal = function (pid) {
+      if (pid === 'steam' || pid === 'egs') { try { smSyncLanguagesFromDetails(); } catch (_) {} }
+      return open.apply(this, arguments);
+    };
+  }
+})();
