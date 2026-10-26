@@ -22163,23 +22163,33 @@ function buildSteamContentRatingSection() {
    Everything a reader can see is v9.08's and unchanged — the wide pill
    that wraps, the three-column list, the count in the dropdown head, the
    heading carrying the hint. */
-/* WHOSE LIST THIS IS (v9.18): the pill wears the suggestion violet and the
-   ticked rows wear their own mark, which is exactly how Epic's multi-select
-   already says it (renderGIARCQuestion below — `ai-confident` on the pill,
-   `is-ai` on the rows). Pressing anything in here turns the whole section
-   blue, because a press takes the section (toggleSteamTag, app.js). */
+/* WHICH OF THESE ARE SHIPMATE'S (v9.18, per tag since v9.19). v9.18 put
+   `ai-confident` on the summary pill the way Epic's multi-select does, so
+   one suggestion painted the whole field — and these sections run to 173
+   options picked three at a time, where Epic's run to five. Mark: "instead
+   of marking the entire Genre field, individual options should be marked."
+
+   So the mark is on the OPTION: the ticked row in the list carries `is-ai`,
+   and the name inside the summary carries it too, so a closed picker still
+   says which of the tags on it are suggestions. The pill itself is plain
+   selected blue again — it is the field, and the field is not the answer. */
 function _steamTagPicker(field, list, max, question, tip) {
   const cur    = state.steamSubmitAnswers[field] || [];
-  const ai     = typeof steamTagsAreInferred === 'function' && steamTagsAreInferred(field);
+  const isAi   = (typeof steamTagIsInferred === 'function')
+    ? (t => steamTagIsInferred(field, t)) : (() => false);
   const key    = 'steam:' + field;
   const open   = state.giarcPickerOpen === key;
   const capped = max !== -1;
   const full   = capped && cur.length >= max;
   // Every pick by name (v9.08: "use a wider pill, so the selected ones can be
   // read fully") — the pill is wider here and wraps rather than truncating.
-  const summary = !cur.length
-    ? (capped ? `Select up to ${max}` : 'Select any that apply')
-    : cur.join(', ');
+  /* The summary is spans, not one string, so each name can say whose it is
+     (v9.19). Separators sit outside them so a comma never comes out violet
+     next to a name that is not. */
+  const summaryHtml = !cur.length
+    ? escHtml(capped ? `Select up to ${max}` : 'Select any that apply')
+    : cur.map(t => `<span class="steam-tag-sum${isAi(t) ? ' is-ai' : ''}">${
+        escHtml(t)}</span>`).join(', ');
   const items = list.map(pair => {
     const [tagid, g] = pair;
     const on  = cur.includes(g);
@@ -22189,7 +22199,7 @@ function _steamTagPicker(field, list, max, question, tip) {
        counts it once — stays available at the cap. */
     const off = !on && (full || (typeof steamTagsOverMax === 'function'
                                  && steamTagsOverMax(field, cur.concat([g]))));
-    return `<button type="button" class="loc-dd-item giarc-dd-item${on ? ' is-on' : ''}${on && ai ? ' is-ai' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
+    return `<button type="button" class="loc-dd-item giarc-dd-item${on ? ' is-on' : ''}${on && isAi(g) ? ' is-ai' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
                     data-tagid="${escHtml(tagid)}"
                     onclick="event.stopPropagation(); ${off ? '' : `toggleSteamTag('${field}','${egsJsStr(g)}',${!on},${max})`}">
               <span class="giarc-dd-box"></span><span class="loc-dd-name">${escHtml(g)}</span>
@@ -22205,11 +22215,9 @@ function _steamTagPicker(field, list, max, question, tip) {
     <div class="giarc-card giarc-depth-1 giarc-inline steam-tag-block" data-key="${key}">
       <div class="giarc-row">
         <div class="loc-primary-wrap sw-select-wrap giarc-picker steam-tag-picker${open ? ' is-open' : ''}" data-giarc-picker="${key}">
-          <button type="button" class="loc-primary-pill${
-              !cur.length ? ' is-empty' : ai ? ' ai-confident' : ''}"${
-              ai ? ' title="Shipmate suggested these. Press any tag to make the list yours."' : ''}
+          <button type="button" class="loc-primary-pill${cur.length ? '' : ' is-empty'}"
                   onclick="toggleGiarcPicker(event,'${key}')">
-            <span class="loc-primary-name">${escHtml(summary)}</span>
+            <span class="loc-primary-name">${summaryHtml}</span>
             <svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="loc-dropdown steam-tag-dd">
@@ -22250,13 +22258,15 @@ function _steamTopGenrePills() {
      is the same pair of functions `setSteamTopGenre` returns early on, so
      a pill greys exactly when the handler would refuse it — never for the
      two-pick cap, which still swaps. */
-  /* The top tier is on show rather than in a picker, so its own lit pills
-     carry the violet instead of a summary pill doing it for them (v9.18). */
-  const ai = typeof steamTagsAreInferred === 'function' && steamTagsAreInferred('topGenres');
+  /* The top tier is on show rather than in a picker, so a suggested genre
+     is marked on its own lit pill (v9.18) — per pill since v9.19, which
+     this tier was already shaped for. */
+  const isAi = (typeof steamTagIsInferred === 'function')
+    ? (t => steamTagIsInferred('topGenres', t)) : (() => false);
   const pills = steamSectionTags(STEAM_TAG_SECTIONS[0]).map(([tagid, g]) => {
     const on  = cur.includes(g);
     const off = !on && typeof steamTopGenreBlocked === 'function' && steamTopGenreBlocked(g);
-    return `<button type="button" class="ob-preset-pill${on ? ' is-active' : ''}${on && ai ? ' ai-confident' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
+    return `<button type="button" class="ob-preset-pill${on ? ' is-active' : ''}${on && isAi(g) ? ' ai-confident' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
                     data-tagid="${escHtml(tagid)}"
                     onclick="${off ? '' : `setSteamTopGenre('${egsJsStr(g)}')`}">${escHtml(g)}</button>`;
   }).join('');
@@ -22328,7 +22338,12 @@ function buildSteamStoreTagsSection() {
         all.length} of ${STEAM_TAG_TOTAL_MAX} tags${
         over ? ' — Steam accepts twenty' :
         full ? ' — remove one to add another' : ''}</div>
-      ${inferred ? `<div class="steam-tag-inferred">${inferred} suggested by Shipmate — press any tag to make that section yours.</div>` : ''}
+      ${/* NOT "press one to confirm" (v9.19). In Content Rating pressing an
+            answer re-asserts the same value, which is what makes a press a
+            confirmation there; pressing a chosen TAG unticks it. A
+            suggestion here is confirmed by being left alone, so the line
+            says the only thing a press can do. */''}
+      ${inferred ? `<div class="steam-tag-inferred">${inferred} suggested by Shipmate — remove any that do not fit.</div>` : ''}
     </div>`;
 }
 

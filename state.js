@@ -7769,48 +7769,65 @@ function steamTopGenreBlocked(g) {
       && steamTagsOverMax('topGenres', steamTopGenreNext(g));
 }
 
-/* ══ WHOSE TAGS THESE ARE (v9.18) ════════════════════════════════════════
+/* ══ WHOSE TAGS THESE ARE (v9.18, per TAG since v9.19) ══════════════════
    Shipmate infers Steam - Tags from the same context it infers a content
-   rating from, so the card now needs what every inferred answer in this
-   app needs: a way to say "this one is ours, not yours".
+   rating from, so the card needs what every inferred answer in this app
+   needs: a way to say "this one is ours, not yours".
 
-   PROVENANCE IS PER SECTION, NOT PER TAG, because a multi-select's answer
-   is the whole list rather than one option — which is how Epic's own
-   pickers already paint it (renderGIARCQuestion, render.js: the pill
-   carries `ai-confident`, the ticked rows carry `is-ai`). `tags:<key>` in
-   state.steamAnswerMeta is that record, alongside the content survey's
-   per-question entries in the same store.
+   PER TAG, NOT PER SECTION, and v9.18 had that wrong. It followed Epic's
+   multi-select, where the pill carries `ai-confident` for the whole list —
+   but Epic's lists are four or five options and a Steam section offers up
+   to 173, chosen three at a time. Mark: "instead of marking the entire
+   Genre field, individual options should be marked." Right: a section with
+   two of the developer's tags and one of Shipmate's is not one state, and
+   painting it as one says the wrong thing about both.
 
-   TOUCHING A SECTION TAKES IT. The moment the developer adds or removes a
-   tag there, `humanConfirmed` goes true: the pill turns from the violet to
-   the selection blue, and inference never writes that section again. It is
-   the same contract as a content answer, one level up. */
+   So `tags:<section>:<tag>` in state.steamAnswerMeta, alongside the content
+   survey's per-question entries in the same store. Three states per tag:
+     no entry           — nobody has said anything about it;
+     humanConfirmed:false — Shipmate put it there, and says so in violet;
+     humanConfirmed:true  — the developer decided it, either by ticking it
+                            or by taking it off, and inference leaves it
+                            alone for good.
+   The last one is why a REMOVAL stamps as hard as an addition: taking off a
+   suggested tag is an answer, and a re-run that quietly put it back would
+   be the worst version of this feature. */
 const STEAM_TAG_META_PREFIX = 'tags:';
-function steamTagMetaKey(sectionKey) { return STEAM_TAG_META_PREFIX + sectionKey; }
-
-/* Is this section's list Shipmate's work? An EMPTY section is nobody's, so
-   it is never painted as a suggestion. */
-function steamTagsAreInferred(sectionKey) {
-  const m = (state.steamAnswerMeta || {})[steamTagMetaKey(sectionKey)];
-  return !!(m && !m.humanConfirmed
-            && (((state.steamSubmitAnswers || {})[sectionKey]) || []).length);
+function steamTagMetaKey(sectionKey, tag) {
+  return STEAM_TAG_META_PREFIX + sectionKey + ':' + tag;
 }
-/* May inference write it? Everything that is not the developer's is, which
-   is the same rule _platformAIClass paints by: an answer is YOURS only if
-   humanConfirmed says you made it, and a re-run replacing its own earlier
-   guess is the behaviour every other questionnaire here already has. */
-function steamTagsWritable(sectionKey) {
-  const m = (state.steamAnswerMeta || {})[steamTagMetaKey(sectionKey)];
-  return !(m && m.humanConfirmed);
+function _steamTagMeta(sectionKey, tag) {
+  return (state.steamAnswerMeta || {})[steamTagMetaKey(sectionKey, tag)];
+}
+
+/* Is this tag on the card because Shipmate put it there? It has to still BE
+   there — a stale stamp for a tag nobody carries is not a suggestion. */
+function steamTagIsInferred(sectionKey, tag) {
+  const m = _steamTagMeta(sectionKey, tag);
+  if (!m || m.humanConfirmed) return false;
+  return (((state.steamSubmitAnswers || {})[sectionKey]) || []).indexOf(tag) >= 0;
+}
+/* Has the developer already ruled on it, either way? Inference never writes
+   a tag again once they have. */
+function steamTagDecided(sectionKey, tag) {
+  const m = _steamTagMeta(sectionKey, tag);
+  return !!(m && m.humanConfirmed);
+}
+/* Does this section hold any suggestion? What the card asks before it says
+   anything about suggestions at all. */
+function steamSectionHasInferred(sectionKey) {
+  return (((state.steamSubmitAnswers || {})[sectionKey]) || [])
+    .some(t => steamTagIsInferred(sectionKey, t));
 }
 /* How many of the title's tags Shipmate put there — the count the card
-   states at its foot, in the same units the total beside it uses. */
+   states at its foot, in the same deduped units the total beside it uses. */
 function steamInferredTagCount() {
   const a = state.steamSubmitAnswers || {};
   const seen = new Set();
   STEAM_TAG_SECTIONS.forEach(sec => {
-    if (!steamTagsAreInferred(sec.key)) return;
-    (a[sec.key] || []).forEach(t => seen.add(t));
+    (a[sec.key] || []).forEach(t => {
+      if (steamTagIsInferred(sec.key, t)) seen.add(t);
+    });
   });
   return seen.size;
 }

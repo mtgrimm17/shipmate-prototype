@@ -25010,7 +25010,8 @@ function toggleSteamAIType(typeId, checked) {
    for. */
 function toggleSteamTag(field, value, checked, maxCount) {
   if (!Array.isArray(state.steamSubmitAnswers[field])) state.steamSubmitAnswers[field] = [];
-  const arr = state.steamSubmitAnswers[field];
+  const arr    = state.steamSubmitAnswers[field];
+  const before = arr.slice();
   if (checked) {
     /* Add only if under this section's cap AND under Steam's twenty (v9.16).
        Two different caps: `maxCount` is how many this one question takes,
@@ -25023,23 +25024,34 @@ function toggleSteamTag(field, value, checked, maxCount) {
   } else {
     state.steamSubmitAnswers[field] = arr.filter(v => v !== value);
   }
-  /* THE PRESS TAKES THE SECTION (v9.18). Adding or removing a tag here
-     makes this list the developer's: its pill turns from the suggestion
-     violet to the selection blue, and inference never writes it again.
-     Stamped on a REMOVAL too — taking a suggested tag off is as much an
+  /* THE PRESS DECIDES THAT TAG (v9.18, per tag since v9.19). The one it
+     touched stops being a suggestion: it loses the violet, and inference
+     never writes it again. Its neighbours in the same section are left as
+     they were — which is the whole point of the v9.19 change, since a
+     section can hold the developer's tags and Shipmate's at once.
+     Stamped on a REMOVAL too: taking a suggested tag off is as much an
      answer as putting one on, and a re-run that quietly put it back would
      be the worst version of this feature. */
-  _steamTagSectionTouched(field);
+  _steamTagsDecided(field, before, state.steamSubmitAnswers[field]);
   reRenderStepModal();
   updateSteamCard();
 }
 
-/* Shared by both tag controls, so neither can forget. */
-function _steamTagSectionTouched(field) {
+/* EVERY TAG WHOSE MEMBERSHIP CHANGED, which is how neither control can
+   forget one. The top tier's third press evicts the older of two — the
+   evicted tag left because the developer pressed something, so it is their
+   decision as much as the one that arrived, and reading the difference
+   catches it without either handler having to know that rule. */
+function _steamTagsDecided(field, before, after) {
   if (typeof steamTagMetaKey !== 'function') return;
   if (!state.steamAnswerMeta) state.steamAnswerMeta = {};
-  const k = steamTagMetaKey(field);
-  state.steamAnswerMeta[k] = { ...(state.steamAnswerMeta[k] || {}), humanConfirmed: true };
+  const b = new Set(before || []);
+  const a = new Set(after  || []);
+  [...b, ...a].forEach(tag => {
+    if (b.has(tag) && a.has(tag)) return;                 // unchanged
+    const k = steamTagMetaKey(field, tag);
+    state.steamAnswerMeta[k] = { ...(state.steamAnswerMeta[k] || {}), humanConfirmed: true };
+  });
 }
 
 /* Steam's Genres checkboxes on the store form (v8.93). Uncapped: the
@@ -33637,13 +33649,14 @@ function _smSteamFlipItems(flip) {
            function and so is global by the time any of this runs, and a
            fallback that quietly stopped escaping would put "Point & Click"
            into the panel as markup. */
-        /* A SUGGESTED TAG IS VIOLET HERE TOO (v9.18). The guide is where
-           every chosen tag is visible at once, so it is the one place a
-           reader can see at a glance how much of this is Shipmate's. */
-        const aiCls = (typeof steamTagsAreInferred === 'function'
-                       && steamTagsAreInferred(sec.key)) ? ' is-ai' : '';
+        /* A SUGGESTED TAG IS VIOLET HERE TOO (v9.18), one pill at a time
+           since v9.19. With the pickers closed this is the only place every
+           chosen tag is visible at once, so it is where a reader sees how
+           much of the list is Shipmate's. */
+        const isAi = (typeof steamTagIsInferred === 'function')
+          ? (t => steamTagIsInferred(sec.key, t)) : (() => false);
         const pills = picked.map(tag =>
-          `<button type="button" class="gd-tagpill${aiCls}" title="Remove ${escHtml(tag)}"` +
+          `<button type="button" class="gd-tagpill${isAi(tag) ? ' is-ai' : ''}" title="Remove ${escHtml(tag)}"` +
           ` aria-label="Remove ${escHtml(tag)}"` +
           ` onclick="removeSteamGuideTag('${escHtml(egsJsStr(sec.key))}','${escHtml(egsJsStr(tag))}')">` +
           `${escHtml(tag)}<span class="gd-tagpill-x" aria-hidden="true">${SM_CLEAR_SVG}</span></button>`
@@ -33855,8 +33868,9 @@ function _smTabGo(set, id) {
    so a pill greys out exactly when this returns early. */
 function setSteamTopGenre(g) {
   if (typeof steamTopGenreBlocked === 'function' && steamTopGenreBlocked(g)) return;
+  const before = (state.steamSubmitAnswers.topGenres || []).slice();
   state.steamSubmitAnswers.topGenres = steamTopGenreNext(g);
-  _steamTagSectionTouched('topGenres');            // see toggleSteamTag (v9.18)
+  _steamTagsDecided('topGenres', before, state.steamSubmitAnswers.topGenres);  // see toggleSteamTag
   reRenderStepModal();
   if (typeof updateSteamCard === 'function') updateSteamCard();
 }

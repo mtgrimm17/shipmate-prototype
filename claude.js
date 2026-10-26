@@ -1596,12 +1596,18 @@ function applySteamTagResults(tagData) {
   let applied = 0;
 
   STEAM_TAG_SECTIONS.forEach(sec => {
-    if (!steamTagsWritable(sec.key)) return;
     const offered = steamSectionTags(sec).map(p => p[1]);
     const allowed = new Set(offered);
-    const rows    = Array.isArray(tagData[sec.key]) ? tagData[sec.key] : [];
-    const picked  = [];
-    let best = 0;
+    const cur     = a[sec.key] || [];
+
+    /* THE DEVELOPER'S TAGS ARE NOT UP FOR REPLACEMENT, ours are (v9.19).
+       A section is no longer all-or-nothing: a re-run keeps every tag the
+       developer ticked, drops the guesses it made last time, and offers a
+       fresh set alongside. That is the per-question behaviour every other
+       questionnaire here already has, now that a tag is the unit. */
+    const picked = cur.filter(t => !steamTagIsInferred(sec.key, t));
+    const fresh  = [];
+    const rows   = Array.isArray(tagData[sec.key]) ? tagData[sec.key] : [];
     /* The model's own order decides WHICH survive a cap — it was asked to
        put its best first — and the section's order decides how they are
        stored, so the card and the guide read in the order they offer. */
@@ -1610,15 +1616,28 @@ function applySteamTagResults(tagData) {
       const c   = r && r.confidence;
       if (!tag || !allowed.has(tag) || picked.indexOf(tag) >= 0) return;
       if (typeof c !== 'number' || c < STEAM_TAG_MIN_CONFIDENCE) return;
+      // The developer has already ruled on this one, by ticking it or by
+      // taking it off. Either way it is not ours to write again.
+      if (steamTagDecided(sec.key, tag)) return;
       if (sec.max !== -1 && picked.length >= sec.max) return;
       if (steamTagsOverMax(sec.key, picked.concat([tag]))) return;
       picked.push(tag);
-      if (c > best) best = c;
+      fresh.push([tag, c]);
     });
-    if (!picked.length) return;
+
+    /* Our last guesses that did not come back lose their stamp as well as
+       their place, so nothing is left claiming a tag the card no longer
+       carries. */
+    cur.forEach(t => {
+      if (picked.indexOf(t) < 0 && steamTagIsInferred(sec.key, t)) {
+        delete meta[steamTagMetaKey(sec.key, t)];
+      }
+    });
     a[sec.key] = offered.filter(t => picked.indexOf(t) >= 0);
-    meta[steamTagMetaKey(sec.key)] = { confidence: best, humanConfirmed: false };
-    applied += picked.length;
+    fresh.forEach(([tag, c]) => {
+      meta[steamTagMetaKey(sec.key, tag)] = { confidence: c, humanConfirmed: false };
+    });
+    applied += fresh.length;
   });
 
   console.log(`[Steam tags] Applied ${applied} tags`);
@@ -2007,15 +2026,15 @@ async function inferAllQuestionnaires() {
      (developer / App Store mapping / inference — see _giarcBranchOwners), and an
      answer stripped of it would read as the developer's and be frozen. */
   state.cqAnswerMeta    = Object.fromEntries(Object.entries(state.cqAnswerMeta).filter(([k,v]) => v.humanConfirmed || k.startsWith(GIARC_PREFIX)));
-  /* TAG SECTIONS KEEP THEIR META, for the reason the IARC keys above keep
-     theirs (v9.18). `tags:<key>` records WHO owns that section, and the
-     tags themselves are not cleared here — so a run that then fails, or
-     comes back with nothing for a section, would leave a list of
-     Shipmate's tags with no provenance on it. _platformAIClass reads a
-     value without `humanConfirmed` as Shipmate's, but steamTagsAreInferred
-     cannot: a section whose meta has gone has nothing to distinguish a
-     suggestion from an answer, and it would paint the selection blue over
-     tags no one ever looked at. A successful run overwrites these anyway. */
+  /* TAG KEYS KEEP THEIR META, for the reason the IARC keys above keep
+     theirs (v9.18). `tags:<section>:<tag>` records who put that tag there,
+     and the tags themselves are not cleared here — so a run that then
+     fails, or comes back with nothing for a section, would leave Shipmate's
+     tags with no provenance on them. _platformAIClass can read a value
+     without `humanConfirmed` as Shipmate's; steamTagIsInferred cannot,
+     because a tag with no stamp is indistinguishable from one the developer
+     ticked, and it would paint the selection blue over tags no one ever
+     looked at. A successful run rewrites these anyway. */
   state.steamAnswerMeta = Object.fromEntries(Object.entries(state.steamAnswerMeta)
     .filter(([k, v]) => v.humanConfirmed || k.startsWith(STEAM_TAG_META_PREFIX)));
 
