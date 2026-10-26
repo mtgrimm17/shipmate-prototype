@@ -33512,7 +33512,7 @@ function egsCrSearchGo(i) {
      cr:<heading>    — a heading in the section (Content's groups), the
                        Content step's own locator;
      hd:<heading>    — any other heading (Tags, Info, Steam Assets);
-     tag:<key>:<tag> — a chosen tag, listed under its category (Tags);
+     tag:<key>       — the pills under a category (Tags);
      tab:<set>:<id>  — a tab (Features' four, System Requirements' three);
      sfx:<id>        — a field (Business's price).
    ══════════════════════════════════════════════════════════════════════════ */
@@ -33535,30 +33535,40 @@ function _smSteamFlipItems(flip) {
        that goes stale the next time one is added. STEAM_TAG_SECTIONS is
        the one source, and `hd:` + the label is the heading this already
        targets. */
-    /* EVERY TAG, UNDER THE CATEGORY IT CAME FROM (v9.14, by request). The
+    /* EVERY TAG, UNDER THE CATEGORY IT CAME FROM — AS PILLS (v9.15). The
        seven section rows are still here and still tick on their own
-       counts; beneath each one, a row per tag currently chosen in it,
-       appearing and disappearing as they are picked. The panel is
-       recomputed from state on every repaint (_chkGroups is wrapped, not
-       cached), so nothing has to push an update — a tag row exists
-       exactly while its tag is selected.
+       counts; beneath each one, the tags chosen in it.
 
-       A TAG ROW IS ALWAYS DONE. It is not an outstanding task; it is the
-       answer, listed. `gd-task-sub` is what makes it read as belonging to
-       the row above rather than as an eighth category.
+       ONE ROW, NOT ONE PER TAG (v9.15, by request). They were a row each,
+       and a .gd-task is 36.5px tall whatever is in it: six tags cost 219px
+       of a panel whose whole argument is that it fits without scrolling.
+       As pills on a single wrapping row the same six cost about fifty, and
+       the panel stays a glance rather than a scroll.
 
-       EACH STEP IS UNIQUE, because renderGuide's decoration pass maps its
-       rows BY step (`byStep`) and duplicates would collide. `tag:` carries
-       the section key so the press can find the heading to jump to. */
+       THE LABEL CARRIES MARKUP, which this builder allows — renderGuide
+       interpolates `i.label` into .gd-task-label rather than setting
+       textContent. Every tag is escaped on the way in: "Point & Click" is
+       a real genre and would otherwise arrive as an entity.
+
+       ALWAYS DONE. It is not an outstanding task; it is the answer,
+       listed. And its step is unique per section because renderGuide's
+       decoration pass maps rows BY step and duplicates would collide —
+       `tag:<key>` with no tag name, since one row now covers them all. */
     case 'tags': {
       const secs = (typeof STEAM_TAG_SECTIONS !== 'undefined') ? STEAM_TAG_SECTIONS : [];
       const out = [];
       secs.forEach(sec => {
         const picked = a[sec.key] || [];
         out.push(row(sec.label, picked.length, 'hd:' + sec.label, !sec.required));
-        picked.forEach(tag => out.push(Object.assign(
-          row(tag, true, 'tag:' + sec.key + ':' + tag),
-          { cls: 'gd-task-sub' })));
+        if (!picked.length) return;
+        /* escHtml, not a guarded fallback: it is render.js's top-level
+           function and so is global by the time any of this runs, and a
+           fallback that quietly stopped escaping would put "Point & Click"
+           into the panel as markup. */
+        const pills = picked.map(tag =>
+          `<span class="gd-tagpill">${escHtml(tag)}</span>`).join('');
+        out.push(Object.assign(row(pills, true, 'tag:' + sec.key),
+                               { cls: 'gd-task-pills' }));
       });
       return out;
     }
@@ -33648,9 +33658,10 @@ function _smTabGo(set, id) {
   window.chkGoStep = function (step) {
     if (typeof step === 'string') {
       if (step.slice(0, 3) === 'hd:')  return _smHeadGo(step.slice(3));
-      /* tag:<sectionKey>:<label> — a chosen tag in Steam - Tags (v9.14).
-         The label is only there to keep the step unique per row; where it
-         goes is its section's heading, same as the category row above it. */
+      /* tag:<sectionKey> — the pills under a category in Steam - Tags
+         (v9.15). Where it goes is that section's heading, same as the
+         category row above it. (The split survives a trailing name: v9.14
+         put one there when each tag had its own row.) */
       if (step.slice(0, 4) === 'tag:') {
         const key = step.slice(4).split(':')[0];
         const sec = (typeof STEAM_TAG_SECTIONS !== 'undefined' ? STEAM_TAG_SECTIONS : [])

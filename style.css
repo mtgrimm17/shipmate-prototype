@@ -32491,22 +32491,41 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .steam-spp-social-linkbar { gap: 7px; }
 .bc-ico.has-mark > svg { width: 62%; height: 62%; display: block; color: #fff; }
 
-/* A chosen tag, hung under its category in Shippy's list (v9.14). Indented
-   to the category's label rather than its tick, and a shade quieter: the
-   row above is the task, these are what has been done about it. */
-.gd-task.gd-task-sub {
-  padding-left: 34px;
-  font-size: 12px;
-  opacity: .78;
+/* The tags chosen in a category, hung under it in Shippy's list as pillboxes
+   (v9.15). v9.14 gave each tag a row of its own, and a .gd-task is a fixed
+   36.5px whatever is in it, so six tags cost 219px of a panel whose whole
+   argument is that it is read at a glance. One wrapping row of pills costs
+   about fifty.
+
+   HEIGHT MUST BE UNSET, not just raised: .gd-task sets `height: 36.5px`, so
+   a second line of pills would be clipped rather than push the row open.
+
+   PADDING-LEFT 41px puts the first pill under the category's LABEL, not
+   under its tick: the row's own 10px, the 20px tick, the 11px gap. */
+.gd-task.gd-task-pills {
+  height: auto;
+  min-height: 0;
+  align-items: flex-start;
+  padding: 1px 10px 7px 41px;
 }
-.gd-task.gd-task-sub .gd-task-box { display: none; }
-.gd-task.gd-task-sub .gd-task-label::before {
-  content: '';
-  display: inline-block;
-  width: 5px; height: 5px;
-  margin-right: 8px;
-  vertical-align: 1px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: .5;
+.gd-task.gd-task-pills .gd-task-box { display: none; }
+.gd-task.gd-task-pills .gd-task-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
 }
+.gd-tagpill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .09);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 15px;
+  letter-spacing: 0;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.gd-task.gd-task-pills:hover .gd-tagpill { background: rgba(255, 255, 255, .16); }
