@@ -1563,6 +1563,68 @@ function applySteamResults(steamData) {
   return applied;
 }
 
+/* ══ STEAM - TAGS, FROM THE SAME CONTEXT (v9.18, by request) ════════════
+   The tags come out of the one unified call every other questionnaire
+   comes out of, so they are reasoned from exactly what a content rating is
+   reasoned from: Game Details, the screenshots, the onboarding answers and
+   whatever any other platform's questionnaire already says.
+
+   EIGHTY, NOT THE STEAM SURVEY'S SIXTY-FIVE. That block buys its lower bar
+   with the cross-platform mapping rules written above it — the model is
+   handed iOS answers as direct evidence for each Steam item. Nothing maps
+   an iOS answer onto "Roguelike"; a tag is inferred from the game itself
+   and nothing else, so it is held to the ordinary bar. And the costs run
+   the other way round: a survey answer that defaults to "no" is harmless,
+   where a tag added is a claim on the store page.
+
+   SECTION BY SECTION, IN SECTION ORDER, which is what makes the twenty
+   work: steamTagsOverMax reads the answer store, and the store is already
+   updated for the sections written before this one, so the cap counts the
+   same deduped total the controls count. Sections later in the list are
+   the ones that lose out, which is the right way round — the top tier is
+   the one Steam requires.
+
+   NAMES ARE VALIDATED, NEVER TRUSTED. A tag not offered in that section is
+   dropped rather than matched loosely: the lists are Steam's and a near
+   miss is not a tag. */
+const STEAM_TAG_MIN_CONFIDENCE = 80;
+
+function applySteamTagResults(tagData) {
+  if (!tagData || typeof tagData !== 'object') return 0;
+  const a    = state.steamSubmitAnswers;
+  const meta = state.steamAnswerMeta;
+  let applied = 0;
+
+  STEAM_TAG_SECTIONS.forEach(sec => {
+    if (!steamTagsWritable(sec.key)) return;
+    const offered = steamSectionTags(sec).map(p => p[1]);
+    const allowed = new Set(offered);
+    const rows    = Array.isArray(tagData[sec.key]) ? tagData[sec.key] : [];
+    const picked  = [];
+    let best = 0;
+    /* The model's own order decides WHICH survive a cap — it was asked to
+       put its best first — and the section's order decides how they are
+       stored, so the card and the guide read in the order they offer. */
+    rows.forEach(r => {
+      const tag = (r && typeof r.tag === 'string') ? r.tag.trim() : '';
+      const c   = r && r.confidence;
+      if (!tag || !allowed.has(tag) || picked.indexOf(tag) >= 0) return;
+      if (typeof c !== 'number' || c < STEAM_TAG_MIN_CONFIDENCE) return;
+      if (sec.max !== -1 && picked.length >= sec.max) return;
+      if (steamTagsOverMax(sec.key, picked.concat([tag]))) return;
+      picked.push(tag);
+      if (c > best) best = c;
+    });
+    if (!picked.length) return;
+    a[sec.key] = offered.filter(t => picked.indexOf(t) >= 0);
+    meta[steamTagMetaKey(sec.key)] = { confidence: best, humanConfirmed: false };
+    applied += picked.length;
+  });
+
+  console.log(`[Steam tags] Applied ${applied} tags`);
+  return applied;
+}
+
 /* ── Steam Content Rating inference ─────────────────────────── */
 
 async function inferSteamCR() {
@@ -1817,6 +1879,33 @@ ${matureIds.join(',\n')}
   }`;
   }
 
+  /* ── Steam tags schema and taxonomy (v9.18) ────────────────────────────
+     The whole taxonomy goes in, by section, because the alternative is a
+     model naming tags Steam does not have: ~1,200 tokens buys every answer
+     being a real tag in the right section. steamSectionTags is the same
+     reader the card draws from, so the software genres Steam hides from a
+     game are not offered here either. */
+  let steamTagsSchema = '', steamTagList = '';
+  if (activePids.includes('steam')) {
+    const secLines = STEAM_TAG_SECTIONS.map(sec => {
+      const cap = sec.max === -1 ? 'no limit' : `at most ${sec.max}`;
+      return `${sec.label} [${sec.key}] (${cap}${sec.required ? ', REQUIRED' : ''}): `
+           + steamSectionTags(sec).map(p => p[1]).join(', ');
+    }).join('\n\n');
+    steamTagList = `
+
+STEAM STORE TAGS — the only tags that exist, listed under the section each
+belongs to. Copy names EXACTLY as written here:
+${secLines}
+`;
+    steamTagsSchema = `
+  "steamTags": {
+${STEAM_TAG_SECTIONS.map(sec =>
+  `    "${sec.key}": [ { "tag": "<exact name from that section's list>", "confidence": 0-100 } ]`
+).join(',\n')}
+  }`;
+  }
+
   // ── IARC schema (Google Play AND Epic Games Store — one questionnaire) ────────
   // Asked whenever either store is active. The android block above is the older
   // consolidated questionnaire and is kept for what still reads it; the tree
@@ -1833,14 +1922,15 @@ IARC CONTENT QUESTIONNAIRE (used by Google Play and the Epic Games Store). Keys,
 ${_iarcTreeForPrompt()}
 ` : '';
 
-  const schemaSections = [iosSchema, androidSchema, steamSchema, iarcSchema].filter(Boolean).join(',\n');
+  const schemaSections = [iosSchema, androidSchema, steamSchema, steamTagsSchema, iarcSchema]
+    .filter(Boolean).join(',\n');
 
   return `You are an expert game content analyst pre-filling platform questionnaires for a game submission tool.
 
 ${ctx}
 
 Using ALL of the above information, fill out the content questionnaires for the active platforms: ${activePids.join(', ')}.
-${iarcTree}
+${iarcTree}${steamTagList}
 CROSS-PLATFORM INFERENCE RULES — when iOS answers are present, use them as direct evidence for equivalent Android/Steam fields:
 - iOS "Realistic Violence: none"       → Steam rv_blood=no, rv_killing=no, rv_minorities=no (confidence ≥90); Android violence questions: no
 - iOS "Realistic Violence: infrequent" → Steam rv_blood=yes (confidence ≥85)
@@ -1871,6 +1961,12 @@ IARC GUIDELINES (the "iarc" block):
 - Keep it consistent with any iOS answers above: iOS "none" for a theme means the matching IARC top-level question is No; iOS Realistic or Extended Graphic Violence means violence against humans with a Realistic setting; iOS Horror/Fear "infrequent|frequent" means Scary elements at least; iOS hasIAP "yes" means Purchases of digital goods; iOS lootBoxes "yes" means chance-based purchases.
 - Nazi symbols, Korean national identity, terrorism advocacy and realistic crime techniques: "No" unless the game data clearly says otherwise.
 - Only include answers with confidence >= 80; leave the rest out.
+
+STEAM TAGS GUIDELINES (the "steamTags" block):
+- Every tag must be copied EXACTLY from its own section's list above. A name that is not on that section's list is discarded, so do not invent, translate or abbreviate one.
+- Respect each section's maximum, and Steam's limit of ${STEAM_TAG_TOTAL_MAX} tags across all sections together. Put your best first in each array: anything past a limit is dropped from the end.
+- A tag says what the game IS — it is how a player finds it in the store, not a content declaration. A handful of accurate tags beats a long list of plausible ones, so leave a section empty rather than filling it.
+- Only include tags with confidence >= ${STEAM_TAG_MIN_CONFIDENCE}; leave the rest out.
 
 ANDROID/STEAM CONFIDENCE THRESHOLDS:
 - Answer Android questions when confidence >= 80
@@ -1911,7 +2007,17 @@ async function inferAllQuestionnaires() {
      (developer / App Store mapping / inference — see _giarcBranchOwners), and an
      answer stripped of it would read as the developer's and be frozen. */
   state.cqAnswerMeta    = Object.fromEntries(Object.entries(state.cqAnswerMeta).filter(([k,v]) => v.humanConfirmed || k.startsWith(GIARC_PREFIX)));
-  state.steamAnswerMeta = Object.fromEntries(Object.entries(state.steamAnswerMeta).filter(([,v]) => v.humanConfirmed));
+  /* TAG SECTIONS KEEP THEIR META, for the reason the IARC keys above keep
+     theirs (v9.18). `tags:<key>` records WHO owns that section, and the
+     tags themselves are not cleared here — so a run that then fails, or
+     comes back with nothing for a section, would leave a list of
+     Shipmate's tags with no provenance on it. _platformAIClass reads a
+     value without `humanConfirmed` as Shipmate's, but steamTagsAreInferred
+     cannot: a section whose meta has gone has nothing to distinguish a
+     suggestion from an answer, and it would paint the selection blue over
+     tags no one ever looked at. A successful run overwrites these anyway. */
+  state.steamAnswerMeta = Object.fromEntries(Object.entries(state.steamAnswerMeta)
+    .filter(([k, v]) => v.humanConfirmed || k.startsWith(STEAM_TAG_META_PREFIX)));
 
   const prompt     = buildUnifiedInferencePrompt();
   const scrshots   = _buildScreenshotContent();
@@ -1969,6 +2075,11 @@ async function inferAllQuestionnaires() {
   // Apply Steam results
   if (activePids.includes('steam') && parsed.steam) {
     applySteamResults(parsed.steam);
+  }
+
+  // Steam - Tags, from the same response (v9.18)
+  if (activePids.includes('steam') && parsed.steamTags) {
+    applySteamTagResults(parsed.steamTags);
   }
 
   // Apply IARC (Google Play + Epic), then let the App Store answers — now

@@ -22163,8 +22163,14 @@ function buildSteamContentRatingSection() {
    Everything a reader can see is v9.08's and unchanged — the wide pill
    that wraps, the three-column list, the count in the dropdown head, the
    heading carrying the hint. */
+/* WHOSE LIST THIS IS (v9.18): the pill wears the suggestion violet and the
+   ticked rows wear their own mark, which is exactly how Epic's multi-select
+   already says it (renderGIARCQuestion below — `ai-confident` on the pill,
+   `is-ai` on the rows). Pressing anything in here turns the whole section
+   blue, because a press takes the section (toggleSteamTag, app.js). */
 function _steamTagPicker(field, list, max, question, tip) {
   const cur    = state.steamSubmitAnswers[field] || [];
+  const ai     = typeof steamTagsAreInferred === 'function' && steamTagsAreInferred(field);
   const key    = 'steam:' + field;
   const open   = state.giarcPickerOpen === key;
   const capped = max !== -1;
@@ -22183,7 +22189,7 @@ function _steamTagPicker(field, list, max, question, tip) {
        counts it once — stays available at the cap. */
     const off = !on && (full || (typeof steamTagsOverMax === 'function'
                                  && steamTagsOverMax(field, cur.concat([g]))));
-    return `<button type="button" class="loc-dd-item giarc-dd-item${on ? ' is-on' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
+    return `<button type="button" class="loc-dd-item giarc-dd-item${on ? ' is-on' : ''}${on && ai ? ' is-ai' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
                     data-tagid="${escHtml(tagid)}"
                     onclick="event.stopPropagation(); ${off ? '' : `toggleSteamTag('${field}','${egsJsStr(g)}',${!on},${max})`}">
               <span class="giarc-dd-box"></span><span class="loc-dd-name">${escHtml(g)}</span>
@@ -22199,7 +22205,10 @@ function _steamTagPicker(field, list, max, question, tip) {
     <div class="giarc-card giarc-depth-1 giarc-inline steam-tag-block" data-key="${key}">
       <div class="giarc-row">
         <div class="loc-primary-wrap sw-select-wrap giarc-picker steam-tag-picker${open ? ' is-open' : ''}" data-giarc-picker="${key}">
-          <button type="button" class="loc-primary-pill${cur.length ? '' : ' is-empty'}" onclick="toggleGiarcPicker(event,'${key}')">
+          <button type="button" class="loc-primary-pill${
+              !cur.length ? ' is-empty' : ai ? ' ai-confident' : ''}"${
+              ai ? ' title="Shipmate suggested these. Press any tag to make the list yours."' : ''}
+                  onclick="toggleGiarcPicker(event,'${key}')">
             <span class="loc-primary-name">${escHtml(summary)}</span>
             <svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
@@ -22241,10 +22250,13 @@ function _steamTopGenrePills() {
      is the same pair of functions `setSteamTopGenre` returns early on, so
      a pill greys exactly when the handler would refuse it — never for the
      two-pick cap, which still swaps. */
+  /* The top tier is on show rather than in a picker, so its own lit pills
+     carry the violet instead of a summary pill doing it for them (v9.18). */
+  const ai = typeof steamTagsAreInferred === 'function' && steamTagsAreInferred('topGenres');
   const pills = steamSectionTags(STEAM_TAG_SECTIONS[0]).map(([tagid, g]) => {
     const on  = cur.includes(g);
     const off = !on && typeof steamTopGenreBlocked === 'function' && steamTopGenreBlocked(g);
-    return `<button type="button" class="ob-preset-pill${on ? ' is-active' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
+    return `<button type="button" class="ob-preset-pill${on ? ' is-active' : ''}${on && ai ? ' ai-confident' : ''}${off ? ' is-disabled' : ''}"${off ? ' aria-disabled="true"' : ''}
                     data-tagid="${escHtml(tagid)}"
                     onclick="${off ? '' : `setSteamTopGenre('${egsJsStr(g)}')`}">${escHtml(g)}</button>`;
   }).join('');
@@ -22300,6 +22312,14 @@ function buildSteamStoreTagsSection() {
   const all  = (typeof steamWizardTags === 'function') ? steamWizardTags() : [];
   const over = all.length > STEAM_TAG_TOTAL_MAX;
   const full = !over && all.length >= STEAM_TAG_TOTAL_MAX;
+  /* THE COUNT GOES BESIDE THE OTHER COUNT (v9.18), not in a pinned line of
+     its own at the top the way Content Rating's does. That one is pinned
+     because its card is thirty questions long and the number changes as you
+     answer them; this card's own total already lives here, and two counts
+     about the same twenty tags belong on the same line rather than at
+     opposite ends of the page. The violet is the real indicator — this
+     sentence only says how to undo it. */
+  const inferred = (typeof steamInferredTagCount === 'function') ? steamInferredTagCount() : 0;
 
   return `
     <div class="giarc-root giarc-flat steam-tags">
@@ -22308,6 +22328,7 @@ function buildSteamStoreTagsSection() {
         all.length} of ${STEAM_TAG_TOTAL_MAX} tags${
         over ? ' — Steam accepts twenty' :
         full ? ' — remove one to add another' : ''}</div>
+      ${inferred ? `<div class="steam-tag-inferred">${inferred} suggested by Shipmate — press any tag to make that section yours.</div>` : ''}
     </div>`;
 }
 

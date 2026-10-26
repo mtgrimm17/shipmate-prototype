@@ -25023,8 +25023,23 @@ function toggleSteamTag(field, value, checked, maxCount) {
   } else {
     state.steamSubmitAnswers[field] = arr.filter(v => v !== value);
   }
+  /* THE PRESS TAKES THE SECTION (v9.18). Adding or removing a tag here
+     makes this list the developer's: its pill turns from the suggestion
+     violet to the selection blue, and inference never writes it again.
+     Stamped on a REMOVAL too — taking a suggested tag off is as much an
+     answer as putting one on, and a re-run that quietly put it back would
+     be the worst version of this feature. */
+  _steamTagSectionTouched(field);
   reRenderStepModal();
   updateSteamCard();
+}
+
+/* Shared by both tag controls, so neither can forget. */
+function _steamTagSectionTouched(field) {
+  if (typeof steamTagMetaKey !== 'function') return;
+  if (!state.steamAnswerMeta) state.steamAnswerMeta = {};
+  const k = steamTagMetaKey(field);
+  state.steamAnswerMeta[k] = { ...(state.steamAnswerMeta[k] || {}), humanConfirmed: true };
 }
 
 /* Steam's Genres checkboxes on the store form (v8.93). Uncapped: the
@@ -25647,7 +25662,11 @@ async function openStorePreviewSection(pid, target) {
   // question AND (before the buildIapSection fix below) the IAP Products
   // list behind the "All" toggle. Content Questions still needs this (it
   // has real AI answers to show), so it keeps re-inferring on every open.
-  const needsInference = (target === 'content')
+  /* AND TAGS, SINCE v9.18, BY THE RULE THE NOTE ABOVE STATES. Business
+     Questions was taken off this list because it had no inferred answers to
+     show; Steam - Tags now does, out of the same unified call, so opening
+     it is worth the wait for the same reason Content Questions is. */
+  const needsInference = (target === 'content' || target === 'tags')
     && CLAUDE_API_KEY
     && !state.platformInferenceCache?.['unified:questionnaire'];
 
@@ -33618,8 +33637,13 @@ function _smSteamFlipItems(flip) {
            function and so is global by the time any of this runs, and a
            fallback that quietly stopped escaping would put "Point & Click"
            into the panel as markup. */
+        /* A SUGGESTED TAG IS VIOLET HERE TOO (v9.18). The guide is where
+           every chosen tag is visible at once, so it is the one place a
+           reader can see at a glance how much of this is Shipmate's. */
+        const aiCls = (typeof steamTagsAreInferred === 'function'
+                       && steamTagsAreInferred(sec.key)) ? ' is-ai' : '';
         const pills = picked.map(tag =>
-          `<button type="button" class="gd-tagpill" title="Remove ${escHtml(tag)}"` +
+          `<button type="button" class="gd-tagpill${aiCls}" title="Remove ${escHtml(tag)}"` +
           ` aria-label="Remove ${escHtml(tag)}"` +
           ` onclick="removeSteamGuideTag('${escHtml(egsJsStr(sec.key))}','${escHtml(egsJsStr(tag))}')">` +
           `${escHtml(tag)}<span class="gd-tagpill-x" aria-hidden="true">${SM_CLEAR_SVG}</span></button>`
@@ -33832,6 +33856,7 @@ function _smTabGo(set, id) {
 function setSteamTopGenre(g) {
   if (typeof steamTopGenreBlocked === 'function' && steamTopGenreBlocked(g)) return;
   state.steamSubmitAnswers.topGenres = steamTopGenreNext(g);
+  _steamTagSectionTouched('topGenres');            // see toggleSteamTag (v9.18)
   reRenderStepModal();
   if (typeof updateSteamCard === 'function') updateSteamCard();
 }

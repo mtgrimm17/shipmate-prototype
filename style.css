@@ -32487,6 +32487,34 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
    colour — the checklist's own mark, the same one the panel's counter
    turns. */
 .steam-tags .steam-tag-total.is-full { color: var(--guide-mark); }
+/* How many of them Shipmate put there (v9.18), under the total rather than
+   in a pinned line of its own — see buildSteamStoreTagsSection's note. The
+   violet names the colour the suggestion pills are wearing, so the sentence
+   and the thing it is about say the same word. */
+.steam-tags .steam-tag-inferred {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--pill-ai-color);
+}
+
+/* A TOP-LEVEL GENRE SHIPMATE PICKED (v9.18). The tier is on show rather
+   than behind a picker, so its lit pills carry the violet themselves where
+   every other section lets its summary pill carry it. Same tokens as the
+   content answers' `.ai-confident`, stated against .is-active so it beats
+   the selection blue on weight rather than order. */
+.steam-top-pills .ob-preset-pill.is-active.ai-confident {
+  background: var(--pill-ai-bg);
+  color: var(--pill-ai-color);
+}
+.steam-top-pills .ob-preset-pill.is-active.ai-confident:hover {
+  background: var(--pill-ai-bg-hover);
+  color: var(--pill-ai-color-hover);
+}
+
+/* And in Shippy, where every chosen tag is visible at once (v9.18). */
+.gd-tagpill.is-ai { background: var(--pill-ai-bg); color: var(--pill-ai-color); }
+.gd-tagpill.is-ai:hover { background: var(--pill-ai-bg-hover); color: var(--pill-ai-color-hover); }
 
 /* A TAG THE TWENTY WOULD REFUSE (v9.16). The same half-strength the
    pickers' own capped rows wear (.steam-tag-dd-grid .giarc-dd-item

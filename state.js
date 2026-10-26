@@ -7769,6 +7769,52 @@ function steamTopGenreBlocked(g) {
       && steamTagsOverMax('topGenres', steamTopGenreNext(g));
 }
 
+/* ══ WHOSE TAGS THESE ARE (v9.18) ════════════════════════════════════════
+   Shipmate infers Steam - Tags from the same context it infers a content
+   rating from, so the card now needs what every inferred answer in this
+   app needs: a way to say "this one is ours, not yours".
+
+   PROVENANCE IS PER SECTION, NOT PER TAG, because a multi-select's answer
+   is the whole list rather than one option — which is how Epic's own
+   pickers already paint it (renderGIARCQuestion, render.js: the pill
+   carries `ai-confident`, the ticked rows carry `is-ai`). `tags:<key>` in
+   state.steamAnswerMeta is that record, alongside the content survey's
+   per-question entries in the same store.
+
+   TOUCHING A SECTION TAKES IT. The moment the developer adds or removes a
+   tag there, `humanConfirmed` goes true: the pill turns from the violet to
+   the selection blue, and inference never writes that section again. It is
+   the same contract as a content answer, one level up. */
+const STEAM_TAG_META_PREFIX = 'tags:';
+function steamTagMetaKey(sectionKey) { return STEAM_TAG_META_PREFIX + sectionKey; }
+
+/* Is this section's list Shipmate's work? An EMPTY section is nobody's, so
+   it is never painted as a suggestion. */
+function steamTagsAreInferred(sectionKey) {
+  const m = (state.steamAnswerMeta || {})[steamTagMetaKey(sectionKey)];
+  return !!(m && !m.humanConfirmed
+            && (((state.steamSubmitAnswers || {})[sectionKey]) || []).length);
+}
+/* May inference write it? Everything that is not the developer's is, which
+   is the same rule _platformAIClass paints by: an answer is YOURS only if
+   humanConfirmed says you made it, and a re-run replacing its own earlier
+   guess is the behaviour every other questionnaire here already has. */
+function steamTagsWritable(sectionKey) {
+  const m = (state.steamAnswerMeta || {})[steamTagMetaKey(sectionKey)];
+  return !(m && m.humanConfirmed);
+}
+/* How many of the title's tags Shipmate put there — the count the card
+   states at its foot, in the same units the total beside it uses. */
+function steamInferredTagCount() {
+  const a = state.steamSubmitAnswers || {};
+  const seen = new Set();
+  STEAM_TAG_SECTIONS.forEach(sec => {
+    if (!steamTagsAreInferred(sec.key)) return;
+    (a[sec.key] || []).forEach(t => seen.add(t));
+  });
+  return seen.size;
+}
+
 const STEAM_AI_LIVE_TYPES = ['Code','Text','Textures','3D Models','Sound Effects','Music','Voice','Other'];
 
 /* ══ ACCESSIBILITY, IN STEAM'S OWN FOUR GROUPS (v8.93) ═══════════
