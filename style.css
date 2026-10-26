@@ -32378,3 +32378,36 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .sm-cr-deep.is-spotlight :has(.is-spotlit) > *:not(.is-spotlit):not(:has(.is-spotlit)):not(.cr-pinned),
 .sm-cr-deep.is-spotlight > *:not(.is-spotlit):not(:has(.is-spotlit)):not(.cr-pinned) { opacity: .3 !important; }
 .sm-cr-deep.is-spotlight .is-spotlit { opacity: 1 !important; }
+
+/* Search results (v9.06, _egsSearchTree): the group's name, then flat rows
+   of matches; a run that hangs from the same place gets its path once above
+   it as a quiet caption. No indents, no rules — the tree read as clutter. */
+.sm-cr-results .sm-cr-group {
+  margin: 16px 0 2px; font-size: 11px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: .04em; line-height: 1.2; color: rgba(255,255,255,.55);
+}
+.sm-cr-path { margin: 8px 0 1px; font: 10.5px/1.35 var(--mono); color: rgba(255,255,255,.38); }
+.sm-cr-node {
+  display: flex; align-items: flex-start; gap: 9px; width: auto;
+  margin: 0 -10px; padding: 6px 10px;
+  border: 0; border-radius: 8px; background: none; text-align: left; cursor: pointer;
+  font: 12.5px/1.4 var(--mono); color: var(--text); transition: background .12s;
+}
+.sm-cr-node:hover { background: rgba(255,255,255,.08); }
+.sm-cr-node-dot {
+  flex: none; width: 14px; height: 14px; margin-top: 2px; border-radius: 50%;
+  background: var(--guide-mark-dim); display: flex; align-items: center; justify-content: center;
+}
+.sm-cr-node.is-done .sm-cr-node-dot { background: var(--guide-mark); }
+.sm-cr-node-dot svg { width: 9px; height: 9px; }
+.sm-cr-node-label { min-width: 0; }
+.sm-cr-node-label mark { background: rgba(160,120,255,.32); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* A PICKER OPENED ON A GREYED ROW IS OPAQUE (v9.06). Jaco: "when things are
+   greyed out, the multipicker is transparent." The preview's .38 is on the
+   row's card, and opacity applies to everything inside it — the dropdown
+   included — and it also makes the card a stacking context, so the greyed
+   rows after it painted through the list. The card with an open picker comes
+   up to full and above its siblings while it is open. */
+.giarc-flat .giarc-preview > .giarc-card:has(.giarc-picker.is-open) { opacity: 1; position: relative; z-index: 20; }
+.giarc-flat .giarc-card:has(.giarc-picker.is-open) { position: relative; z-index: 20; }

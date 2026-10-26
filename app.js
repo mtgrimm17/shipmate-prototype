@@ -33144,25 +33144,129 @@ function _egsSearchPaint() {
   const fld = card.querySelector('.sm-cr-search-field');
   if (fld) fld.classList.toggle('is-filled', !!q);
   if (!live) { _egsSearchHits = []; return; }
-  _egsSearchHits = _egsSearch(q);
-  const rows = _egsSearchHits.map((r, i) => `
-    <button type="button" class="gd-task sm-cr-hit${_egsHitAnswered(r) ? ' is-done' : ''}" onclick="egsCrSearchGo(${i})">
-      <span class="gd-task-box">${_egsHitAnswered(r) && typeof GUIDE_CHECK_SVG !== 'undefined' ? GUIDE_CHECK_SVG : ''}</span>
-      <span class="sm-cr-hit-text"><span class="gd-task-label">${_egsMark(r.label, q)}</span>${r.crumb ? `<span class="sm-cr-hit-crumb">${escHtml(r.crumb)}</span>` : ''}</span>
-    </button>`).join('');
+  const matches = _egsSearch(q);
+  const tree = _egsSearchTree(matches);
+  _egsSearchHits = tree.flat;
+  const rows = tree.html(q);
   const block = document.createElement('div');
   block.className = 'sm-cr-results';
   if (line) {
-    const n = _egsSearchHits.length;
+    const n = matches.length;
     const cnt = document.createElement('div');
     cnt.className = line.className.replace(/\bsm-cr-line-moved\b/, '') + ' sm-cr-line-moved sm-cr-count';
     cnt.textContent = n ? `${n} ${n === 1 ? 'match' : 'matches'} for “${q.trim()}”.` : `No matches for “${q.trim()}”.`;
     line.after(cnt);
   }
-  block.innerHTML = `<div class="guide-tasks-head"><span>Results</span></div>
-    ${rows ? `<div class="guide-tasks">${rows}</div>` : `<div class="sm-cr-empty">No question mentions “${escHtml(q.trim())}”.</div>`}`;
+  block.innerHTML = rows || `<div class="sm-cr-empty">No question mentions “${escHtml(q.trim())}”.</div>`;
   const bar = card.querySelector('.sm-cr-search');
   card.insertBefore(block, bar || null);
+}
+
+/* RESULTS ARE A TREE, IN THE FORM'S OWN ORDER (v9.06). Jaco: "creo que
+   deberíamos mejorar cómo se muestran los resultados… teniendo que hay
+   preguntas parent y subpreguntas, ¿podría organizarse según la jerarquía?"
+   A flat list ranked by score put "Level of Blood…" twice with nothing but a
+   grey crumb to say which was humans' and which non-humans'. Now each match
+   brings the rows above it — its topic, its type — as context, so the list
+   is the questionnaire cut down to what matched: grouped under the group
+   name, indented by level, in the order the form asks them. Context rows are
+   quieter and still pressable; matches carry the mark and the tick. */
+function _egsSearchNodeOf(key) {
+  // The row a question is drawn as: a type option for a Types question's
+  // option, nothing for a Types question itself or an absorbed follow-up.
+  return { kind: 'q', key, id: key };
+}
+function _egsSearchParentNode(key) {
+  const TR = window.EGS_TYPE_ROWS || {};
+  for (let up = _egsParentOf(key); up; up = _egsParentOf(up.q.key)) {
+    if (TR[up.q.key]) return { kind: 'type', key: up.q.key, opt: up.opt.index, id: up.q.key + '#' + up.opt.index, from: up.q.key };
+    if (_egsAbsorbedKey(up.q.key)) continue;                       // drawn inside its type's row
+    return { kind: 'q', key: up.q.key, id: up.q.key, from: up.q.key };
+  }
+  return null;
+}
+function _egsAbsorbedKey(k) {
+  const up = _egsParentOf(k);
+  return !!(up && (window.EGS_TYPE_ROWS || {})[up.q.key] && _egsAbsorbed(up.opt.child) && _egsAbsorbed(up.opt.child).key === k);
+}
+function _egsSearchOrder() {
+  if (_egsSearchOrder.m) return _egsSearchOrder.m;
+  const TR = window.EGS_TYPE_ROWS || {}, m = new Map();
+  let n = 0;
+  const visit = key => {
+    const q = GOOGLE_IARC_BY_KEY[key]; if (!q) return;
+    if (TR[key]) {
+      giarcOptionEntries(q).forEach(o => {
+        m.set(key + '#' + o.index, n++);
+        const ab = _egsAbsorbed(o.child);
+        if (ab) giarcOptionEntries(ab).forEach(x => giarcChildKeysForOption(x.child).forEach(visit));
+        else giarcChildKeysForOption(o.child).forEach(visit);
+      });
+      return;
+    }
+    m.set(key, n++);
+    giarcOptionEntries(q).forEach(o => giarcChildKeysForOption(o.child).forEach(visit));
+  };
+  (typeof GIARC_TOPIC_ORDER !== 'undefined' ? GIARC_TOPIC_ORDER : GOOGLE_IARC_TOP_LEVEL_KEYS).forEach(visit);
+  return (_egsSearchOrder.m = m);
+}
+function _egsSearchTree(matches) {
+  const idx = new Map(_egsSearchIndex().map(r => [r.kind === 'type' ? r.key + '#' + r.opt : r.key, r]));
+  const order = _egsSearchOrder();
+  const nodes = new Map();
+  const add = (id, base) => {
+    if (!nodes.has(id)) nodes.set(id, { ...base, id, match: false, kids: new Set(), parent: null });
+    return nodes.get(id);
+  };
+  matches.forEach(r => {
+    const id = r.kind === 'type' ? r.key + '#' + r.opt : r.key;
+    let node = add(id, r);
+    node.match = true;
+    for (let p = _egsSearchParentNode(r.key); p; p = _egsSearchParentNode(p.from)) {
+      const pr = idx.get(p.id) || { kind: p.kind, key: p.key, opt: p.opt, label: p.key };
+      const pn = add(p.id, pr);
+      pn.kids.add(node.id);
+      node.parent = pn.id;
+      node = pn;
+    }
+  });
+  const ord = id => order.has(id) ? order.get(id) : 1e6;
+  const roots = [...nodes.values()].filter(n => !n.parent).sort((a, b) => ord(a.id) - ord(b.id));
+  const groupOf = k => (GIARC_RAIL_GROUPS.find(g => g.keys.some(t => 'google.content.' + t === k)) || {}).label || '';
+  const flat = [];
+  const walk = (n, depth) => {
+    n.depth = depth;
+    flat.push(n);
+    [...n.kids].map(id => nodes.get(id)).sort((a, b) => ord(a.id) - ord(b.id)).forEach(k => walk(k, depth + 1));
+  };
+  roots.forEach(r => walk(r, 0));
+  /* …AND DRAWN FLAT, WITH THE PATH AS A CAPTION (v9.06). Jaco, of the
+     indented tree: "too messy." The order and the grouping stay; the levels
+     stop being rows. Only matches are rows, all at one indent, and a run of
+     matches that hang from the same place gets that place once above it, as
+     a quiet caption ("Blood, Violence… › Against humans"). A topic that
+     matches itself needs no caption. */
+  const html = q => {
+    let lastGroup = null, lastPath = null, out = '';
+    flat.forEach((n, i) => {
+      if (!n.match) return;
+      const chain = [];
+      for (let p = n.parent && nodes.get(n.parent); p; p = p.parent && nodes.get(p.parent)) chain.unshift(p);
+      const top = chain[0] || n;
+      const g = groupOf(top.key);
+      if (g !== lastGroup) { out += `<div class="sm-cr-group">${escHtml(g)}</div>`; lastGroup = g; lastPath = null; }
+      const path = chain.map(p => p.label).join(' › ');
+      if (path && path !== lastPath) out += `<div class="sm-cr-path">${escHtml(path)}</div>`;
+      lastPath = path;
+      const done = _egsHitAnswered(n);
+      out += `<button type="button" class="sm-cr-node is-match${done ? ' is-done' : ''}" onclick="egsCrSearchGo(${i})">
+        <span class="sm-cr-node-dot">${done && typeof GUIDE_CHECK_SVG !== 'undefined' ? GUIDE_CHECK_SVG : ''}</span>
+        <span class="sm-cr-node-label">${_egsMark(n.label, q)}</span>
+      </button>`;
+    });
+    return out;
+  };
+  return { flat, html };
 }
 function _egsSearchMount() {
   const card = document.querySelector('#app-guide > .guide-card');
@@ -33212,7 +33316,11 @@ function egsCrSearchClear() {
   _egsSearchPaint();
 }
 function egsCrSearchKey(e) {
-  if (e.key === 'Enter' && _egsSearchHits.length) { e.preventDefault(); egsCrSearchGo(0); }
+  if (e.key === 'Enter' && _egsSearchHits.length) {
+    e.preventDefault();
+    const i = _egsSearchHits.findIndex(n => n.match);
+    egsCrSearchGo(i < 0 ? 0 : i);
+  }
 }
 /* ESCAPE ENDS THE SEARCH, WHEREVER THE FOCUS IS (v9.06). Jaco: "if I click
    ESC, it should empty the search bar and take me back to the original Shippy
