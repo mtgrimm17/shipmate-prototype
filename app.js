@@ -23302,8 +23302,105 @@ function answerGIARCTypeFreq(key, idx, fi) {
    egsTypeFoldKey, render.js. The step keeps its scroll across the render. */
 function toggleEgsTypeFold(fk) {
   if (!state.egsTypeOpen) state.egsTypeOpen = new Set();
-  if (state.egsTypeOpen.has(fk)) state.egsTypeOpen.delete(fk); else state.egsTypeOpen.add(fk);
-  reRenderAndroidStepModal();
+  const pending = state.egsFoldPending && state.egsFoldPending.delete(fk);
+  const opening = !pending && !state.egsTypeOpen.has(fk);
+  if (pending) {
+    // Pressed during the beat: the developer wants it open — keep it open.
+    state.egsTypeOpen.add(fk);
+    const c = _egsFoldChip(fk); if (c) c.classList.remove('is-folded');
+    return;
+  }
+  if (opening) {
+    state.egsTypeOpen.add(fk);
+    reRenderAndroidStepModal();
+    _egsFoldAnimate(fk, true);
+  } else {
+    _egsFoldAnimate(fk, false).then(() => {
+      if (!state.egsTypeOpen.has(fk)) return;     // reopened mid-way
+      state.egsTypeOpen.delete(fk);
+      reRenderAndroidStepModal();
+    });
+  }
+}
+
+/* THE FOLD IS ANIMATED, AND WAITS A BEAT FIRST (v9.04). Jaco: "quiero que el
+   colapso automático tras responder las subpreguntas no sea tan brusco… que
+   tenga un cierto tiempo de animado, para que no pille de sorpresa." It used
+   to happen inside the render that recorded the last answer: the pill you had
+   just pressed vanished under the pointer, along with seven rows above it.
+
+   Now the answer lands first. The type is held open (state.egsFoldPending),
+   its "8 answered" chip appears, and 700ms later the block closes over 420ms
+   — height to 0, a slight fade — while the chevron turns. Only then is it
+   drawn folded. Anything that makes the type unfinished again in the beat, or
+   a press on the chip, cancels the fold. Opening and closing by hand use the
+   same animation. */
+const EGS_FOLD_BEAT = 700, EGS_FOLD_MS = 420;
+function _egsFoldRow(fk) {
+  const i = fk.lastIndexOf('#');
+  const scope = (typeof _smStepScope === 'function' && _smStepScope()) || document;
+  return scope.querySelector(`.giarc-typerow[data-key="${fk.slice(0, i)}"][data-opt="${fk.slice(i + 1)}"]`);
+}
+function _egsFoldChip(fk) { const r = _egsFoldRow(fk); return r && r.querySelector('.egs-fold'); }
+function _egsFoldBlock(fk) {
+  const r = _egsFoldRow(fk), n = r && r.nextElementSibling;
+  return n && n.classList.contains('giarc-children') ? n : null;
+}
+function _egsFoldAnimate(fk, opening) {
+  const el = _egsFoldBlock(fk), chip = _egsFoldChip(fk);
+  if (chip) chip.classList.toggle('is-folded', !opening);
+  if (!el || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return Promise.resolve();
+  const h = el.getBoundingClientRect().height;
+  const cs = getComputedStyle(el);
+  const full = { height: h + 'px', opacity: 1, marginTop: cs.marginTop, marginBottom: cs.marginBottom };
+  const shut = { height: '0px', opacity: 0, marginTop: '0px', marginBottom: '0px' };
+  el.style.overflow = 'hidden';
+  const a = el.animate(opening ? [shut, full] : [full, shut],
+                       { duration: EGS_FOLD_MS, easing: 'cubic-bezier(.4,0,.2,1)', fill: opening ? 'none' : 'forwards' });
+  return a.finished.catch(() => {}).then(() => { if (opening) el.style.overflow = ''; });
+}
+function _egsFoldDone(fk) {
+  const i = fk.lastIndexOf('#'), key = fk.slice(0, i), idx = +fk.slice(i + 1);
+  const q = GOOGLE_IARC_BY_KEY[key]; if (!q) return false;
+  const cur = state.cqAnswers[key];
+  if (!Array.isArray(cur) || !cur.includes(idx)) return false;
+  const o = giarcOptionEntries(q).find(x => x.index === idx);
+  const kids = o ? giarcChildKeysForOption(o.child) : [];
+  return kids.length > 0 && kids.every(giarcIsSubtreeComplete);
+}
+/* A PICKER STILL OPEN HOLDS THE FOLD (v9.05). Jaco: "if a question is of
+   multipicker type, and it's the only/last question, don't fold when I click
+   the first pick, because I might need other picks. Wait until I'm out of the
+   picker to collapse." The first tick completes the type, but the picker is
+   still open for the second — so while a picker inside this type is open the
+   fold waits, and the beat starts again from when it closes. */
+function _egsFoldPickerOpen(fk) {
+  const k = state.giarcPickerOpen;
+  if (!k) return false;
+  const b = _egsFoldBlock(fk);
+  return !b || !!b.querySelector(`[data-giarc-picker="${k}"]`);
+}
+function _egsFoldSoon(fk) {
+  if (!state.egsFoldPending) state.egsFoldPending = new Set();
+  state.egsFoldPending.add(fk);
+  let held = false;
+  const tick = () => {
+    if (!state.egsFoldPending.has(fk)) return;
+    if (!_egsFoldDone(fk)) { state.egsFoldPending.delete(fk); return; }
+    if (_egsFoldPickerOpen(fk)) { held = true; return setTimeout(tick, 150); }
+    if (held) { held = false; return setTimeout(tick, EGS_FOLD_BEAT); }
+    _egsFoldAnimate(fk, false).then(() => {
+      if (!state.egsFoldPending.delete(fk)) return;   // the chip was pressed mid-way
+      reRenderAndroidStepModal();
+    });
+  };
+  setTimeout(tick, EGS_FOLD_BEAT);
+}
+/* Which types an answer has just finished: the type rows on screen, read
+   before and after the handler. */
+function _egsTypeFoldKeys() {
+  const scope = (typeof _smStepScope === 'function' && _smStepScope()) || document;
+  return [...scope.querySelectorAll('.giarc-typerow:not(.giarc-freqrow)')].map(r => r.dataset.key + '#' + r.dataset.opt);
 }
 
 ['answerGIARCSingle', 'answerGIARCMultiOpt', 'answerGIARCTypeRow', 'answerGIARCTypeFreq'].forEach(name => {
@@ -23317,7 +23414,20 @@ function toggleEgsTypeFold(fk) {
       _egsEnsureRevealed(key);
     }
     const before = giarcActiveChildKeys(key);
+    const opened = state.egsTypeOpen || new Set();
+    const probe   = egs ? _egsTypeFoldKeys() : [];
+    const wasDone = new Set(probe.filter(_egsFoldDone));
     const out = orig.apply(this, arguments);
+    if (egs) {
+      /* The handler's own render drew a just-finished type folded; it is
+         redrawn open in the same task, before anything paints, and folds
+         after the beat. */
+      const fresh = probe.filter(fk => !wasDone.has(fk) && !opened.has(fk) && _egsFoldDone(fk));
+      if (fresh.length) {
+        fresh.forEach(_egsFoldSoon);
+        reRenderAndroidStepModal();                       // draw them open, chip showing
+      }
+    }
     if (egs && _egsCollapseAuto(key)) { reRenderAndroidStepModal(); updateAndroidCard(); }
     _egsRevealNew(key, before, /^answerGIARCType/.test(name) ? idx : null);
     return out;
@@ -32905,6 +33015,264 @@ if (typeof MutationObserver === 'function') {
     const out = await orig.apply(this, arguments);
     const m2 = document.getElementById('submit-modal');
     if (m2) { m2.classList.add('is-flip-enter'); setTimeout(() => m2.classList.remove('is-flip-enter'), 280); }
+    return out;
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SHIPPY CAN SEARCH THE QUESTIONNAIRE (v9.05).
+
+   Jaco: "a search bar in Shippy guide… search key words and make it easier to
+   locate them in the content rating", at the bottom of Shippy, "kinda like
+   the Xcode bar". Epic only for now.
+
+   A capsule at the foot of the card filters every question IARC can ask —
+   ninety-five, most of them not on screen until something above is answered
+   Yes. While there is a query, the group rows give way to the matches; each
+   is a type row or a question, named the way the form names it, with its
+   group and topic underneath. Pressing one opens the path to it greyed
+   (state.egsPeek — nothing is answered), switches the list to All if a
+   filter would hide it, scrolls there and lights it with the same spotlight
+   the group rows use. Enter takes the first match; Escape clears.
+
+   The card is rebuilt with innerHTML on every guide paint, so the bar is
+   re-attached after each one and the caret put back where it was.
+   ══════════════════════════════════════════════════════════════════════════ */
+let _egsSearchHits = [];
+function _egsNorm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function _egsAbsorbed(child) {
+  // Mirrors egsFreqChild (render.js): a follow-up drawn inside its type's row.
+  const ks = giarcChildKeysForOption(child);
+  if (ks.length !== 1) return null;
+  const c = GOOGLE_IARC_BY_KEY[ks[0]];
+  if (!c || c.data_type !== 'radio') return null;
+  const os = giarcOptionEntries(c), ov = (window.EGS_ROW_OVERRIDES || {})[ks[0]];
+  if (os.length === 2 && /^rare(ly)?$/i.test(os[0].text) && /^often$/i.test(os[1].text)) return c;
+  if (ov && !ov.order && os.length >= 2 && os.length <= 3 && !os.some(o => /^(yes|no)$/i.test(o.text)) && os.every(o => ov.opts[o.index])) return c;
+  return null;
+}
+function _egsSearchIndex() {
+  if (_egsSearchIndex.c && _egsSearchIndex.c.length) return _egsSearchIndex.c;
+  const TR = window.EGS_TYPE_ROWS || {}, OV = window.EGS_ROW_OVERRIDES || {};
+  const topicOf = k => { let x = k, p; while ((p = _egsParentOf(x))) x = p.q.key; return x; };
+  const groupOf = k => (GIARC_RAIL_GROUPS.find(g => g.keys.some(t => 'google.content.' + t === k)) || {}).label || '';
+  const short = t => { const i = String(t).lastIndexOf(': '); return i > 0 ? t.slice(i + 2) : t; };
+  const out = [], absorbed = new Set();
+  GOOGLE_IARC_QUESTIONS.forEach(q => {
+    if (!TR[q.key]) return;
+    giarcOptionEntries(q).forEach(o => {
+      const c = _egsAbsorbed(o.child);
+      if (c) absorbed.add(c.key);
+      const label = TR[q.key][o.index] || o.text;
+      out.push({ kind: 'type', key: q.key, opt: o.index, label, topic: topicOf(q.key),
+                 hay: _egsNorm([label, o.text, c ? c.title : '', c ? c.tooltip : '',
+                                c ? giarcOptionEntries(c).map(x => x.text).join(' ') : ''].join(' ')) });
+    });
+  });
+  GOOGLE_IARC_QUESTIONS.forEach(q => {
+    if (TR[q.key] || absorbed.has(q.key)) return;
+    const ov = OV[q.key];
+    const label = (ov && ov.title) || short(q.title);
+    const opts = giarcOptionEntries(q).map(x => x.text).join(' ') + (ov ? ' ' + Object.values(ov.opts).join(' ') : '');
+    out.push({ kind: 'q', key: q.key, label, topic: topicOf(q.key),
+               hay: _egsNorm([label, q.title, q.tooltip, opts].join(' ')) });
+  });
+  /* The crumb says what the label is OF: a question's own subject when its
+     title has one ("Alcohol Use: First-Person Perspective" → Alcohol Use, so
+     Alcohol's and Tobacco's are told apart), otherwise its topic. */
+  out.forEach(r => {
+    const t = GOOGLE_IARC_BY_KEY[r.topic], own = GOOGLE_IARC_BY_KEY[r.key];
+    const ti = own && r.kind === 'q' ? String(own.title).lastIndexOf(': ') : -1;
+    const subj = ti > 0 ? own.title.slice(0, ti) : (r.key === r.topic ? '' : short((t && t.title) || ''));
+    r.crumb = [groupOf(r.topic), subj].filter(Boolean).join(' › ');
+    r.lab = _egsNorm(r.label);
+  });
+  return (_egsSearchIndex.c = out);
+}
+function _egsSearch(query) {
+  const toks = _egsNorm(query).split(/\s+/).filter(Boolean);
+  if (!toks.length) return [];
+  return _egsSearchIndex()
+    .filter(r => toks.every(t => r.hay.includes(t)))
+    .map(r => ({ r, s: toks.reduce((n, t) => n + (r.lab.startsWith(t) ? 4 : r.lab.includes(t) ? 3 : 1), 0) - (r.kind === 'q' ? 0.5 : 0) }))
+    .sort((a, b) => b.s - a.s)
+    .slice(0, 40).map(x => x.r);
+}
+function _egsHitAnswered(r) {
+  if (r.kind === 'type') {
+    const cur = state.cqAnswers[r.key];
+    return (Array.isArray(cur) && cur.includes(r.opt)) || ((state.egsTypeNo || {})[r.key] || []).includes(r.opt);
+  }
+  return giarcIsAnswered(r.key);
+}
+function _egsMark(text, query) {
+  let html = escHtml(text);
+  _egsNorm(query).split(/\s+/).filter(Boolean).forEach(t => {
+    const i = _egsNorm(text).indexOf(t);
+    if (i < 0 || html !== escHtml(text)) return;                 // one mark is enough
+    html = escHtml(text.slice(0, i)) + '<mark>' + escHtml(text.slice(i, i + t.length)) + '</mark>' + escHtml(text.slice(i + t.length));
+  });
+  return html;
+}
+/* A plain magnifier in the weight of SF's `magnifyingglass` (v9.07): a ring
+   and a short round-capped handle at 45°. Drawn here, not copied — Apple's
+   symbol licence covers Apple platforms only. */
+const SM_SEARCH_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="6.9" cy="6.9" r="4.9"/><path d="M10.5 10.5L14 14"/></svg>';
+const SM_CLEAR_SVG  = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6.6"/><path d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4"/></svg>';
+
+function _egsSearchOn() {
+  if (typeof _smShippyStep === 'undefined' || !_smShippyStep) return false;
+  const sm = typeof _smOpenStep === 'function' && _smOpenStep();
+  return !!(sm && sm.platformId === 'egs' && _smIsContentBody(sm));
+}
+function _egsSearchPaint() {
+  const card = document.querySelector('#app-guide > .guide-card');
+  if (!card) return;
+  const q = state.egsCrQuery || '';
+  card.querySelectorAll('.sm-cr-results, .sm-cr-count').forEach(n => n.remove());
+  const live = q.trim().length > 0;
+  /* THE COUNT LINE SAYS WHAT THE LIST IS (v9.08). Jaco: "when I'm searching,
+     instead of '0 of 7 groups answered' it should say X coincidences." The
+     progress line belongs to the step (it is re-parented here from the
+     modal's own bar), so it is hidden rather than rewritten, and a twin in
+     the same classes says the number of matches in its place. */
+  const line = card.querySelector(':scope > .sm-cr-line-moved');
+  if (line) line.style.display = live ? 'none' : '';
+  card.querySelectorAll(':scope > .guide-tasks-head, :scope > .guide-tasks').forEach(n => { n.style.display = live ? 'none' : ''; });
+  const clr = card.querySelector('.sm-cr-search-clear');
+  if (clr) clr.hidden = !q;
+  if (!live) { _egsSearchHits = []; return; }
+  _egsSearchHits = _egsSearch(q);
+  const rows = _egsSearchHits.map((r, i) => `
+    <button type="button" class="gd-task sm-cr-hit${_egsHitAnswered(r) ? ' is-done' : ''}" onclick="egsCrSearchGo(${i})">
+      <span class="gd-task-box">${_egsHitAnswered(r) && typeof GUIDE_CHECK_SVG !== 'undefined' ? GUIDE_CHECK_SVG : ''}</span>
+      <span class="sm-cr-hit-text"><span class="gd-task-label">${_egsMark(r.label, q)}</span>${r.crumb ? `<span class="sm-cr-hit-crumb">${escHtml(r.crumb)}</span>` : ''}</span>
+    </button>`).join('');
+  const block = document.createElement('div');
+  block.className = 'sm-cr-results';
+  if (line) {
+    const n = _egsSearchHits.length;
+    const cnt = document.createElement('div');
+    cnt.className = line.className.replace(/\bsm-cr-line-moved\b/, '') + ' sm-cr-line-moved sm-cr-count';
+    cnt.textContent = n ? `${n} ${n === 1 ? 'match' : 'matches'} for “${q.trim()}”.` : `No matches for “${q.trim()}”.`;
+    line.after(cnt);
+  }
+  block.innerHTML = `<div class="guide-tasks-head"><span>Results</span></div>
+    ${rows ? `<div class="guide-tasks">${rows}</div>` : `<div class="sm-cr-empty">No question mentions “${escHtml(q.trim())}”.</div>`}`;
+  const bar = card.querySelector('.sm-cr-search');
+  card.insertBefore(block, bar || null);
+}
+function _egsSearchMount() {
+  const card = document.querySelector('#app-guide > .guide-card');
+  if (!card || card.querySelector('.sm-cr-search')) return;
+  const bar = document.createElement('div');
+  bar.className = 'sm-cr-search';
+  bar.innerHTML = `<label class="sm-cr-search-field">
+      <span class="sm-cr-search-icon">${SM_SEARCH_SVG}</span>
+      <input id="sm-cr-search-input" type="text" autocomplete="off" spellcheck="false" placeholder="Search anything"
+             oninput="egsCrSearchInput(this.value)" onkeydown="egsCrSearchKey(event)">
+      <button type="button" class="sm-cr-search-clear" aria-label="Clear" onclick="egsCrSearchClear()" hidden>${SM_CLEAR_SVG}</button>
+    </label>`;
+  card.appendChild(bar);
+  bar.querySelector('input').value = state.egsCrQuery || '';
+  card.classList.add('has-cr-search');
+  _egsSearchPaint();
+  _egsSearchAlign();
+}
+/* ON THE SAME LINE AS SAVE & CLOSE (v9.09). Jaco: "can you align the search
+   bar to the Save and Close button? so their centres vertically coincide."
+   The two live in different boxes — the step's footer and Shippy's card —
+   whose bottoms differ by arm and by window, so the offset is measured
+   rather than written: the bar's bottom padding takes up the difference
+   between the two centres, after every mount and on resize. */
+function _egsSearchAlign() {
+  const bar = document.querySelector('#app-guide .sm-cr-search');
+  const field = bar && bar.querySelector('.sm-cr-search-field');
+  const scope = _smStepScope();
+  const btn = scope && [...scope.querySelectorAll('.submit-modal-footer button, .submit-modal button')]
+    .find(b => /save\s*&\s*close|done/i.test(b.textContent) && b.getBoundingClientRect().height);
+  if (!field || !btn) return;
+  // The guide rebuilds the bar on every answer: start it where the last one
+  // ended, so a rebuild never draws a frame at the default and then jumps.
+  if (_egsSearchAlign.pb != null) bar.style.paddingBottom = _egsSearchAlign.pb + 'px';
+  const mid = r => r.top + r.height / 2;
+  const pb  = parseFloat(getComputedStyle(bar).paddingBottom) || 0;
+  const d   = mid(field.getBoundingClientRect()) - mid(btn.getBoundingClientRect());
+  _egsSearchAlign.pb = Math.max(4, Math.min(40, pb + d));
+  bar.style.paddingBottom = _egsSearchAlign.pb + 'px';
+}
+window.addEventListener('resize', () => { if (_egsSearchOn()) _egsSearchAlign(); });
+function egsCrSearchInput(v) { state.egsCrQuery = v; _egsSearchPaint(); }
+function egsCrSearchClear() {
+  state.egsCrQuery = '';
+  const i = document.getElementById('sm-cr-search-input');
+  if (i) { i.value = ''; i.focus(); }
+  _egsSearchPaint();
+}
+function egsCrSearchKey(e) {
+  if (e.key === 'Enter' && _egsSearchHits.length) { e.preventDefault(); egsCrSearchGo(0); }
+}
+/* ESCAPE ENDS THE SEARCH, WHEREVER THE FOCUS IS (v9.06). Jaco: "if I click
+   ESC, it should empty the search bar and take me back to the original Shippy
+   panel." After pressing a result the focus is no longer in the bar, so the
+   input's own handler never saw it — and the step's Escape would have closed
+   the modal instead. Captured at the document: while there is a query (or
+   the bar has focus) Escape empties it, drops the focus and brings the group
+   rows back, and nothing else hears that press. */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !_egsSearchOn()) return;
+  const i = document.getElementById('sm-cr-search-input');
+  if (!state.egsCrQuery && document.activeElement !== i) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  state.egsCrQuery = '';
+  if (i) { i.value = ''; i.blur(); }
+  _egsSearchPaint();
+}, true);
+function egsCrSearchGo(i) {
+  const r = _egsSearchHits[i];
+  if (!r) return;
+  const path = new Set();
+  for (let k = r.key, up = _egsParentOf(k); up; k = up.q.key, up = _egsParentOf(k)) path.add(up.q.key + '#' + up.opt.index);
+  state.egsPeek = path;
+  if (state.egsCrShowAll === false && typeof toggleEgsCrExpanded === 'function') toggleEgsCrExpanded(true);
+  reRenderAndroidStepModal();
+  const scope = _smStepScope() || document;
+  const el = r.kind === 'type'
+    ? scope.querySelector(`.giarc-typerow[data-key="${r.key}"][data-opt="${r.opt}"]`)
+    : scope.querySelector(`.giarc-card[data-key="${r.key}"]`);
+  if (!el) return;
+  /* EVERYTHING BUT THE ROW DIMS, AND STAYS DIMMED LONG ENOUGH TO FIND IT
+     (v9.05). Jaco: "if I click one of the results, it should take me there
+     and dim the rest." The group rows' spotlight dims whole topics, which
+     left the target's own siblings bright — and a result that had to be
+     opened greyed was itself at the preview's .38, so it was the dimmest
+     thing on screen. This one dims by structure down to the row (the same
+     rule the store page's doors use), lifts the row to full, and holds 1.8s:
+     the 420ms of travel plus time to read where you landed. */
+  const host = _smStepQ('.ios-step-body-content') || _smStepQ('.submit-modal-scroll');
+  if (host) {
+    host.classList.add('sm-cr-deep');
+    clearTimeout(egsCrSearchGo._t);
+    _smSpotlight(host, [el], 1800);
+    egsCrSearchGo._t = setTimeout(() => host.classList.remove('sm-cr-deep'), 1800 + 320);
+  }
+  _smCrScrollWhenSettled(el);
+}
+(() => {
+  const orig = window.renderGuide;
+  if (typeof orig !== 'function') return;
+  window.renderGuide = function () {
+    const a = document.activeElement;
+    const caret = a && a.id === 'sm-cr-search-input' ? [a.selectionStart, a.selectionEnd] : null;
+    const out = orig.apply(this, arguments);
+    if (_egsSearchOn()) {
+      _egsSearchMount();
+      if (caret) {
+        const i = document.getElementById('sm-cr-search-input');
+        if (i) { i.focus({ preventScroll: true }); try { i.setSelectionRange(caret[0], caret[1]); } catch (_) {} }
+      }
+    }
     return out;
   };
 })();

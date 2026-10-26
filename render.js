@@ -19084,6 +19084,25 @@ function buildEgsContentRatingSection() {
      one type is, and folding it would hide the types not yet answered. */
   function egsTypeFoldKey(key, idx) { return key + '#' + idx; }
 
+  /* A SEARCH RESULT CAN BE A QUESTION NOTHING HAS OPENED YET (v9.05). Pressing
+     it in Shippy's search sets state.egsPeek to the path to it — every
+     `question#option` it hangs from — and each builder on that path draws the
+     option's follow-ups greyed, the way a topic previews its types (v8.62).
+     Nothing is answered: answering a greyed row answers its parents Yes
+     (_egsEnsureRevealed), exactly as the preview already does. */
+  function egsPeekHas(key, idx) { return !!(state.egsPeek && state.egsPeek.has(key + '#' + idx)); }
+  function egsPeekChildren(key, depth) {
+    if (!state.egsPeek) return '';
+    const q = GOOGLE_IARC_BY_KEY[key]; if (!q) return '';
+    const cur = state.cqAnswers[key];
+    const o = giarcOptionEntries(q).find(x => x.child && egsPeekHas(key, x.index)
+      && !(Array.isArray(cur) ? cur.includes(x.index) : cur === x.index));
+    if (!o) return '';
+    return `<div class="giarc-children giarc-preview">${giarcChildKeysForOption(o.child).map(k => renderGIARCQuestion(k, depth)).join('')}</div>`;
+  }
+
+  // Shippy's search reads the short names off these (app.js, v9.05).
+  window.EGS_TYPE_ROWS = EGS_TYPE_ROWS; window.EGS_ROW_OVERRIDES = EGS_ROW_OVERRIDES;
   function buildEgsTypeRows(q, key, depth) {
     const labels = EGS_TYPE_ROWS[key];
     const cur    = Array.isArray(state.cqAnswers[key]) ? state.cqAnswers[key] : [];
@@ -19108,12 +19127,15 @@ function buildEgsContentRatingSection() {
             <div class="intensity-group">${pill('No', no, `answerGIARCTypeRow('${key}',${o.index},false)`)}${fq.opts.map(f => pill(f.label, fv === f.index, `answerGIARCTypeFreq('${key}',${o.index},${f.index})`, f.hint)).join('')}</div>
           </div>
         </div>
-        ${yes ? renderChildren(fq.ck, depth + 1) : ''}`;
+        ${(yes ? renderChildren(fq.ck, depth + 1) : '') + egsPeekChildren(fq.ck, depth + 1)}`;
       }
       const kids = yes ? giarcChildKeysForOption(o.child) : [];
       const fk   = egsTypeFoldKey(key, o.index);
       const done = kids.length > 0 && kids.every(giarcIsSubtreeComplete);
-      const folded = done && !open.has(fk);
+      /* A type that has JUST been finished stays open for a beat and then
+         folds with a height animation (_egsFoldSoon, app.js, v9.04) — it is
+         drawn open while that is pending. */
+      const folded = done && !open.has(fk) && !(state.egsFoldPending && state.egsFoldPending.has(fk)) && !egsPeekHas(key, o.index);
       const foldHTML = done
         ? `<button type="button" class="egs-fold${folded ? ' is-folded' : ''}" onclick="toggleEgsTypeFold('${fk}')"
                    aria-label="${folded ? 'Show' : 'Hide'} its answers">${kids.length} answered<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>`
@@ -19134,7 +19156,10 @@ function buildEgsContentRatingSection() {
             <div class="question-yn">${pill(true, yes)}${pill(false, no)}</div>
           </div>
         </div>
-        ${yes && !folded ? renderChildren(key, depth + 1, kids) : ''}`;
+        ${yes && !folded ? renderChildren(key, depth + 1, kids)
+          : !yes && o.child && egsPeekHas(key, o.index)
+            ? `<div class="giarc-children giarc-preview">${giarcChildKeysForOption(o.child).map(k => renderGIARCQuestion(k, depth + 1)).join('')}</div>`
+            : ''}`;
     }).join('');
   }
 
@@ -19479,7 +19504,7 @@ function buildEgsContentRatingSection() {
       const tip = q.tooltip ? giarcTooltip(q.tooltip) : '';
       return buildGIARCInlineRow(q, key, title, tip, '', '', depth, index)
            + (depth === 1 && !giarcActiveChildKeys(key).length ? egsPreviewChildren(q, depth + 1)
-                                                               : renderChildren(key, depth + 1));
+                                                               : renderChildren(key, depth + 1) + egsPeekChildren(key, depth + 1));
     }
 
     const showCollapsedRow = isMulti
@@ -19519,7 +19544,7 @@ function buildEgsContentRatingSection() {
     return `
       <div class="giarc-card giarc-depth-${depth}${answered ? ' is-answered' : ''}" data-key="${key}">${inner}
       </div>
-      ${renderChildren(key, depth + 1)}`;
+      ${renderChildren(key, depth + 1)}${egsPeekChildren(key, depth + 1)}`;
   }
 
   /* Every active child, one question each, with the wording a run of siblings
