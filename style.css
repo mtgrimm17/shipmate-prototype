@@ -32338,19 +32338,28 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   margin: auto -18px -15px; padding: 12px 12px 12px;
   background: var(--guide-bg);
 }
+/* An input, not a capsule (v9.05): the calendar's own search field
+   (.mcal-search) — 34px, 10px corners, the panel fill and border, purple
+   when focused or filled — so the app has one search field, not two. */
 .sm-cr-search-field {
-  display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 9px 0 10px;
-  border-radius: 999px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.09);
-  color: rgba(255,255,255,.55); cursor: text; transition: border-color .15s, background .15s;
+  display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 8px 0 11px;
+  border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.13);
+  color: rgba(255,255,255,.45); cursor: text; transition: border-color .15s, color .15s, background .15s;
 }
-.sm-cr-search-field:focus-within { border-color: rgba(160,120,255,.65); background: rgba(255,255,255,.09); }
+/* Light on the guide's ink, not a black well (v9.05). Jaco: "can we make it
+   lighter? instead of black, transparent white stroke, maybe transparent
+   white background fill." The calendar's field sits on the near-black panel,
+   where its --panel fill reads as a field; on Shippy's blue-black card the
+   same fill read as a hole. */
+.sm-cr-search-field:hover { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.2); }
+.sm-cr-search-field:focus-within, .sm-cr-search-field.is-filled { border-color: var(--purple); color: var(--purple); }
 .sm-cr-search-icon { display: flex; flex: none; }
 .sm-cr-search-field input {
   flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: none;
   color: var(--text); font: 12.5px/1 var(--mono);
 }
-.sm-cr-search-field input::placeholder { color: rgba(255,255,255,.42); }
-.sm-cr-search-clear { display: flex; flex: none; padding: 2px; border: 0; background: none; color: rgba(255,255,255,.5); cursor: pointer; border-radius: 50%; }
+.sm-cr-search-field input::placeholder { color: rgba(255,255,255,.4); }
+.sm-cr-search-clear { display: flex; flex: none; padding: 4px; border: 0; background: none; color: rgba(255,255,255,.45); cursor: pointer; border-radius: 6px; }
 .sm-cr-search-clear:hover { color: var(--text); }
 .sm-cr-search-clear[hidden] { display: none; }
 .sm-cr-results { display: flex; flex-direction: column; }

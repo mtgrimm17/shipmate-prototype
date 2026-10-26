@@ -33118,7 +33118,7 @@ function _egsMark(text, query) {
    and a short round-capped handle at 45°. Drawn here, not copied — Apple's
    symbol licence covers Apple platforms only. */
 const SM_SEARCH_SVG = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="6.9" cy="6.9" r="4.9"/><path d="M10.5 10.5L14 14"/></svg>';
-const SM_CLEAR_SVG  = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6.6"/><path d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4"/></svg>';
+const SM_CLEAR_SVG  = '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>';   // a bare x (v9.05)
 
 function _egsSearchOn() {
   if (typeof _smShippyStep === 'undefined' || !_smShippyStep) return false;
@@ -33141,6 +33141,8 @@ function _egsSearchPaint() {
   card.querySelectorAll(':scope > .guide-tasks-head, :scope > .guide-tasks').forEach(n => { n.style.display = live ? 'none' : ''; });
   const clr = card.querySelector('.sm-cr-search-clear');
   if (clr) clr.hidden = !q;
+  const fld = card.querySelector('.sm-cr-search-field');
+  if (fld) fld.classList.toggle('is-filled', !!q);
   if (!live) { _egsSearchHits = []; return; }
   _egsSearchHits = _egsSearch(q);
   const rows = _egsSearchHits.map((r, i) => `
@@ -33190,7 +33192,7 @@ function _egsSearchAlign() {
   const field = bar && bar.querySelector('.sm-cr-search-field');
   const scope = _smStepScope();
   const btn = scope && [...scope.querySelectorAll('.submit-modal-footer button, .submit-modal button')]
-    .find(b => /save\s*&\s*close|done/i.test(b.textContent) && b.getBoundingClientRect().height);
+    .find(b => /save\s*&\s*(close|return)|^\s*done\s*$/i.test(b.textContent) && b.getBoundingClientRect().height);
   if (!field || !btn) return;
   // The guide rebuilds the bar on every answer: start it where the last one
   // ended, so a rebuild never draws a frame at the default and then jumps.
@@ -33268,6 +33270,12 @@ function egsCrSearchGo(i) {
     const out = orig.apply(this, arguments);
     if (_egsSearchOn()) {
       _egsSearchMount();
+      /* Re-aligned on every paint, and once more after a step's flip has
+         settled: a bar that survived the paint, or one painted while the
+         footer was still turning, would otherwise keep a stale offset. */
+      _egsSearchAlign();
+      clearTimeout(_egsSearchAlign._t);
+      _egsSearchAlign._t = setTimeout(() => { if (_egsSearchOn()) _egsSearchAlign(); }, 450);
       if (caret) {
         const i = document.getElementById('sm-cr-search-input');
         if (i) { i.focus({ preventScroll: true }); try { i.setSelectionRange(caret[0], caret[1]); } catch (_) {} }
