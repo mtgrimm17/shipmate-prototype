@@ -8327,6 +8327,51 @@ function egsFeaturesFromSteamCategories(names) {
   return EGS_FEATURES.filter(f => out.indexOf(f) >= 0);
 }
 
+/* ══ STEAM'S GENRES, FOR THE TWO PAGES THAT ASK FOR GENRES (v9.17) ═══════
+   /game's `genres` is an array of plain English strings in Steam's own
+   genre vocabulary — the short, fixed, developer-assigned list, not the
+   community tags Steam - Tags deals in. Read off the endpoint across
+   fourteen titles before either of these was written: every value was one
+   of the ten Steamworks offers a Game, plus "Free To Play" and "Early
+   Access", which Steamworks sets elsewhere and keeps out of the Genres
+   list for a Game. Nothing mature-content-ish ever appeared.
+
+   NEITHER HELPER TRANSLATES A NAME, because neither has to. Nine of
+   Steam's ten are spelled exactly as Epic spells them, and the tenth —
+   Massively Multiplayer — has no Epic genre at all (MOBA is a different
+   claim, not a synonym). So a filter against the list each page offers is
+   the entire mapping, and a value neither list carries is dropped rather
+   than guessed into something near it.
+
+   Each returns its own page's order rather than Steam's, the way the
+   Features seed does: a set that arrived in a foreign order reads as
+   shuffled next to the list it was picked from. */
+function steamInfoGenresFromSteam(genres) {
+  const out = [];
+  (genres || []).forEach(g => {
+    const n = (typeof g === 'string') ? g.trim() : '';
+    if (n && STEAM_INFO_GENRES.indexOf(n) >= 0 && out.indexOf(n) < 0) out.push(n);
+  });
+  return STEAM_INFO_GENRES.filter(g => out.indexOf(g) >= 0);
+}
+/* EPIC TAKES THREE, AND WHICH THREE IS ARBITRARY — measured, and worth
+   saying plainly: Steam returns its genres ALPHABETICALLY, with Free To
+   Play and Early Access appended, so there is no primary among them and
+   nothing to rank by. Path of Exile arrives Action, Adventure, Indie,
+   Massively Multiplayer, RPG and three of those five have to go.
+   So: the first three Epic also offers, which is stable and defensible
+   and not a judgement; the developer who wants a different three takes a
+   chip off and picks one, which is what that control is for. */
+function egsGenresFromSteam(genres) {
+  const out = [];
+  (genres || []).forEach(g => {
+    const n = (typeof g === 'string') ? g.trim() : '';
+    if (n && EGS_GENRES.indexOf(n) >= 0 && out.indexOf(n) < 0
+        && out.length < EGS_GENRE_MAX) out.push(n);
+  });
+  return EGS_GENRES.filter(g => out.indexOf(g) >= 0);
+}
+
 function makeBlankSteamAnswers() {
   return {
     /* System requirements and the legal notice (v8.86). Both are printed on

@@ -11132,6 +11132,13 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // { id, description } objects — same join, one less hop. English because
     // this is the baseline call; see fetchShipmateGame.
     if (data.genres && data.genres.length) state.webSite.genres = data.genres.filter(Boolean).join(', ');
+    /* AND THE SAME LIST ANSWERS TWO MORE QUESTIONS (v9.17, by request).
+       The line above fills Factsheet > Genres, which is free text. Steam -
+       Info and Epic's Store Page Preview both ask the same question against
+       fixed lists, and both were left for the developer to answer a second
+       and a third time by hand. Called from here rather than beside
+       _applySteamCategories so that `data.genres` is read in one place. */
+    _applySteamGenres(data.genres);
     // Purchase price. /game gives { currency, value } in MINOR units (1999 =
     // $19.99) rather than appdetails' pre-formatted "$19.99", and omits the
     // object entirely for free-to-play titles while setting isFree — so the
@@ -26324,6 +26331,31 @@ const STEAM_CATEGORY_TO_PLAYER = {
   'Shared/Split Screen Co-op':  'coopLocal',
   'Cross-Platform Multiplayer': 'crossPlatform',
 };
+/* ══ GENRES, INTO THE TWO PAGES THAT ASK FOR THEM (v9.17, by request) ════
+   The name matching lives in state.js (steamInfoGenresFromSteam,
+   egsGenresFromSteam) with the lists it matches against; this is only the
+   question of when it is safe to write.
+
+   SEEDED ONLY WHILE EMPTY, which is the rule every importer beside it
+   follows and for their reason: [] means nobody has picked, a developer
+   who has picked any is visibly done picking, and a re-scrape that
+   overwrote would be deleting an answer nobody withdrew. Unlike Steam's
+   players tree, both of these have a real empty to test, so the test is
+   the array itself. */
+function _applySteamGenres(genres) {
+  if (!Array.isArray(genres) || !genres.length) return;
+  const a = state.steamSubmitAnswers;
+  if (a && Array.isArray(a.infoGenres) && !a.infoGenres.length) {
+    const picked = steamInfoGenresFromSteam(genres);
+    if (picked.length) a.infoGenres = picked;
+  }
+  const e = state.egsSubmitAnswers;
+  if (e && Array.isArray(e.genres) && !e.genres.length) {
+    const picked = egsGenresFromSteam(genres);
+    if (picked.length) e.genres = picked;
+  }
+}
+
 function _applySteamCategories(categories) {
   if (!Array.isArray(categories) || !categories.length) return;
   const a = state.steamSubmitAnswers;
