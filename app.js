@@ -28434,6 +28434,7 @@ function _smStepItems() {
      answer than none. */
   const flip = _smFlipTarget(sm.platformId);
   if (flip && sm.platformId === 'steam') return _smSteamFlipItems(flip);
+  if (!flip && sm.platformId === 'egs' && state.egsPreviewTab === 'achievements') return _smEgsAchItems();
   if (flip === 'business') { const b = _smBusinessItems(sm.platformId); if (b) return b; }
   const lang = (state.formData && state.formData.primaryLanguage) || 'en';
   const els = sppRequiredElements(sm.platformId, lang) || [];
@@ -28697,6 +28698,8 @@ window.renderGuide = function () {
   };
   const hero = (sm && sm.platformId === 'steam' && flip)
     ? { t: SM_STEAM_FLIP_TITLES[flip] || 'This section', s: 'Press a line to jump straight to it.' }
+    : (sm && sm.platformId === 'egs' && !flip && state.egsPreviewTab === 'achievements')
+    ? { t: 'Achievements', s: 'Press one to open it.' }
     : (HERO[flip] || HERO.null);
   const ti = el.querySelector('.guide-title');
   const su = el.querySelector('.guide-sub');
@@ -33686,8 +33689,8 @@ function _smSteamFlipItems(flip) {
     case 'achievements':
       return [row('Achievements', typeof steamAchievementsFilled === 'function' && steamAchievementsFilled(), null, true)];
     case 'info':
-      return [row('Genres', (a.infoGenres || []).length, 'hd:Genres'),
-              row('Links', (ws.links || []).some(l => (l.url || '').trim()), 'hd:Links', true)];
+      // Genres come from Tags now (steamInfoGenres, v9.20) — only Links is asked here.
+      return [row('Links', (ws.links || []).some(l => (l.url || '').trim()), 'hd:Links', true)];
     case 'steamAssets':
       return [row('Screenshots', isSteamSectionComplete('screenshots'), 'hd:Screenshots'),
               row('Trailer', up.steamTrailer, 'hd:Trailer', true),
@@ -33939,4 +33942,86 @@ window._steamSeedLanguagesIfNeeded = function () { smSyncLanguagesFromDetails();
       return open.apply(this, arguments);
     };
   }
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   COMING BACK INTO A STORE STARTS ON ITS PAGE (v9.20).
+
+   Jaco: "si estoy editando una tienda (cualquiera: Steam, Epic, iOS) y estaba
+   en un modal concreto — de los que hacen slide — y doy a salir de la tienda,
+   cuando entre otra vez necesito estar en la view principal, no en una capa
+   de contenido deep."
+
+   Measured before: the App Store and Mac already reset (openStepModal clears
+   the flip for 'storePreview'), but Steam's step is 'storePreviewPrototype',
+   so closing inside Business reopened on Business; and Epic's page reopened
+   on whichever tab it was left on — Achievements, the one tab that slides.
+   On a fresh entry — the modal closed, then a store's page opened — the
+   sub-section is cleared and Epic goes back to its overview. Returning to the
+   page from inside the modal (Save & Return, the back arrow) is not a fresh
+   entry and is untouched. */
+(() => {
+  const orig = window.openStepModal;
+  if (typeof orig !== 'function') return;
+  window.openStepModal = function (pid, stepId) {
+    const ov = document.getElementById('submit-overlay');
+    const fresh = !ov || ov.classList.contains('hidden');
+    if (fresh && (stepId === 'storePreview' || stepId === 'storePreviewPrototype')) {
+      if (!state.storePreviewFlipTarget) state.storePreviewFlipTarget = {};
+      state.storePreviewFlipTarget[pid] = null;
+      if (pid === 'egs') state.egsPreviewTab = 'overview';
+    }
+    return orig.apply(this, arguments);
+  };
+})();
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   EPIC'S ACHIEVEMENTS TAB HAS ITS OWN LIST (v9.20).
+
+   Jaco: "que en Epic Achievements el panel de Shippy no sea el panel de la
+   store main view, porque causa un loop infinito al clicar en Achievements."
+   On the Achievements tab Shippy still listed the overview's rows, so its own
+   "Achievements" row pushed the tab onto itself again — a slide into the
+   page you were already on, every press. The tab now lists what is on it:
+   one row per achievement, ticked when it has a name, a description, XP and
+   an icon, pressing one opens its editor and brings it into view; an "Add an
+   achievement" row while there are none; and "Back to Overview" to leave. */
+function _smEgsAchItems() {
+  const list = typeof egsAchievements === 'function' ? egsAchievements() : [];
+  const rows = list.map(x => ({
+    label: (x.name || '').trim() || 'Untitled achievement',
+    done: !!((x.name || '').trim() && (x.description || '').trim() && x.xp && x.icon),
+    bad: false,
+    step: x.recordId ? 'ach:' + x.recordId : 'spp:__status',
+  }));
+  if (!rows.length) rows.push({ label: 'Add an achievement', done: false, bad: false, step: 'egsach:add' });
+  rows.push({ label: 'Back to Overview', done: false, bad: false, step: 'egsach:overview' });
+  return rows;
+}
+(() => {
+  const orig = window.chkGoStep;
+  window.chkGoStep = function (step) {
+    if (typeof step === 'string' && step === 'egsach:overview') {
+      if (typeof setEgsPreviewTab === 'function') setEgsPreviewTab('overview');
+      return;
+    }
+    if (typeof step === 'string' && step === 'egsach:add') {
+      if (typeof addEgsAchievement === 'function') addEgsAchievement();
+      return;
+    }
+    if (typeof step === 'string' && step.slice(0, 4) === 'ach:') {
+      const id = step.slice(4);
+      const rec = (state.egsAchievements || []).find(a => a && a.id === id);
+      if (rec && !rec.open && typeof toggleEgsAchievement === 'function') toggleEgsAchievement(id);
+      const scope = _smStepScope() || document;
+      const el = scope.querySelector(`[onclick="toggleEgsAchievement('${id}')"]`);
+      if (el) {
+        if (typeof _smSteamSpot === 'function') _smSteamSpot([el], el);
+        else el.scrollIntoView({ block: 'center' });
+      }
+      return;
+    }
+    return orig.apply(this, arguments);
+  };
 })();

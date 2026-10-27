@@ -23074,20 +23074,12 @@ function buildSteamInfoEditSection() {
   const ws  = state.webSite;
   const ssa = state.steamSubmitAnswers;
 
-  /* ══ GENRES, FROM STEAMWORKS' OWN CHECKBOX LIST (v8.93) ══════════
-     This offered the Tag Wizard's top tier (STEAM_TAG_SUPERGENRES
-     now), not the Genres field the store form asks for. Steam asks both
-     questions and they are not the same list: the genre list has Indie
-     and Massively Multiplayer, which the tag tier does not. Read off the
-     Store edit page's own Genres checkboxes. */
-  const genreChecks = STEAM_INFO_GENRES.map(g => {
-    const checked = (ssa.infoGenres || []).includes(g);
-    return `<label class="cq-check-row${checked ? ' is-checked' : ''}">
-      <input type="checkbox" ${checked ? 'checked' : ''}
-             onchange="toggleSteamInfoGenre('${egsJsStr(g)}', this.checked)">
-      <span>${escHtml(g)}</span></label>`;
-  }).join('');
-
+  /* GENRES ARE NOT ASKED HERE ANY MORE (v9.20). Jaco: "el info modal de
+     Steam, necesito que no tenga los genres, y que los coja automáticamente
+     de las tags de genre seleccionadas por el dev." Steamworks' Genres
+     checkboxes are now read off the Tags section (steamInfoGenres,
+     state.js) — the developer has already said what kind of game it is
+     there, in more detail than this list allows. */
   /* TITLE, DEVELOPER AND PUBLISHER ARE NOT HERE (v8.93), by request. All
      three are typed directly on the Store Page Preview, on the page they
      appear on, and a second box for the same value one click away is a
@@ -23096,12 +23088,6 @@ function buildSteamInfoEditSection() {
      by looking. The Info block still OPENS this section; what it opens
      is now the part of itself that has nowhere else to live. */
   return `
-    <div class="form-group">
-      <label class="form-label">Genres</label>
-      <div class="cq-check-list">${genreChecks}</div>
-    </div>
-
-    <div class="ios-q-divider"></div>
     <label class="task-content-label" style="display:block;margin-bottom:6px;">Links</label>
     ${(ws.links || []).map(_wsLinkRowHTML).join('')}
     <button class="btn btn-ghost btn-sm" type="button" onclick="addWebLink()">Add</button>`;
@@ -23385,7 +23371,7 @@ function buildSteamStorePreviewPrototypeSection() {
      is the question its door opens (v8.96) — not the Tag Wizard's top
      tier, which is a different question in a different section. Blank
      until that question is answered. */
-  const infoGenreText = (ssa.infoGenres || []).join(', ');
+  const infoGenreText = (typeof steamInfoGenres === 'function' ? steamInfoGenres() : (ssa.infoGenres || [])).join(', ');
 
   // Developer/Publisher — Steam's own independent per-language storage
   // (state.webSite.localizedStoreText, via _steamFieldValue), whose Primary

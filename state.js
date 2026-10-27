@@ -8409,6 +8409,19 @@ function egsFeaturesFromSteamCategories(names) {
    Each returns its own page's order rather than Steam's, the way the
    Features seed does: a set that arrived in a foreign order reads as
    shuffled next to the list it was picked from. */
+/* STEAMWORKS' GENRES, READ OFF THE TAGS (v9.20). The Info section no longer
+   asks; the developer's tags answer. Every tag whose name is one of
+   Steamworks' genres counts (Action, RPG, Racing…; "MMO" counts as
+   Massively Multiplayer), in Steamworks' own order. A page with no tags yet
+   falls back to whatever a Steam import brought (infoGenres), so an imported
+   store page does not lose its genres before anyone has tagged it. */
+function steamInfoGenres() {
+  const tags = typeof steamWizardTags === 'function' ? steamWizardTags() : [];
+  const alias = { 'MMO': 'Massively Multiplayer', 'MMORPG': 'Massively Multiplayer' };
+  const fromTags = steamInfoGenresFromSteam(tags.map(t => alias[t] || t));
+  if (fromTags.length || tags.length) return fromTags;
+  return (state.steamSubmitAnswers && state.steamSubmitAnswers.infoGenres) || [];
+}
 function steamInfoGenresFromSteam(genres) {
   const out = [];
   (genres || []).forEach(g => {
