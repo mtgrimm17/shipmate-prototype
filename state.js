@@ -5680,6 +5680,35 @@ function makeBlankSteamAchievement() {
   };
 }
 
+/* ── WHAT STEAM LOCALIZES ABOUT AN ACHIEVEMENT (v9.27) ───────────────────
+   The two text fields its editor owns. Hidden is a flag, not words, and the
+   icons are pictures — a hidden achievement withholds its name and
+   description from the player, which makes them no less worth translating
+   for the players who have unlocked it.
+
+   NO LIMITS, which is Steam's habit and not an omission: its editor counts
+   nothing, and the store page's five fields carry one length between them
+   (STEAM_FIELD_CHAR_LIMITS, app.js, on the short description alone). An
+   empty table is how a field says it has no counter. */
+const STEAM_ACH_LOC_FIELDS = [
+  { value: 'displayName', label: 'Display Name' },
+  { value: 'description', label: 'Description' },
+];
+const STEAM_ACH_LOC_FIELD_KEYS = STEAM_ACH_LOC_FIELDS.map(f => f.value);
+const STEAM_ACH_FIELD_LIMITS = {};
+const STEAM_ACH_LOC_FIELD_LABELS = {
+  displayName: 'achievement name',
+  description: 'achievement description',
+};
+const STEAM_ACH_LOC_AUTOCFG_DEFAULT = { displayName: true, description: true };
+/* Real once it has the name the row is for. Steam's records, like Epic's,
+   are in the list from the moment Add is pressed and blank until typed in;
+   there is no persistent saved flag to read, and a nameless row in the
+   achievement picker is a row you cannot tell from the one above it. */
+function steamAchLocIsSaved(a) {
+  return !!(a && (a.displayName || '').trim());
+}
+
 /* THE LIST, FILTERED OF HOLES. One accessor so the preview block, the
    editor and the completeness check cannot disagree about what is in it. */
 function steamAchievements() {
@@ -6942,6 +6971,21 @@ const state = {
   steamTranslatePendingLangs: {},
   steamAutoTranslateFields: { description: true, developer: false, publisher: false, aboutGame: true },
   steamReviewSettingsOpen: false,
+  /* ── STEAM'S LOCALIZATIONS, NOW A PAGE WITH TABS (v9.27) ──────────────
+     The step was a stub. It is Mac's page now: a Store Page tab over the
+     five fields the keys above already serve, and an Achievements tab over
+     Steam's own achievements. Declared together, because the prefix is the
+     contract makeAchLocFamily builds every one of these names from. */
+  steamLocsView:                   'storePage',   // 'storePage' | 'achievements'
+  steamAchLocAchId:                null,
+  steamAchLocField:                'displayName',
+  steamAchLocMode:                 'all',         // 'all' | 'review'
+  steamAchLocSettingsOpen:         false,
+  steamAchLocAutoTranslateFields:  null,          // null = the defaults below
+  steamAchLocBackTranslation:      {},
+  steamAchLocUndoHistory:          {},
+  steamAchLocTranslateStatus:      {},
+  steamAchLocTranslatePendingLangs:{},
 
   // ── Business — "IAP Localizations" ──────────────────────────────────
   // A full parallel of the nine locReview*/iasTranslate*/iasAutoTranslate*

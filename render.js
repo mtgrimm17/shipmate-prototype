@@ -17980,6 +17980,15 @@ function _locsCardsHtml(cfg) {
   const locReviewStatusHtml = (status) => status === 'loading' ? locReviewLoadingSpinnerHtml : status === 'error' ? locReviewErrorStatusHtml : '';
 
   const fieldBlock = (value, onclickAttr, undoRedoHtml) => {
+    /* NO LIMIT, NO COUNTER (v9.26). Not every store invents one: Steam sets
+       a length on its short description and on nothing else, and Epic sets
+       none on its product name. `undefined - value.length` is NaN, so a
+       field with no limit printed the word NaN where its remaining
+       characters belong.
+       The standalone sections this builder replaced each tested `limit ==
+       null` and drew the counter-less block below; the shared one carried
+       that block and never reached for it, which is the whole bug. */
+    if (limit == null) return fieldBlockNoLimit(value, onclickAttr, undoRedoHtml);
     const overLimit = value.length > limit;
     const remaining = limit - value.length;
     const display = value ? escHtml(value) : `<span class="loc-review-placeholder">Click to edit</span>`;
@@ -19850,11 +19859,93 @@ function buildStepStubSection(title, note) {
    nobody renders is the one that silently rots. buildSteamLocalizations-
    Section, the other stub, is still reached and still here. */
 
+/* ══ STEAM'S LOCALIZATIONS, AS A PAGE WITH TABS (v9.27, by request) ══════
+   This was the stub that said "reviewing those translations will happen
+   here". It happens here now, and it is Mac's page: a Store Page tab and an
+   Achievements tab, through the same builder Epic went onto in v9.26.
+
+   THE STORE PAGE TAB IS THE REVIEW SURFACE THAT ALREADY EXISTED. Steam's
+   Localization Review has been reachable from the Store Page Preview's own
+   Localizations button all along, over these five fields and these
+   accessors; what it never had was a step of its own to open it from.
+   buildSteamLocalizationReviewSection stays exactly where it is and keeps
+   that door — two doors, one set of accessors, no second copy of the text.
+
+   NO IAPs TAB: Steam's page has none to localize, and `p.iaps` is optional
+   since v9.26.
+
+   FOUR OF THE FIVE FIELDS CARRY NO LIMIT, which is Steam's own habit — only
+   the short description has one. That is why the shared cards learned to
+   draw a field with no counter rather than one reading NaN (see
+   _locsCardsHtml); without it this page would have shown it four times
+   over. */
 function buildSteamLocalizationsSection() {
-  return buildStepStubSection(
-    'Localizations',
-    'Your Steam store page can carry a translated name, description and feature list per language, separately from the interface, audio and subtitle support you set on the Store Page Preview. Reviewing those translations will happen here. Nothing is required of you yet.'
-  );
+  return _buildUnifiedLocalizationsSection({
+    idPrefix: 'steam',
+    viewStateKey: 'steamLocsView',
+    viewSetterFn: 'setSteamLocsView',
+    storePage: {
+      fieldKey: 'steamLocReviewField', modeKey: 'steamLocReviewMode',
+      settingsOpenKey: 'steamReviewSettingsOpen',
+      autoCfgKey: 'steamAutoTranslateFields',
+      autoCfgDefault: { description: true, developer: false, publisher: false, aboutGame: true },
+      fields: STEAM_LOC_REVIEW_FIELDS,
+      limits: STEAM_FIELD_CHAR_LIMITS,
+      longFields: ['description', 'aboutGame'],
+      /* Title is the App Store's own value wherever it appears
+         (STEAM_SHARED_LISTING_FIELDS, app.js), so its switch reads and
+         writes iasAutoTranslateFields — the same override Mac App Store's
+         Title and Epic's Product Name use. Developer and Publisher ARE
+         offered here, unlike on Epic: Steam's store page prints them as
+         its own fields. */
+      settingsRows: [
+        ['title', 'Title', LOC_SHARED_AUTO_OVERRIDE],
+        ['description', 'Short Description'],
+        ['developer', 'Developer'],
+        ['publisher', 'Publisher'],
+        ['aboutGame', 'About This Game'],
+      ],
+      fieldHasOverLimitLang: _steamFieldHasOverLimitLang,
+      fieldValue: _steamFieldValue,
+      backTranslationValue: _steamLocReviewBackTranslationValue,
+      fieldTranslatePending: _steamFieldTranslatePending,
+      sourceBadge: _steamLocReviewSourceBadge,
+      undoState: _steamLocReviewUndoState,
+      undoFn: 'steamLocReviewUndo', redoFn: 'steamLocReviewRedo',
+      inlineEditFn: 'startSteamLocReviewInlineEdit',
+      backEditFn: 'startSteamLocReviewBackTranslationEdit',
+      toggleReviewModeFn: 'toggleSteamLocReviewMode',
+      fieldSetterFn: 'setSteamLocReviewField',
+      toggleAutoTranslateFieldFn: '_steamToggleAutoTranslateField',
+    },
+    achievements: {
+      savedKey: 'steamAchievements',
+      isSaved: steamAchLocIsSaved,
+      itemLabel: a => a.displayName,
+      emptyText: 'No achievements yet \u2014 add one from Steam - Achievements.',
+      fields: STEAM_ACH_LOC_FIELDS,
+      limits: STEAM_ACH_FIELD_LIMITS,
+      settingsRows: STEAM_ACH_LOC_FIELDS.map(f => [f.value, f.label]),
+      autoCfgDefault: STEAM_ACH_LOC_AUTOCFG_DEFAULT,
+      fieldKey: 'steamAchLocField', modeKey: 'steamAchLocMode',
+      settingsOpenKey: 'steamAchLocSettingsOpen',
+      autoCfgKey: 'steamAchLocAutoTranslateFields',
+      effectiveItemId: () => STEAM_ACH_LOC.effectiveAchId(),
+      fieldHasOverLimitLang: (id, f, langs) => STEAM_ACH_LOC.fieldHasOverLimitLang(id, f, langs),
+      fieldValue: (id, f, lang) => STEAM_ACH_LOC.fieldValue(id, f, lang),
+      backTranslationValue: (id, f, lang) => STEAM_ACH_LOC.backTranslationValue(id, f, lang),
+      fieldTranslatePending: (id, f, lang) => STEAM_ACH_LOC.fieldTranslatePending(id, f, lang),
+      sourceBadge: (id, f, lang) => STEAM_ACH_LOC.sourceBadge(id, f, lang),
+      undoState: (kind, id, f, lang) => STEAM_ACH_LOC.undoState(kind, id, f, lang),
+      undoFn: 'steamAchLocUndo', redoFn: 'steamAchLocRedo',
+      inlineEditFn: 'startSteamAchLocInlineEdit',
+      backEditFn: 'startSteamAchLocBackTranslationEdit',
+      toggleReviewModeFn: 'toggleSteamAchLocReviewMode',
+      itemSetterFn: 'setSteamAchLocReviewAchId',
+      fieldSetterFn: 'setSteamAchLocField',
+      toggleAutoTranslateFieldFn: '_steamAchLocToggleAutoTranslateField',
+    },
+  });
 }
 
 function buildAndroidLocalizationsSection() {

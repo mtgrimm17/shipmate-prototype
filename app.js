@@ -19936,6 +19936,51 @@ function _egsAchLocToggleAutoTranslateField(field) {
   return EGS_ACH_LOC.toggleAutoTranslateField(field);
 }
 
+/* ══ STEAM'S ACHIEVEMENT LOCALIZATIONS (v9.27) ═══════════════════════════
+   The second caller of makeAchLocFamily, and the one that pays for it: a
+   twenty-line config where v9.26's note said a fifth hand-written family
+   would have been six hundred. Same machinery, Steam's list, Steam's two
+   text fields, Steam's own state keys.
+
+   Steam's achievement records take `locs` the way Apple's and Epic's do —
+   the factory's one requirement of a store — and nothing else about them
+   changes. */
+const STEAM_ACH_LOC = makeAchLocFamily({
+  pid:            'steam',
+  keyPrefix:      'steamAchLoc',
+  listKey:        'steamAchievements',
+  isSaved:        steamAchLocIsSaved,
+  fields:         STEAM_ACH_LOC_FIELDS,
+  limits:         STEAM_ACH_FIELD_LIMITS,
+  labels:         STEAM_ACH_LOC_FIELD_LABELS,
+  translatable:   STEAM_ACH_LOC_FIELD_KEYS,
+  settingsWrapId: 'steam-locs-achievements-settings-wrap',
+});
+
+function startSteamAchLocInlineEdit(achId, field, lang, el, ev) {
+  return STEAM_ACH_LOC.startInlineEdit(achId, field, lang, el, ev);
+}
+function startSteamAchLocBackTranslationEdit(achId, field, lang, el, ev) {
+  return STEAM_ACH_LOC.startBackTranslationEdit(achId, field, lang, el, ev);
+}
+function steamAchLocUndo(kind, achId, field, lang, ev) {
+  return STEAM_ACH_LOC.undo(kind, achId, field, lang, ev);
+}
+function steamAchLocRedo(kind, achId, field, lang, ev) {
+  return STEAM_ACH_LOC.redo(kind, achId, field, lang, ev);
+}
+function toggleSteamAchLocReviewMode() { return STEAM_ACH_LOC.toggleReviewMode(); }
+function setSteamAchLocReviewAchId(achId) { return STEAM_ACH_LOC.setReviewAchId(achId); }
+function setSteamAchLocField(field) { return STEAM_ACH_LOC.setField(field); }
+function _steamAchLocToggleAutoTranslateField(field) {
+  return STEAM_ACH_LOC.toggleAutoTranslateField(field);
+}
+
+function setSteamLocsView(view) {
+  state.steamLocsView = view;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
 /* Which tab Epic's Localizations page is showing. Mirrors setMacLocsView. */
 function setEgsLocsView(view) {
   state.egsLocsView = view;
