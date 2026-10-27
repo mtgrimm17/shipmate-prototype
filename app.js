@@ -23508,7 +23508,37 @@ function toggleGiarcPicker(event, key) {
   closeAllDropdowns();
   if (wasOpen) return;
   state.giarcPickerOpen = key;
-  document.querySelector(`[data-giarc-picker="${key}"]`)?.classList.add('is-open');
+  const wrap = document.querySelector(`[data-giarc-picker="${key}"]`);
+  wrap?.classList.add('is-open');
+  _giarcPickerReveal(wrap);
+}
+
+/* AN OPENED LIST SCROLLS INTO VIEW (v9.22). Jaco: "que cuando dé a
+   cualquier picker multi, me hagas autoscroll para mostrar la mayor parte
+   del desplegable." A list opened near the bottom of the step ran off the
+   screen. The step scrolls, eased, just far enough to show the list's end —
+   but never so far that the pill you pressed goes above the top edge (or
+   under the pinned bar), so a list taller than the screen shows from its
+   pill down. */
+function _giarcPickerReveal(wrap) {
+  const dd = wrap && wrap.querySelector('.loc-dropdown');
+  if (!dd) return;
+  requestAnimationFrame(() => {
+    // Asked after the list is open: before it, the step may not scroll at all.
+    const sc = (typeof _smNearestScroller === 'function' && _smNearestScroller(wrap))
+            || wrap.closest('.submit-modal-scroll, .sub-pane, .mac-spp-main, .sm-steps-card');
+    if (!sc) return;
+    const scR = sc.getBoundingClientRect(), dR = dd.getBoundingClientRect(), wR = wrap.getBoundingClientRect();
+    const pin  = sc.querySelector('.cr-pinned');
+    const ceil = (pin ? pin.getBoundingClientRect().bottom : scR.top) + 12;
+    const over = dR.bottom - (scR.bottom - 16);
+    if (over <= 0) return;
+    const room = wR.top - ceil;
+    const by = Math.min(over, Math.max(0, room));
+    if (by <= 0) return;
+    if (typeof _smScrollTo === 'function') _smScrollTo(sc, sc.scrollTop + by);
+    else sc.scrollTop += by;
+  });
 }
 
 /* Epic's Presentation picker (buildEgsPresentation, render.js): Rarely and
@@ -33671,10 +33701,44 @@ function _smSteamFlipItems(flip) {
     }
     case 'technical': {
       const p = a.players || {};
-      return [row('Players', Object.keys(p).some(k => p[k]), 'tab:tech:players'),
-              row('Supported Features', (a.supportedFeatures || []).length, 'tab:tech:supported', true),
-              row('Controller Support', a.inputSupport, 'tab:tech:controller'),
-              row('Accessibility Features', (a.accessibilityFeatures || []).length, 'tab:tech:access', true)];
+      /* No tabs since v9.22 — each row goes to its heading. And, as Tags does
+         (v9.18), what is chosen shows under its row as removable pills.
+         Jaco: "¿y que igual que hacemos en Tags, se muestre lo seleccionado
+         en el Shippy panel?" */
+      const pills = (list, heading) => list.length ? [Object.assign(row(list.map(([label, call]) =>
+          `<button type="button" class="gd-tagpill" title="Remove ${escHtml(label)}" aria-label="Remove ${escHtml(label)}"` +
+          ` onclick="event.stopPropagation(); ${escHtml(call)}">${escHtml(label)}<span class="gd-tagpill-x" aria-hidden="true">${SM_CLEAR_SVG}</span></button>`
+        ).join(''), true, 'hd:' + heading), { cls: 'gd-task-pills', plain: true })] : [];
+      const PLAYER = { singlePlayer: 'Single-player', multiPlayer: 'Multi-player', pvp: 'PvP', pvpOnline: 'Online PvP',
+                       pvpLan: 'LAN PvP', pvpLocal: 'Local PvP', coop: 'Co-op', coopOnline: 'Online Co-op',
+                       coopLan: 'LAN Co-op', coopLocal: 'Local Co-op', mmo: 'MMO', crossPlatform: 'Cross-Platform' };
+      const players = Object.keys(PLAYER).filter(k => p[k]).map(k => [PLAYER[k], `setSteamPlayerPick('${k}', false)`]);
+      const sup = (typeof STEAM_SUPPORTED_FEATURES !== 'undefined' ? STEAM_SUPPORTED_FEATURES : [])
+        .filter(f => (a.supportedFeatures || []).includes(f.id))
+        .map(f => [f.label, `toggleSteamSupportedFeature('${egsJsStr(String(f.id))}', false)`]);
+      const INPUT = { keyboard_only: 'Mouse & keyboard only', keyboard_plus: 'Mouse & keyboard + gamepad',
+                      gamepad_preferred: 'Gamepad preferred', gamepad_required: 'Gamepad required' };
+      const PS = { ps_dualshock_usb: 'DualShock (USB)', ps_dualshock_bt: 'DualShock (USB + BT)',
+                   ps_dualsense_usb: 'DualSense (USB)', ps_dualsense_bt: 'DualSense (USB + BT)', ps_none: 'No PlayStation' };
+      const ctrl = [];
+      if (a.inputSupport) ctrl.push([INPUT[a.inputSupport] || a.inputSupport, `answerSteamField('inputSupport','${a.inputSupport}')`]);
+      if (a.xboxFullSupport === 'yes') ctrl.push(['Xbox', `answerSteamField('xboxFullSupport','yes')`]);
+      (a.psControllers || []).forEach(id => ctrl.push([PS[id] || id, `toggleSteamPS('${id}', false)`]));
+      if (a.steamInputAPI === 'yes') ctrl.push(['Steam Input API', `answerSteamField('steamInputAPI','yes')`]);
+      const acc = (typeof STEAM_ACCESSIBILITY_FEATURES !== 'undefined' ? STEAM_ACCESSIBILITY_FEATURES : [])
+        .filter(f => (a.accessibilityFeatures || []).includes(f.id))
+        .map(f => [f.label, `toggleSteamAccessibility('${egsJsStr(f.id)}', false)`]);
+      return [row('Players', Object.keys(p).some(k => p[k]), 'hd:Players'), ...pills(players, 'Players'),
+              row('Supported Features', sup.length, 'hd:Supported Features', true), ...pills(sup, 'Supported Features'),
+              row('Controller Support', a.inputSupport && (a.inputSupport === 'keyboard_only' || a.xboxFullSupport !== null), 'hd:Controller Support'), ...pills(ctrl, 'Controller Support'),
+              ...(() => {
+                const sum = typeof steamControllerSummary === 'function' ? steamControllerSummary() : [];
+                if (!sum.length) return [];
+                return [Object.assign(row(`<span class="gd-summary-label">Steam shows</span>` +
+                  sum.map(t => `<span class="gd-tagpill is-static">${escHtml(t)}</span>`).join(''), true, 'hd:Controller Support'),
+                  { cls: 'gd-task-pills gd-task-summary', plain: true })];
+              })(),
+              row('Accessibility', acc.length, 'hd:Accessibility', true), ...pills(acc, 'Accessibility')];
     }
     case 'sysreq': {
       const sr = typeof _steamSysreq === 'function' ? _steamSysreq() : {};
@@ -34024,4 +34088,55 @@ function _smEgsAchItems() {
     }
     return orig.apply(this, arguments);
   };
+})();
+
+/* Players picker (v9.22): one tick changes one mode; a mode ticked under an
+   unticked parent ticks that parent too, so what you picked always counts. */
+function setSteamPlayerPick(id, on) {
+  const p = state.steamSubmitAnswers.players || (state.steamSubmitAnswers.players = {});
+  if (on) {
+    const parents = { pvp: ['multiPlayer'], coop: ['multiPlayer'],
+      pvpOnline: ['multiPlayer', 'pvp'], pvpLan: ['multiPlayer', 'pvp'], pvpLocal: ['multiPlayer', 'pvp'],
+      coopOnline: ['multiPlayer', 'coop'], coopLan: ['multiPlayer', 'coop'], coopLocal: ['multiPlayer', 'coop'] }[id] || [];
+    parents.forEach(k => { p[k] = true; });
+  } else {
+    /* …and unticking a parent unticks what hangs from it (Jaco: "if I remove
+       Multi-player, you should remove the children too"). */
+    const kids = { multiPlayer: ['pvp', 'pvpOnline', 'pvpLan', 'pvpLocal', 'coop', 'coopOnline', 'coopLan', 'coopLocal'],
+                   pvp: ['pvpOnline', 'pvpLan', 'pvpLocal'], coop: ['coopOnline', 'coopLan', 'coopLocal'] }[id] || [];
+    kids.forEach(k => { p[k] = false; });
+  }
+  toggleSteamPlayer(id, on);
+}
+
+/* ONE LINE, THEN "AND N MORE" (v9.22). Jaco: "si llegamos a un punto en que
+   el preview del multipicker pasa a dos líneas, déjalo en una y que sea
+   'bla, bla, bla and x more'." A picker's pill names each pick in its own
+   span (.steam-tag-sum); after every render, a pill whose names do not fit
+   on one line keeps as many as fit and ends "and N more". Measured, not
+   counted, so it follows the pill's real width and the font. */
+function _steamPickFit() {
+  // Every picker in the app, not only Steam's (Jaco: "hazlo en todos los
+  // sitios en los que pase") — Epic's content-rating pickers too.
+  document.querySelectorAll('.giarc-picker .loc-primary-name').forEach(el => {
+    if (el.dataset.full == null) el.dataset.full = el.innerHTML;
+    el.innerHTML = el.dataset.full;
+    const spans = [...el.querySelectorAll('.steam-tag-sum')];
+    const fits = () => el.scrollWidth <= el.clientWidth + 1;
+    if (spans.length < 2 || fits()) return;
+    for (let k = spans.length - 1; k >= 1; k--) {
+      el.innerHTML = spans.slice(0, k).map(n => n.outerHTML).join(', ')
+        + ` <span class="steam-tag-more">and ${spans.length - k} more</span>`;
+      if (fits()) return;
+    }
+  });
+}
+(() => {
+  let t = null;
+  const soon = () => { if (t) return; t = requestAnimationFrame(() => { t = null; if (document.querySelector('.giarc-picker')) _steamPickFit(); }); };
+  new MutationObserver(soon).observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('resize', () => {
+    document.querySelectorAll('.giarc-picker .loc-primary-name').forEach(el => { if (el.dataset.full != null) el.innerHTML = el.dataset.full; });
+    soon();
+  });
 })();

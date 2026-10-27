@@ -32629,3 +32629,34 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .gd-tagcap.is-over .gd-tagcap-n b,
 .gd-tagcap.is-over .gd-tagcap-note { color: var(--magenta); }
 .gd-tagcap.is-over .gd-tagcap-track i { background: var(--magenta); }
+
+/* Steam Features (v9.22): Tags' pickers; a group heading inside a list spans
+   every column. */
+.steam-tag-dd-group { grid-column: 1 / -1; padding: 10px 14px 4px; font: 600 11px/1.2 var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--text-faint); }
+.steam-tag-dd-group:first-child { padding-top: 2px; }
+.steam-features .steam-players-preview-list,
+.steam-features > .steam-spp-muted { margin: 4px 0 2px; }
+/* v9.22: Controller Support's yes/no and pad pills; "No" greys the pads. */
+.steam-ctrl-pills { margin: 6px 0 14px; }
+.steam-ctrl-pills .ob-preset-pill.is-greyed { opacity: .4; }
+.steam-ctrl-q .steam-tag-block .giarc-row { padding-top: 6px; }
+.giarc-dd-item.is-radio .giarc-dd-box { border-radius: 50%; }
+/* v9.22: Players stays one full-width picker (Jaco: "mantén Players como un
+   multipicker largo"); the badges Steam will show run left to right under
+   it, in one wrapping row. */
+.steam-features .steam-players-side-tags .steam-players-preview-list { margin: 2px 0 4px; flex-direction: row; flex-wrap: wrap; gap: 6px; }
+.steam-features .steam-players-side-tags .steam-spp-muted { margin: 2px 0 4px !important; }
+.steam-ctrl-pills--no { margin: 6px 0 10px; }
+/* v9.22: the controller Summary, in Shippy under Controller Support. */
+.gd-task-summary .gd-summary-label { width: 100%; font: 10.5px/1.3 var(--mono); color: rgba(255,255,255,.45); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+.gd-tagpill.is-static { cursor: default; padding-right: 8px; }
+
+/* A picker option's hover is a rounded well inset from the list's edge, like
+   every other hover in the app (v9.22). Jaco: "en los multipickers, al
+   hoverear sobre una opción, el rectángulo gris que se marca, que sea con
+   rounded corners como todas las cosas que tenemos." */
+.giarc-dd-item { border-radius: 8px; margin: 1px 6px; width: calc(100% - 12px); }
+.steam-tag-dd-grid .giarc-dd-item { width: auto; }
+/* v9.22: a picker's pill is one line; _steamPickFit ends it "and N more". */
+.giarc-picker .loc-primary-name { white-space: nowrap !important; overflow: hidden !important; text-overflow: clip !important; }
+.giarc-picker .loc-primary-pill .steam-tag-more { color: inherit; opacity: .7; }

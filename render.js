@@ -19253,8 +19253,10 @@ function buildEgsContentRatingSection() {
     const m     = state.cqAnswerMeta && state.cqAnswerMeta[key];
     const ai    = !!(m && m.source && !m.humanConfirmed && cur.length);
     const names = cur.map(i => cfg.short[i]).filter(Boolean);
-    const summary = !names.length ? 'Select all that apply'
-                  : names.length <= 2 ? names.join(', ') : `${names.length} selected`;
+    /* Every pick by name, one line, ending "and N more" when it runs out of
+       room (_steamPickFit, app.js — v9.22, across every picker). */
+    const summaryHtml = !names.length ? 'Select all that apply'
+                  : names.map(n => `<span class="steam-tag-sum">${escHtml(n)}</span>`).join(', ');
     const open  = state.giarcPickerOpen === key;
     const items = giarcOptionEntries(q).map(o => {
       const on = cur.includes(o.index);
@@ -19274,7 +19276,7 @@ function buildEgsContentRatingSection() {
           <div class="loc-primary-wrap sw-select-wrap align-right giarc-picker${open ? ' is-open' : ''}" data-giarc-picker="${key}">
             <button type="button" class="loc-primary-pill${!names.length ? ' is-empty' : ai ? ' ai-confident' : ''}"
                     onclick="toggleGiarcPicker(event,'${key}')">
-              <span class="loc-primary-name">${escHtml(summary)}</span>
+              <span class="loc-primary-name">${summaryHtml}</span>
               <svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
             <div class="loc-dropdown">${items}</div>
@@ -22804,16 +22806,25 @@ function buildSteamTechnicalSection() {
      keyboard", so the row ran off the side of the card. The wizard puts
      the question on its own line with the options stacked under it as a
      radio list, and so does this. */
+  /* FOUR PILLS, ON SHOW (v9.22). Jaco first asked for a picker, then: "¿quizás
+     el Controller Support deberían ser 4 pills en vez de un multiselector?"
+     Four answers, one of them: Game Details' pills, all visible, the way the
+     top-level genre is asked. The wizard's sentences are too long for a pill,
+     so each pill says it short and keeps Steam's own wording on its hint. */
+  const INPUT_SHORT = { keyboard_only: 'Mouse & keyboard only', keyboard_plus: 'Mouse & keyboard + gamepad',
+                        gamepad_preferred: 'Gamepad preferred', gamepad_required: 'Gamepad required' };
   const inputHtml = `
     <div class="steam-ctrl-q">
       <div class="steam-ctrl-ask">What kind of devices can be used to comfortably play your game?</div>
-      <div class="steam-ctrl-opts">${INPUT_OPTS.map(o => `
-        <label class="steam-ctrl-opt${a.inputSupport === o.id ? ' is-on' : ''}">
-          <input type="radio" name="steam-input-support" ${a.inputSupport === o.id ? 'checked' : ''}
-                 onchange="answerSteamField('inputSupport','${o.id}')">
-          <span>${escHtml(o.label)}</span>
-        </label>`).join('')}</div>
+      <div class="ob-preset-pills steam-ctrl-pills">${INPUT_OPTS.map(o =>
+        `<button type="button" class="ob-preset-pill${a.inputSupport === o.id ? ' is-active' : ''}" data-tip="${escHtml(o.label)}"
+                 onclick="answerSteamField('inputSupport','${o.id}')">${escHtml(INPUT_SHORT[o.id] || o.label)}</button>`).join('')}</div>
     </div>`;
+  /* Yes / No and the PlayStation pads wear Game Details' pill (v9.22). Jaco:
+     "si doy Xbox / PlayStation, que el tipo de estilo sea igual… que no sean
+     verdes sino azules y mismo estilo que mi pill." */
+  const ynPills = (field) => `<div class="ob-preset-pills steam-ctrl-pills">${['yes', 'no'].map(v =>
+      `<button type="button" class="ob-preset-pill${a[field] === v ? ' is-active' : ''}" onclick="answerSteamField('${field}','${v}')">${v === 'yes' ? 'Yes' : 'No'}</button>`).join('')}</div>`;
 
   const psOpts = [
     { id: 'ps_dualshock_usb', label: 'DualShock Controller (USB)' },
@@ -22847,40 +22858,37 @@ function buildSteamTechnicalSection() {
       <div class="ios-content-step-label" style="margin-top:0;">Xbox Controller Support
         <span class="tooltip-anchor"><span class="tooltip-icon">?</span><span class="tooltip-body">${escHtml(ctrlCriteria)}</span></span>
       </div>
-      ${ynRow('Does your game meet the criteria for full Xbox Controller support?',
-        a.xboxFullSupport,
-        "answerSteamField('xboxFullSupport','yes')",
-        "answerSteamField('xboxFullSupport','no')")}
+      <div class="steam-ctrl-ask">Does your game meet the criteria for full Xbox Controller support?</div>
+      ${ynPills('xboxFullSupport')}
 
       ${headTip('PlayStation Controller Support', ctrlCriteria)}
-      <div class="form-label" style="margin-bottom:6px;">Yes, my game supports: <span style="color:var(--text-faint);font-weight:400;">(select all that apply)</span></div>
-      <div class="ms-chip-group">${psOpts.map(c => {
+      ${(() => {
+        /* NO COMES FIRST (v9.22). Jaco: "en PlayStation controllers, mueve NO
+           arriba de las preguntas." It is the answer that rules the other four
+           out, so it is asked before them, on its own row; "No" greys the four
+           pads, which stay pressable — one press swaps the answer back to a pad
+           (toggleSteamPS drops No). */
+        const none = (a.psControllers || []).includes('ps_none');
+        const pill = c => {
           const on = a.psControllers.includes(c.id);
-          return `<button class="ms-chip${on ? ' is-on' : ''}"
+          const grey = none && c.id !== 'ps_none';
+          return `<button type="button" class="ob-preset-pill${on ? ' is-active' : ''}${grey ? ' is-greyed' : ''}"
                           onclick="toggleSteamPS('${c.id}', ${!on})">${escHtml(c.label)}</button>`;
-        }).join('')}</div>
+        };
+        return `<div class="ob-preset-pills steam-ctrl-pills steam-ctrl-pills--no">${pill(psOpts.find(c => c.id === 'ps_none'))}</div>
+      <div class="form-label" style="margin-bottom:6px;">Yes, my game supports: <span style="color:var(--text-faint);font-weight:400;">(select all that apply)</span></div>
+      <div class="ob-preset-pills steam-ctrl-pills">${psOpts.filter(c => c.id !== 'ps_none').map(pill).join('')}</div>`;
+      })()}
 
       ${headTip('Steam Input API Integration',
         'Implements Steam Input actions and queries action origins so the right glyphs show, pauses automatically if a controller disconnects, and lets the player remap buttons through the Steam configurator.')}
-      ${ynRow('Does your game make full use of the Steam Input API?',
-        a.steamInputAPI,
-        "answerSteamField('steamInputAPI','yes')",
-        "answerSteamField('steamInputAPI','no')")}
+      <div class="steam-ctrl-ask">Does your game make full use of the Steam Input API?</div>
+      ${ynPills('steamInputAPI')}
 
-      <div class="ios-content-step-label">Summary</div>
-      <div class="form-hint" style="margin-bottom:6px;">Based on what you have said about your controller support, Steam will show customers:</div>
-      ${(() => {
-        const hasXbox = a.xboxFullSupport === 'yes';
-        const hasPs   = (a.psControllers || []).some(c => c !== 'ps_none');
-        const rows = [];
-        if (hasXbox || hasPs || a.steamInputAPI === 'yes') rows.push('Full Controller Support');
-        if (hasXbox) rows.push('Xbox Controllers');
-        if (hasPs)   rows.push('PlayStation Controllers');
-        return rows.length
-          ? `<div class="steam-players-preview-list">${rows.map(r =>
-              `<div class="steam-players-preview-row"><span class="steam-players-preview-icon">\u{1F3AE}</span><span class="steam-players-preview-label">${escHtml(r)}</span></div>`).join('')}</div>`
-          : `<div class="steam-spp-muted">Nothing yet — answer the questions above and Steam's breakdown appears here.</div>`;
-      })()}
+      ${/* THE SUMMARY MOVED TO SHIPPY (v9.22). Jaco: "que el summary que
+           tenemos aparezca en Shippy y no debajo de lo elegido." What Steam
+           will show is now the last line of Shippy's Controller Support row
+           (steamControllerSummary, state.js). */''}
     </div>
   ` : '';
 
@@ -22936,60 +22944,95 @@ function buildSteamTechnicalSection() {
     </label>`;
   }).join('');
 
-  /* ══ FOUR TABS, NOT ONE LONG SCROLL (v9.02) ═══════════════════════════
-     This card had grown to four unrelated questionnaires stacked end to
-     end — Players, seventeen Supported Features, the five-step controller
-     wizard and nineteen accessibility checkboxes — and the last of them
-     was two screens below the first. Tabs, the same control System
-     Requirements already uses for its operating systems.
+  /* ══ NO TABS: TAGS' SHAPE (v9.22) ═══════════════════════════════════════
+     Jaco: "let's remove the tabs from the Steam Features modal, and bring
+     the same system of multipicker selection we use in Tags." The four tabs
+     (v9.02) hid three of the four questions at any moment. Now it reads as
+     Tags does: a group heading per question and, under it, Tags' full-width
+     picker whose list opens below it — Players (the tree flattened, a
+     breakdown appearing under its parent once the parent is ticked),
+     Supported Features (two columns, each feature's sentence on its hint)
+     and Accessibility (Steam's four groups as headings inside the list).
+     Controller Support is a wizard of questions rather than a list to tick,
+     so it keeps its own controls under its heading. Storage and handlers are
+     unchanged (toggleSteamPlayer, toggleSteamSupportedFeature,
+     toggleSteamAccessibility). */
+  const head = (label, first, tip) => `${first ? '' : '<div class="ios-q-divider"></div>'}<div class="ios-content-step-label giarc-group-head"${first ? ' style="margin-top:0;"' : ''}>${label}${tip ? ` <span class="tooltip-anchor" data-tip="${escHtml(tip)}"><span class="tooltip-icon">?</span></span>` : ''}</div>`;
 
-     THE TAB IS NOT THE HEADING. Each pane keeps the section heading it
-     had, including where that heading repeats its own tab's name: the
-     headings were asked for by name (v9.02: "General Input Support"
-     becomes "Controller Support", "Accessibility Features" becomes
-     "Accessibility") and the tab labels were given separately, so the
-     two lists are deliberately not the same words. */
-  const TECH_TABS = [
-    { id: 'players',    label: 'Players' },
-    { id: 'supported',  label: 'Supported Features' },
-    { id: 'controller', label: 'Controller Support' },
-    { id: 'access',     label: 'Accessibility Features' },
-  ];
-  const techTab = TECH_TABS.some(t => t.id === state.steamTechnicalTab)
-    ? state.steamTechnicalTab : TECH_TABS[0].id;
+  /* THE WHOLE TREE, ALWAYS (v9.22). Jaco: "when I remove one tag, don't
+     remove the whole thing from the Players multipicker, just update the
+     tags." The breakdown used to appear only under a ticked parent, so
+     unticking Multi-player made PvP, Co-op and their six modes vanish from
+     the list. Every mode is listed now, indented under its parent; unticking
+     one changes only that one, and ticking a mode ticks the parents it
+     hangs from (setSteamPlayerPick, app.js) so it counts. */
+  const playerItems = [
+    { id: 'singlePlayer', label: 'Single-player' },
+    { id: 'multiPlayer',  label: 'Multi-player' },
+    { id: 'pvp', label: 'PvP', indent: 1 },
+    { id: 'pvpOnline', label: 'Online PvP', indent: 2 }, { id: 'pvpLan', label: 'LAN PvP', indent: 2 }, { id: 'pvpLocal', label: 'Local PvP', indent: 2 },
+    { id: 'coop', label: 'Co-op', indent: 1 },
+    { id: 'coopOnline', label: 'Online Co-op', indent: 2 }, { id: 'coopLan', label: 'LAN Co-op', indent: 2 }, { id: 'coopLocal', label: 'Local Co-op', indent: 2 },
+    { id: 'mmo',           label: 'MMO' },
+    { id: 'crossPlatform', label: 'Cross-Platform Multiplayer' },
+  ].map(i => ({ ...i, on: !!p[i.id], call: `setSteamPlayerPick('${i.id}', ${!p[i.id]})` }));
 
-  /* A tick on a tab means that pane has an answer in it, the same signal
-     the System Requirements tabs carry. Players is the only required one,
-     so it is the only one that also wears the asterisk. */
-  const techDone = {
-    players:    Object.keys(p || {}).some(k => p[k]),
-    supported:  supported.length > 0,
-    controller: !!a.inputSupport,
-    access:     (a.accessibilityFeatures || []).length > 0,
-  };
+  const supportedItems = STEAM_SUPPORTED_FEATURES.map(f => {
+    const on = supported.includes(f.id);
+    return { id: f.id, label: f.label, hint: f.desc, on, call: `toggleSteamSupportedFeature('${egsJsStr(String(f.id))}', ${!on})` };
+  });
 
-  const techTabsHtml = TECH_TABS.map(t => `
-    <button type="button" class="steam-sysreq-tab steam-tech-tab${
-      t.id === techTab ? ' is-current' : ''}${techDone[t.id] ? ' is-done' : ''}"
-            onclick="setSteamTechnicalTab('${t.id}')">${escHtml(t.label)}</button>`).join('');
-
-  const techPanes = {
-    players: playersHtml,
-    supported: `
-      <div class="ios-content-step-label" style="margin-top:0;">Supported Features</div>
-      <div class="cq-check-list"><div class="cq-checkboxes">${supportedRows}</div></div>`,
-    controller: `
-      <div class="ios-content-step-label" style="margin-top:0;">Controller Support</div>
-      ${inputHtml}
-      ${gamepadBlock}`,
-    access: `
-      <div class="ios-content-step-label" style="margin-top:0;">Accessibility <span style="font-weight:400;text-transform:none;font-size:11px;letter-spacing:0;">(Optional — select all that apply)</span></div>
-      <div class="cq-check-list">${accessChecks}</div>`,
-  };
+  const accessItems = [];
+  STEAM_ACCESS_CATEGORIES.forEach(cat => STEAM_ACCESSIBILITY_FEATURES.filter(f => f.cat === cat.id).forEach(f => {
+    const on = (a.accessibilityFeatures || []).includes(f.id);
+    accessItems.push({ id: f.id, label: f.label, hint: f.desc, group: cat.label, on, call: `toggleSteamAccessibility('${egsJsStr(f.id)}', ${!on})` });
+  }));
 
   return `
-    <div class="steam-sysreq-tabs steam-tech-tabs">${techTabsHtml}</div>
-    ${techPanes[techTab] || ''}`;
+    <div class="giarc-root giarc-flat steam-tags steam-features">
+      ${head('Players <span style="color:#e0555a;">*</span>', true)}
+      ${_steamListPicker('steam:players', playerItems, 'Select how it is played', 1)}
+      ${head('Supported Features')}
+      ${_steamListPicker('steam:supported', supportedItems, 'Select all that apply', 2)}
+      ${head('Controller Support <span style="color:#e0555a;">*</span>')}
+      ${inputHtml}
+      ${gamepadBlock}
+      ${head('Accessibility', false, 'Optional — select all that apply.')}
+      ${_steamListPicker('steam:access', accessItems, 'Select all that apply', 2)}
+    </div>`;
+}
+
+/* Tags' full-width picker, for any list of ticks (v9.22): each item carries
+   its own on-state and the call that flips it; an item with `group` starts
+   a heading inside the list, `indent` steps a child in, `hint` is its
+   tooltip. The list stays open while you tick (state.giarcPickerOpen). */
+function _steamListPicker(key, items, placeholder, cols, single) {
+  const open = state.giarcPickerOpen === key;
+  const names = items.filter(i => i.on).map(i => i.label);
+  let lastGroup = null;
+  const body = items.map(i => {
+    let g = '';
+    if (i.group && i.group !== lastGroup) { g = `<div class="steam-tag-dd-group">${escHtml(i.group)}</div>`; lastGroup = i.group; }
+    return g + `<button type="button" class="loc-dd-item giarc-dd-item${single ? ' is-radio' : ''}${i.on ? ' is-on' : ''}"${i.indent ? ` style="padding-left:${14 + i.indent * 18}px"` : ''}${i.hint ? ` data-tip="${escHtml(i.hint)}"` : ''}
+                    onclick="event.stopPropagation(); ${i.call}">
+              <span class="giarc-dd-box"></span><span class="loc-dd-name">${escHtml(i.label)}</span>
+            </button>`;
+  }).join('');
+  return `
+    <div class="giarc-card giarc-depth-1 giarc-inline steam-tag-block" data-key="${key}">
+      <div class="giarc-row">
+        <div class="loc-primary-wrap sw-select-wrap giarc-picker steam-tag-picker${open ? ' is-open' : ''}" data-giarc-picker="${key}">
+          <button type="button" class="loc-primary-pill${names.length ? '' : ' is-empty'}" onclick="toggleGiarcPicker(event,'${key}')">
+            <span class="loc-primary-name">${names.length ? names.map(n => `<span class="steam-tag-sum">${escHtml(n)}</span>`).join(', ') : escHtml(placeholder)}</span>
+            <svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="loc-dropdown steam-tag-dd">
+            ${single ? '' : `<div class="steam-tag-dd-head">${names.length} selected</div>`}
+            <div class="steam-tag-dd-grid" style="grid-template-columns:repeat(${cols || 1}, minmax(0, 1fr))">${body}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
 }
 
 /* ── Steam: Store Page Preview - Prototype's "Languages" block ──────

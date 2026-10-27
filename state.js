@@ -8591,6 +8591,11 @@ function isSteamSectionComplete(sectionId) {
   }
   if (sectionId === 'storeTags')  return a.topGenres.length >= 1;
   if (sectionId === 'technical')  {
+    /* BOTH STARRED QUESTIONS (v9.22): Players was marked required and never
+       asked for — now at least one mode is needed, beside Controller
+       Support, which was always the gate. */
+    const pl = a.players || {};
+    if (!Object.keys(pl).some(k => pl[k])) return false;
     if (a.inputSupport === null) return false;
     if (a.inputSupport !== 'keyboard_only' && a.xboxFullSupport === null) return false;
     return true;
@@ -8610,4 +8615,19 @@ function computeSteamSectionRisk(sectionId) {
   if (sectionId === 'storeTags')     return a.topGenres.length === 0 ? 'HIGH' : 'LOW';
   if (sectionId === 'technical')     return a.inputSupport === null  ? 'HIGH' : 'LOW';
   return 'LOW';
+}
+
+
+/* What Steam will show customers about controllers (v9.22) — the wizard's
+   own Summary step, read by Shippy's Controller Support row. */
+function steamControllerSummary() {
+  const a = state.steamSubmitAnswers || {};
+  if (!a.inputSupport || a.inputSupport === 'keyboard_only') return [];
+  const hasXbox = a.xboxFullSupport === 'yes';
+  const hasPs   = (a.psControllers || []).some(c => c !== 'ps_none');
+  const rows = [];
+  if (hasXbox || hasPs || a.steamInputAPI === 'yes') rows.push('Full Controller Support');
+  if (hasXbox) rows.push('Xbox Controllers');
+  if (hasPs)   rows.push('PlayStation Controllers');
+  return rows;
 }
