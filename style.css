@@ -32667,3 +32667,11 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   background: var(--pill-ai-bg); color: var(--pill-ai-color); border-color: transparent;
 }
 .giarc-picker .loc-primary-pill.ai-confident:hover { background: var(--pill-ai-bg-hover); color: var(--pill-ai-color-hover); }
+
+/* THE RING IS VIOLET TOO, WHEREVER AN ANSWER IS SUGGESTED (v9.23). Jaco:
+   "sigue fallando en las pills" — the top-level genre pills took the violet
+   fill and kept the selection's blue ring, because the ring is drawn from
+   --ring-top / --ring-bottom and only the fill was overridden. Set once, on
+   the class every suggested answer wears, so no pill can be half of each. */
+.ai-confident { --ring-top: var(--pill-ai-stroke-top); --ring-bottom: var(--pill-ai-stroke-bottom); }
+.steam-top-pills .ob-preset-pill.is-active.ai-confident { border-color: transparent; }
