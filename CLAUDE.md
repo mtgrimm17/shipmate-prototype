@@ -259,7 +259,7 @@ section exists to prevent, arriving through the one door it had not considered.
 The full renumbering history — every batch collapsed to one published version, every number burned as a local cache-bust, and the lesson each left — is in `docs/decisions/14-versioning-full.md`.
 
 Update the version in **three places**:
-1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (**15** of them since v6.80 added `shippy-live.js`)
+1. `index.html` — all `?v=X.XX` cache-bust params on script/style tags (**17** of them since v9.20 added `upf-egs.js`; 16 from v8.x, 15 since v6.80)
 2. `index.html` — the footer badge: `<span class="app-footer-version" id="app-footer-version">vX.XX</span>`
 3. `splash.html` — the version badge text (around line 1366)
 

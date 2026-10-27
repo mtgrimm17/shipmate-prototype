@@ -2033,6 +2033,9 @@ function upfMarkStep(pid, flag) {
 }
 
 function upfBuildPanelHTML(pid) {
+  /* The Epic card's Build from Steam panel lives in upf-egs.js (v9.20): same
+     seam, same agent, the Steam WINDOWS build as the input. */
+  if (typeof UPFEGS !== 'undefined' && UPFEGS.handles(pid)) return UPFEGS.panelHTML(pid);
   if (typeof UPF === 'undefined' || !UPF.isMac(pid)) return '';
   const u = state.upf;
   if (u.agent === false || u.agent === null) { UPF.health().then(h => { if (h) UPF.ensureMatch(); }); return ''; }
