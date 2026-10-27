@@ -18133,8 +18133,19 @@ function _buildUnifiedLocalizationsSection(p) {
   // request) — computed once, up front, so the tab row's own filter below
   // and the iaps/achievements branches further down (which need these exact
   // same lists anyway) can't disagree with each other.
-  const savedProducts = (state[p.iaps.answersKey].iapProducts || []).filter(x => x.collapsed);
-  const savedAchievements = (state[p.achievements.savedKey] || []).filter(x => x.saved);
+  /* NOT EVERY STORE HAS IAPS (v9.26). Epic's Localizations page is this
+     builder's first caller with only two tabs, so `p.iaps` is optional and
+     an absent one simply has no products — which the tab filter below
+     already treats as "no tab". Read defensively rather than guarded at
+     every use, so the branch further down stays the shape it was. */
+  const savedProducts = p.iaps
+    ? ((state[p.iaps.answersKey] || {}).iapProducts || []).filter(x => x.collapsed)
+    : [];
+  /* And which records count as real is the store's own question: Game
+     Center sets `.saved` once, Epic has no such flag and asks whether the
+     achievement has the text that makes it one. */
+  const achIsSaved = p.achievements.isSaved || (x => x.saved);
+  const savedAchievements = (state[p.achievements.savedKey] || []).filter(achIsSaved);
   const hasIaps = savedProducts.length > 0;
   const hasAchievements = savedAchievements.length > 0;
   const visibleViewOptions = LOC_VIEW_OPTIONS.filter(opt =>
@@ -18153,17 +18164,21 @@ function _buildUnifiedLocalizationsSection(p) {
       toggleReviewFnName, cardsCfg, settingsHtml, emptyState, cardClass;
 
   if (view === 'storePage') {
-    field = state[p.storePage.fieldKey] || 'title';
+    /* THE FIELD LIST IS THE CALLER'S (v9.26). It was the App Store's, which
+       is right for the three Apple surfaces and wrong for Epic, whose page
+       has a headline and no "what's new". */
+    const spFields = p.storePage.fields || LOC_STEP_REVIEW_FIELDS;
+    field = state[p.storePage.fieldKey] || spFields[0].value;
     // What's New is no longer one of this step's fields (LOC_STEP_REVIEW_FIELDS
     // above). A selection left over from the standalone Localization Review,
     // which shares this same state key, falls back to Title rather than showing
     // a field with no tab left to reselect it from — same treatment the view
     // fallback above gives a tab that has disappeared, and deliberately not
     // written back to state for the same reason.
-    if (!LOC_STEP_REVIEW_FIELDS.some(f => f.value === field)) field = 'title';
-    const limit = IAS_FIELD_CHAR_LIMITS[field];
+    if (!spFields.some(f => f.value === field)) field = spFields[0].value;
+    const limit = (p.storePage.limits || IAS_FIELD_CHAR_LIMITS)[field];
     reviewMode = state[p.storePage.modeKey] === 'review';
-    fieldOptions = LOC_STEP_REVIEW_FIELDS.map(f => ({
+    fieldOptions = spFields.map(f => ({
       value: f.value,
       label: f.label,
       warning: p.storePage.fieldHasOverLimitLang(f.value, langCodes),
@@ -18262,24 +18277,32 @@ function _buildUnifiedLocalizationsSection(p) {
     // hasAchievements. Same note as the iaps branch's own emptyState: this
     // branch only runs when hasAchievements is true, so it's unreachable in
     // practice, left as a harmless defensive fallback.
-    if (!savedAchievements.length) {
-      emptyState = '<div class="cq-inline-empty">No saved achievements yet — add one from Game Center.</div>';
-    }
+    const achEmpty = `<div class="cq-inline-empty">${
+      p.achievements.emptyText || 'No saved achievements yet — add one from Game Center.'}</div>`;
+    if (!savedAchievements.length) emptyState = achEmpty;
     itemId = p.achievements.effectiveItemId();
     const item = savedAchievements.find(x => x.id === itemId);
-    if (!emptyState && !item) emptyState = '<div class="cq-inline-empty">No saved achievements yet — add one from Game Center.</div>';
-    field = state[p.achievements.fieldKey] || 'displayName';
+    if (!emptyState && !item) emptyState = achEmpty;
+    // Game Center's three, or whatever this store's achievements are made of.
+    const achFields = p.achievements.fields || ACHIEVEMENT_LOC_FIELDS;
+    field = state[p.achievements.fieldKey] || achFields[0].value;
+    if (!achFields.some(f => f.value === field)) field = achFields[0].value;
     // Shared with the cards' pending test below, same as the Store Page branch.
     const achAutoCfg = state[p.achievements.autoCfgKey]
+      || p.achievements.autoCfgDefault
       || { displayName: true, earnedDescription: true, preEarnedDescription: true };
-    const limit = ACHIEVEMENT_FIELD_LIMITS[field];
+    const limit = (p.achievements.limits || ACHIEVEMENT_FIELD_LIMITS)[field];
     reviewMode = state[p.achievements.modeKey] === 'review';
-    fieldOptions = ACHIEVEMENT_LOC_FIELDS.map(f => ({
+    fieldOptions = achFields.map(f => ({
       value: f.value,
       label: f.label,
       warning: emptyState ? false : p.achievements.fieldHasOverLimitLang(itemId, f.value, langCodes),
     }));
-    itemOptions = savedAchievements.map(x => ({ value: x.id, label: escHtml(x.displayName || x.refName) || 'Untitled Achievement' }));
+    /* What to call each one in the picker: Game Center's display name, or
+       whatever the store's own record calls itself. */
+    const achLabel = p.achievements.itemLabel || (x => x.displayName || x.refName);
+    itemOptions = savedAchievements.map(x => ({
+      value: x.id, label: escHtml(achLabel(x) || '') || 'Untitled Achievement' }));
     itemSetterName = p.achievements.itemSetterFn;
     cardClass = 'iap-loc';
     settingsHtml = _locsSettingsMenu({
@@ -18289,7 +18312,8 @@ function _buildUnifiedLocalizationsSection(p) {
       toggleMenuOnclick: `_locsToggleSettingsMenu(event, '${p.achievements.settingsOpenKey}', '${p.idPrefix}-locs-achievements-settings-wrap')`,
       toggleFieldOnclick: (key) => `${p.achievements.toggleAutoTranslateFieldFn}('${key}')`,
       autoCfg: achAutoCfg,
-      rows: [['displayName', 'Display Name'], ['earnedDescription', 'Earned Description'], ['preEarnedDescription', 'Pre-Earned Description']],
+      rows: p.achievements.settingsRows
+        || [['displayName', 'Display Name'], ['earnedDescription', 'Earned Description'], ['preEarnedDescription', 'Pre-Earned Description']],
     });
     toggleReviewFnName = p.achievements.toggleReviewModeFn;
     if (!emptyState) {
@@ -18314,7 +18338,10 @@ function _buildUnifiedLocalizationsSection(p) {
 
   const cardsHtml = cardsCfg ? _locsCardsHtml(cardsCfg) : '';
   const wrapperClass = view === 'storePage' ? 'loc-review-cards' : 'iap-loc-cards';
-  const isLongField = view === 'storePage' && (field === 'description' || field === 'releaseNotes');
+  /* Which of the store page's fields get the taller card — the App Store's
+     two by default, Epic's short and long descriptions when it says so. */
+  const longFields = (p.storePage && p.storePage.longFields) || ['description', 'releaseNotes'];
+  const isLongField = view === 'storePage' && longFields.indexOf(field) >= 0;
   const wrapperModifiers = view === 'storePage'
     ? `${isLongField ? ' loc-review-cards--long-field' : ''}${reviewMode ? ' loc-review-cards--review-mode' : ''}`
     : '';
@@ -20486,8 +20513,97 @@ function buildEgsSocialMediaSection() {
 
 
 /* The step now renders the review itself rather than describing it (v7.31). */
+/* ══ EPIC'S LOCALIZATIONS, AS A PAGE WITH TABS (v9.26, by request) ═══════
+   "Implement localization for achievements as a separate tab, like in Mac
+   App Store - Localizations" — so it is Mac's page, with Mac's builder,
+   minus the tab Epic has nothing for.
+
+   THE STORE PAGE TAB IS THE SURFACE THAT WAS ALREADY HERE, and every
+   accessor it names is the one buildEgsLocalizationReviewSection was already
+   calling: `_steam*`, because the text lives in state.webSite.localizedStoreText
+   and has since v7.31's "two PC storefronts selling one game do not want two
+   French short descriptions". Nothing about which words appear, or where
+   they are stored, changes by moving this into the shared builder. What
+   changes is that it now has a tab row above it.
+
+   buildEgsLocalizationReviewSection STAYS, and is still what the Store Page
+   Preview's own Localizations button opens — a second door onto the same
+   field, with no tab row, which is the right shape inside the preview. Two
+   callers, one set of accessors, and no second copy of the text.
+
+   NO IAPs TAB: `p.iaps` is omitted, which v9.26 made legal. Epic's page has
+   no in-app purchases to localize, and a tab that is always empty is a tab
+   that teaches you to ignore the row it is in. */
 function buildEgsLocalizationsSection() {
-  return buildEgsLocalizationReviewSection();
+  return _buildUnifiedLocalizationsSection({
+    /* 'egs', not 'egs-locs': the builder appends '-locs-…' itself, so the
+       longer one produced ids like egs-locs-locs-item and the settings wrap
+       this page's own gear looks for never matched. */
+    idPrefix: 'egs',
+    viewStateKey: 'egsLocsView',
+    viewSetterFn: 'setEgsLocsView',
+    storePage: {
+      fieldKey: 'egsLocReviewField', modeKey: 'egsLocReviewMode',
+      settingsOpenKey: 'egsReviewSettingsOpen',
+      autoCfgKey: 'steamAutoTranslateFields',
+      autoCfgDefault: { description: true, headline: true, aboutGame: true },
+      fields: EGS_LOC_REVIEW_FIELDS,
+      limits: EGS_LOC_FIELD_CHAR_LIMITS,
+      /* Epic's two long ones. The App Store's default list names its own
+         "what's new", which Epic's page has not got. */
+      longFields: ['description', 'aboutGame'],
+      /* Product Name is the App Store's own value wherever it appears, so
+         its switch reads and writes iasAutoTranslateFields — the same
+         override Mac App Store's Title uses, for the same reason. */
+      settingsRows: [
+        ['title', 'Product Name', LOC_SHARED_AUTO_OVERRIDE],
+        ['description', 'Short Description'],
+        ['headline', 'Headline'],
+        ['aboutGame', 'Description'],
+      ],
+      fieldHasOverLimitLang: _egsLocFieldHasOverLimitLang,
+      fieldValue: _steamFieldValue,
+      backTranslationValue: _steamLocReviewBackTranslationValue,
+      fieldTranslatePending: _steamFieldTranslatePending,
+      sourceBadge: _steamLocReviewSourceBadge,
+      undoState: _steamLocReviewUndoState,
+      undoFn: 'steamLocReviewUndo', redoFn: 'steamLocReviewRedo',
+      inlineEditFn: 'startSteamLocReviewInlineEdit',
+      backEditFn: 'startSteamLocReviewBackTranslationEdit',
+      toggleReviewModeFn: 'toggleEgsLocReviewMode',
+      fieldSetterFn: 'setEgsLocReviewField',
+      toggleAutoTranslateFieldFn: '_steamToggleAutoTranslateField',
+    },
+    achievements: {
+      savedKey: 'egsAchievements',
+      isSaved: egsAchLocIsSaved,
+      /* Epic's rows have no persistent saved flag, so the picker names them
+         by the field its own editor marks required. */
+      itemLabel: a => a.unlockedDisplayName,
+      emptyText: 'No achievements yet \u2014 add one from Achievements.',
+      fields: EGS_ACH_LOC_FIELDS,
+      limits: EGS_ACH_FIELD_LIMITS,
+      settingsRows: EGS_ACH_LOC_FIELDS.map(f => [f.value, f.label]),
+      autoCfgDefault: EGS_ACH_LOC_AUTOCFG_DEFAULT,
+      fieldKey: 'egsAchLocField', modeKey: 'egsAchLocMode',
+      settingsOpenKey: 'egsAchLocSettingsOpen',
+      autoCfgKey: 'egsAchLocAutoTranslateFields',
+      effectiveItemId: () => EGS_ACH_LOC.effectiveAchId(),
+      fieldHasOverLimitLang: (id, f, langs) => EGS_ACH_LOC.fieldHasOverLimitLang(id, f, langs),
+      fieldValue: (id, f, lang) => EGS_ACH_LOC.fieldValue(id, f, lang),
+      backTranslationValue: (id, f, lang) => EGS_ACH_LOC.backTranslationValue(id, f, lang),
+      fieldTranslatePending: (id, f, lang) => EGS_ACH_LOC.fieldTranslatePending(id, f, lang),
+      sourceBadge: (id, f, lang) => EGS_ACH_LOC.sourceBadge(id, f, lang),
+      undoState: (kind, id, f, lang) => EGS_ACH_LOC.undoState(kind, id, f, lang),
+      undoFn: 'egsAchLocUndo', redoFn: 'egsAchLocRedo',
+      inlineEditFn: 'startEgsAchLocInlineEdit',
+      backEditFn: 'startEgsAchLocBackTranslationEdit',
+      toggleReviewModeFn: 'toggleEgsAchLocReviewMode',
+      itemSetterFn: 'setEgsAchLocReviewAchId',
+      fieldSetterFn: 'setEgsAchLocField',
+      toggleAutoTranslateFieldFn: '_egsAchLocToggleAutoTranslateField',
+    },
+  });
 }
 
 

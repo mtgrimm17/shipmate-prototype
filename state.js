@@ -3511,6 +3511,45 @@ function appStoreStepGateOn(pid) {
    conversation with Epic rather than a field, so this card states the default
    and says the request exists rather than pretending to grant it. */
 const EGS_ACH_CHAR_MAX = 255;
+/* ── WHAT EPIC LOCALIZES ABOUT AN ACHIEVEMENT (v9.26) ────────────────────
+   The four text fields its editor owns, in the editor's own order: the
+   unlocked pair first, because that is the pair Epic marks required and the
+   pair its page actually prints (see egsAchievements' own note on reading
+   the unlocked fields and only those). All four share one limit, which is
+   the one the editor already counts against.
+
+   Flavour text is on the record and is not here, by request — it can join
+   by adding a row, since everything downstream reads these tables. */
+const EGS_ACH_LOC_FIELDS = [
+  { value: 'unlockedDisplayName', label: 'Unlocked Name' },
+  { value: 'unlockedDescription', label: 'Unlocked Description' },
+  { value: 'lockedDisplayName',   label: 'Locked Name' },
+  { value: 'lockedDescription',   label: 'Locked Description' },
+];
+const EGS_ACH_LOC_FIELD_KEYS = EGS_ACH_LOC_FIELDS.map(f => f.value);
+const EGS_ACH_FIELD_LIMITS = EGS_ACH_LOC_FIELD_KEYS.reduce(
+  (o, k) => (o[k] = EGS_ACH_CHAR_MAX, o), {});
+const EGS_ACH_LOC_FIELD_LABELS = {
+  unlockedDisplayName: 'unlocked achievement name',
+  unlockedDescription: 'unlocked achievement description',
+  lockedDisplayName:   'locked achievement name',
+  lockedDescription:   'locked achievement description',
+};
+/* Every one of them translates by default: unlike a store listing, where a
+   studio name is deliberately left alone, all four of these are sentences a
+   player reads. */
+const EGS_ACH_LOC_AUTOCFG_DEFAULT = EGS_ACH_LOC_FIELD_KEYS.reduce(
+  (o, k) => (o[k] = true, o), {});
+/* AN ACHIEVEMENT IS REAL ONCE IT HAS THE NAME EPIC REQUIRES. Game Center
+   sets a persistent `.saved` flag when its editor commits a row; Epic's
+   records have no such flag — they are in the list from the moment Add is
+   pressed, blank. The unlocked display name is what its own editor marks
+   required, so it is the honest test for "this is an achievement, not an
+   empty row", and it keeps a half-typed row out of the picker. */
+function egsAchLocIsSaved(a) {
+  return !!(a && (a.unlockedDisplayName || '').trim());
+}
+
 const EGS_ACH_XP = { min: 5, max: 200, step: 5, total: 1000 };
 const EGS_ACH_TIERS = [
   { id: 'bronze', label: 'Bronze', min: 5,   max: 45  },
@@ -6556,6 +6595,21 @@ const state = {
   egsLocReviewField:     'title',
   egsLocReviewMode:      'all',    // 'all' | 'review'
   egsReviewSettingsOpen: false,
+  /* ── EPIC'S LOCALIZATIONS, NOW A PAGE WITH TABS (v9.26) ────────────────
+     Which tab is showing, and the achievements tab's own working notes.
+     The prefix is the contract: makeAchLocFamily (app.js) builds every one
+     of these key names off `egsAchLoc`, so they are declared here together
+     rather than discovered one at a time when something reads undefined. */
+  egsLocsView:                   'storePage',   // 'storePage' | 'achievements'
+  egsAchLocAchId:                null,
+  egsAchLocField:                'unlockedDisplayName',
+  egsAchLocMode:                 'all',         // 'all' | 'review'
+  egsAchLocSettingsOpen:         false,
+  egsAchLocAutoTranslateFields:  null,          // null = the defaults below
+  egsAchLocBackTranslation:      {},
+  egsAchLocUndoHistory:          {},
+  egsAchLocTranslateStatus:      {},
+  egsAchLocTranslatePendingLangs:{},
 
   // Per-field AI inference metadata for Steam (mirrors iosAnswerMeta)
   steamAnswerMeta: {},

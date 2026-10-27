@@ -19294,6 +19294,654 @@ function _achLocBlankLocalizedText() {
 // moment a previously-saved achievement is reopened, which would otherwise
 // make it vanish from here (and from the achievement picker dropdown that
 // reads this list) while the developer is mid-edit.
+/* ══ ONE ACHIEVEMENT-LOCALIZATION FAMILY, MADE TO ORDER (v9.26) ══════════
+   The App Store, Mac App Store and Mac App Store Full each carry their own
+   hand-written copy of this machinery — twenty-nine functions apiece, the
+   same twenty-nine, differing only in which list they read, which fields
+   they localize and which state keys they keep their working notes in.
+   Epic needs a fourth and Steam a fifth, and two more transcriptions of
+   nineteen hundred lines is not a thing to do twice more by hand.
+
+   SO THIS IS THE FOURTH AND FIFTH, NOT A REWRITE OF THE FIRST THREE. The
+   three that exist are shipped, and each has platform-specific history in
+   it; replacing them with this would put every Apple surface at risk to
+   tidy a file. They stay exactly as they are. What this guarantees instead
+   is that Epic's tab BEHAVES like Mac's rather than merely looking like it:
+   every line below is Mac's own, transcribed with six things parameterized,
+   so the translate guard, the Steam-authority ordering, the in-flight
+   dedupe, the undo stacks and the back-translation sync are the same code
+   doing the same thing.
+
+   WHAT A CALLER SUPPLIES:
+     pid             — the platform the deferred re-renders belong to;
+     keyPrefix       — state.<prefix>Mode, …UndoHistory, …AchId and the rest;
+     listKey         — state.<listKey> holds the achievement records;
+     isSaved         — which of them are real enough to localize;
+     fields/limits/labels/translatable — the text this store localizes;
+     settingsWrapId  — the DOM id of its settings menu's wrapper.
+
+   The records themselves must carry `locs[lang][field]` the way Apple's do;
+   that shape is the contract, and _achLocBlankLocalizedText makes one. */
+function makeAchLocFamily(ACFG) {
+  /* ACFG, NOT `cfg` — measured, not styled. Several of the transcribed
+     functions declare their own `const cfg` for the auto-translate settings
+     object, which shadowed the parameter and made every table lookup read
+     a null. The equivalence test below caught it; the odd name is what
+     keeps it caught. */
+  const P = ACFG.keyPrefix;
+
+function FSavedAchievements() {
+    return (state[ACFG.listKey] || []).filter(a => ACFG.isSaved(a));
+  }
+
+  function FEffectiveAchId() {
+    const saved = FSavedAchievements();
+    if (!saved.length) return null;
+    if (saved.some(a => a.id === state[P + 'AchId'])) return state[P + 'AchId'];
+    return saved[0].id;
+  }
+
+  function FFieldValue(achId, field, lang) {
+    const a = (state[ACFG.listKey] || []).find(x => x.id === achId);
+    if (!a) return '';
+    const fd = state.formData;
+    const primary = fd.primaryLanguage || 'en';
+    if (lang === primary) return a[field] || '';
+    const entry = a.locs && a.locs[lang];
+    return (entry && entry[field]) || '';
+  }
+
+  function FFieldHasOverLimitLang(achId, field, langCodes) {
+    const limit = ACFG.limits[field];
+    return langCodes.some(lang => FFieldValue(achId, field, lang).length > limit);
+  }
+
+  // Mirrors _masIapLocSourceBadge, plus a 'steam' case (an IAP product has no
+  // Steam-sourced text at all; an achievement imported from Steam can) —
+  // checked BEFORE 'ai' since a genuine Steam localization, while its
+  // authority still holds, always outranks an AI-translated guess of the
+  // same primary text (see FTriggerAutoTranslate's write-time guard,
+  // which enforces that same ordering when a translation is written).
+  function FSourceBadge(achId, field, lang) {
+    const a = (state[ACFG.listKey] || []).find(x => x.id === achId);
+    if (!a) return null;
+    const fd = state.formData;
+    const primary = fd.primaryLanguage || 'en';
+    if (lang === primary) return null;
+    if (!FFieldValue(achId, field, lang)) return null;
+    const entry = a.locs && a.locs[lang];
+    if (!entry) return null;
+    if (entry[field + 'FromSteam']) return 'steam';
+    if (FFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (a[field] || '')) return 'ai';
+    return null;
+  }
+
+  function FSetFieldValue(achId, field, lang, value) {
+    const a = (state[ACFG.listKey] || []).find(x => x.id === achId);
+    if (!a) return;
+    const fd = state.formData;
+    const primary = fd.primaryLanguage || 'en';
+    if (lang === primary) {
+      a[field] = value;
+      if (FFieldAutoTranslateEnabled(field)) FTriggerAutoTranslate(achId, field, value);
+      return;
+    }
+    if (!a.locs) a.locs = {};
+    if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+    a.locs[lang][field] = value;
+    // A manual edit of this language's own card always wins over whatever
+    // automatically populated it before — same "developer's own typing is
+    // final" rule every other inline-edit path in this file already follows.
+    delete a.locs[lang][field + 'FromSteam'];
+  }
+
+  // Newly-added language — bring every already-saved achievement's
+  // Achievement Localizations up to date right away, the same job
+  // _iapLocPropagateAllFields/_masIapLocPropagateAllFields do for IAP
+  // Localizations (all three called together from toggleObLang). Without
+  // this, an achievement saved (or last edited) BEFORE this language existed
+  // has no a.locs[lang] entry at all — saveMacGcAchievement/
+  // _applySteamAchievements only ever propagate to the supporting languages
+  // that exist AT THAT MOMENT — so every field would show blank in
+  // Achievement Localizations until the achievement happened to be reopened
+  // and re-saved. _checkSteamLocalizedAchievements (toggleObLang's other new-
+  // language call) still runs alongside this and, per
+  // FTriggerAutoTranslate's own write-time guard, always wins if it
+  // finds a genuine Steam localization for the same language/field.
+  function FPropagateAllFields() {
+    FSavedAchievements().forEach(a => {
+      ACFG.translatable.forEach(field => FTriggerAutoTranslate(a.id, field, a[field] || ''));
+    });
+  }
+
+  function FFieldAutoTranslateEnabled(field) {
+    const cfg = state[P + 'AutoTranslateFields'];
+    if (!cfg) return ACFG.translatable.includes(field);
+    return !!cfg[field];
+  }
+
+  async function FTriggerAutoTranslate(achId, field, primaryValue) {
+    if (!FFieldAutoTranslateEnabled(field)) return;
+    const a = (state[ACFG.listKey] || []).find(x => x.id === achId);
+    if (!a) return;
+    const fd = state.formData;
+    const supportedLangs = fd.localizations || [];
+    if (!supportedLangs.length) return;
+
+    const text      = (primaryValue || '').trim();
+    const sourceKey = field + 'SourceText';
+    // See _iasTriggerAutoTranslate's own inFlightKey comment (above, this
+    // file) — same mechanism, applied here. Achievements are the dominant
+    // term in the fan-out that comment describes, so this is where a
+    // redundant re-translate is most costly to skip on.
+    const inFlightKey = sourceKey + 'Pending';
+
+    if (!a.locs) a.locs = {};
+    const eligible = supportedLangs.filter(lang => {
+      const entry = a.locs[lang];
+      const cachedSource  = entry ? entry[sourceKey]   : undefined;
+      const pendingSource = entry ? entry[inFlightKey] : undefined;
+      if (cachedSource === text) return false;
+      if (pendingSource === text) return false;
+      // Steam first — see _steamAlreadySupplied/_steamMayStillSupply. Achievements are scraped by their
+      // own separately-timed call, hence the 'achievements' domain.
+      if (_steamAlreadySupplied(entry, field, text)) return false;
+      if (_steamMayStillSupply(lang, 'achievements')) return false;
+      return true;
+    });
+    if (!eligible.length) return;
+
+    if (!text) {
+      eligible.forEach(lang => {
+        if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+        a.locs[lang][field]     = '';
+        a.locs[lang][sourceKey] = '';
+        delete a.locs[lang][field + 'FromSteam'];
+        const backEntry = FBackTranslationEntry(achId, field, lang);
+        if (backEntry.syncedTopText !== '') FRefreshBackTranslation(achId, field, lang, '');
+      });
+      _locDeferredRerender(ACFG.pid, 'achievements', field, achId);
+      return;
+    }
+
+    if (!CLAUDE_API_KEY) return;
+
+    state[P + 'TranslateStatus'] = state[P + 'TranslateStatus'] || {};
+    state[P + 'TranslateStatus'][achId] = state[P + 'TranslateStatus'][achId] || {};
+    state[P + 'TranslateStatus'][achId][field] = 'loading';
+    state[P + 'TranslatePendingLangs'] = state[P + 'TranslatePendingLangs'] || {};
+    state[P + 'TranslatePendingLangs'][achId] = state[P + 'TranslatePendingLangs'][achId] || {};
+    state[P + 'TranslatePendingLangs'][achId][field] = eligible.slice();
+    eligible.forEach(lang => {
+      if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+      a.locs[lang][inFlightKey] = text;
+    });
+    _locDeferredRerender(ACFG.pid, 'achievements', field, achId);
+
+    const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
+    const fieldLabel    = ACFG.labels[field] || field;
+    const perLangBudget = field === 'displayName' ? 80 : 200;
+    const maxTokens     = Math.min(8192, 300 + eligible.length * perLangBudget);
+
+    const prompt = `Translate the following Game Center achievement ${fieldLabel} text for a mobile/video game into each of the listed languages.
+
+  Source text:
+  """
+  ${text}
+  """
+
+  Target languages (ISO code: language name):
+  ${langList}
+
+  Return ONLY valid JSON — no markdown fences, no extra text:
+    {
+      "translations": { "<language code>": "<translated text>", ... }
+    }
+
+  Rules:
+  - Preserve the tone and meaning of the source text.
+  - Write natural, idiomatic translations for a native speaker of each target language — not literal word-for-word.
+  - Include every requested language code as a key.`;
+
+    try {
+      // Queued — see _enqueueTranslateTask's own comment (above, this file).
+      // Achievements are the dominant term in the fan-out that comment
+      // describes: every saved achievement times every translatable field,
+      // for this platform alone.
+      await _enqueueTranslateTask(async () => {
+      const res = await fetch(CLAUDE_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'x-api-key':                                 CLAUDE_API_KEY,
+          'anthropic-version':                         '2023-06-01',
+          'content-type':                              'application/json',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model:      CLAUDE_MODEL,
+          max_tokens: maxTokens,
+          messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+        }),
+      });
+
+      if (!res.ok) throw await smClaudeHttpError(res);
+      const data    = await res.json();
+      const resText = (data.content?.[0]?.text || '').trim();
+      const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+      const parsed  = JSON.parse(cleaned);
+      const results = parsed.translations || {};
+
+      eligible.forEach(lang => {
+        const translated = results[lang];
+        if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+        const entry = a.locs[lang];
+        delete entry[inFlightKey];
+        if (typeof translated !== 'string' || !translated.trim()) return;
+        // Same Steam-authority write-time guard as _iasTriggerAutoTranslate's
+        // own descriptionFromSteam check (see that function's comment for the
+        // full race explanation) — only fires when Steam's cached source text
+        // still equals what THIS call is translating, so a Steam localization
+        // that arrived after this translate kicked off (Steam's fetch is
+        // typically much faster than a Claude round trip) doesn't get
+        // silently overwritten by an in-flight AI translation of the same
+        // now-stale primary text.
+        if (entry[field + 'FromSteam'] && entry[sourceKey] === text) return;
+        entry[field]     = translated;
+        entry[sourceKey] = text;
+        delete entry[field + 'FromSteam'];
+        const backEntry = FBackTranslationEntry(achId, field, lang);
+        if (backEntry.syncedTopText !== translated) FRefreshBackTranslation(achId, field, lang, translated);
+      });
+
+      state[P + 'TranslateStatus'][achId][field] = 'complete';
+      });
+    } catch (e) {
+      console.warn('[Mac App Store Achievement Localizations Translate]', achId, field, e.message);
+      state[P + 'TranslateStatus'][achId][field] = 'error';
+      eligible.forEach(lang => {
+        const entry = a.locs[lang];
+        if (entry) delete entry[inFlightKey];
+      });
+    }
+    state[P + 'TranslatePendingLangs'][achId][field] = [];
+    _locDeferredRerender(ACFG.pid, 'achievements', field, achId);
+  }
+
+  function FFieldTranslatePending(achId, field, lang) {
+    if (!state[P + 'TranslateStatus'] || !state[P + 'TranslateStatus'][achId] || state[P + 'TranslateStatus'][achId][field] !== 'loading') return false;
+    const pending = state[P + 'TranslatePendingLangs'] && state[P + 'TranslatePendingLangs'][achId] && state[P + 'TranslatePendingLangs'][achId][field];
+    return !!(pending && pending.includes(lang));
+  }
+
+  function FToggleAutoTranslateField(field) {
+    state[P + 'AutoTranslateFields'] = state[P + 'AutoTranslateFields'] || {};
+    state[P + 'AutoTranslateFields'][field] = !state[P + 'AutoTranslateFields'][field];
+    if (state[P + 'AutoTranslateFields'][field]) {
+      FSavedAchievements().forEach(a => FTriggerAutoTranslate(a.id, field, a[field] || ''));
+    }
+    reRenderStepModal();
+  }
+
+  function FstartInlineEdit(achId, field, lang, el, ev) {
+    if (ev) ev.stopPropagation();
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+    const inHalf = !!(el.closest && el.closest('.iap-loc-half'));
+    const limit = ACFG.limits[field];
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+    input.classList.add('ias-inline-input');
+    input.value = FFieldValue(achId, field, lang);
+
+    const counterRow = el.nextElementSibling;
+    const errorEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-error') : null;
+    const countEl = counterRow?.classList.contains('ias-char-counter-row') ? counterRow.querySelector('.ias-char-count') : null;
+
+    const updateCounter = () => {
+      const remaining = limit - input.value.length;
+      const isOver = remaining < 0;
+      if (countEl) {
+        countEl.textContent = String(remaining);
+        countEl.classList.toggle('is-over', isOver);
+      }
+      if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';
+      input.classList.toggle('is-over-limit', isOver);
+    };
+
+    const commit = () => {
+      const previousValue = FFieldValue(achId, field, lang);
+      if (input.value !== previousValue) FPushUndo('real', achId, field, lang, previousValue);
+      FSetFieldValue(achId, field, lang, input.value);
+      if (inHalf) {
+        const backEntry = FBackTranslationEntry(achId, field, lang);
+        if (backEntry.syncedTopText !== input.value) FRefreshBackTranslation(achId, field, lang, input.value);
+      }
+      reRenderStepModal();
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('input', updateCounter);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+
+    el.replaceWith(input);
+    updateCounter();
+    input.focus();
+    input.select();
+  }
+
+  function FBackTranslationValue(achId, field, lang) {
+    const entry = state[P + 'BackTranslation']
+      && state[P + 'BackTranslation'][achId]
+      && state[P + 'BackTranslation'][achId][field]
+      && state[P + 'BackTranslation'][achId][field][lang];
+    return entry || { text: '', syncedTopText: undefined, status: null, forwardStatus: null };
+  }
+
+  function FBackTranslationEntry(achId, field, lang) {
+    if (!state[P + 'BackTranslation']) state[P + 'BackTranslation'] = {};
+    const forAch   = state[P + 'BackTranslation'][achId] || (state[P + 'BackTranslation'][achId] = {});
+    const forField = forAch[field] || (forAch[field] = {});
+    return forField[lang] || (forField[lang] = { text: '', syncedTopText: undefined, status: null, forwardStatus: null });
+  }
+
+  function FSyncBackTranslations(achId) {
+    if (!achId) return Promise.resolve();
+    const fd = state.formData;
+    const field = state[P + 'Field'] || 'displayName';
+    const supportedLangs = fd.localizations || [];
+
+    const jobs = [];
+    supportedLangs.forEach(lang => {
+      const topText = FFieldValue(achId, field, lang);
+      const entry = FBackTranslationEntry(achId, field, lang);
+      if (entry.syncedTopText === topText) return;
+      jobs.push(FRefreshBackTranslation(achId, field, lang, topText));
+    });
+    return Promise.all(jobs);
+  }
+
+  async function FRefreshBackTranslation(achId, field, lang, topText) {
+    const entry = FBackTranslationEntry(achId, field, lang);
+
+    if (!topText.trim()) {
+      entry.text = '';
+      entry.syncedTopText = topText;
+      entry.status = null;
+      _locDeferredRerenderBack(ACFG.pid, 'achievements', field, achId);
+      return;
+    }
+
+    entry.status = 'loading';
+    _locDeferredRerenderBack(ACFG.pid, 'achievements', field, achId);
+
+    const fd = state.formData;
+    const primary = fd.primaryLanguage || 'en';
+    const translated = await _iasTranslateSingle(topText, lang, primary);
+
+    const currentTop = FFieldValue(achId, field, lang);
+    if (currentTop !== topText) { FRefreshBackTranslation(achId, field, lang, currentTop); return; }
+
+    const freshEntry = FBackTranslationEntry(achId, field, lang);
+    if (translated === null) {
+      freshEntry.status = 'error';
+    } else {
+      freshEntry.text = translated;
+      freshEntry.syncedTopText = topText;
+      freshEntry.status = null;
+    }
+    _locDeferredRerenderBack(ACFG.pid, 'achievements', field, achId);
+  }
+
+  async function FCommitPrimaryEdit(achId, field, lang, value) {
+    const entry = FBackTranslationEntry(achId, field, lang);
+    entry.text = value;
+    entry.syncedTopText = undefined;
+    entry.forwardStatus = value.trim() ? 'loading' : null;
+    reRenderStepModal();
+
+    if (!value.trim()) {
+      FSetFieldValue(achId, field, lang, '');
+      entry.syncedTopText = '';
+      reRenderStepModal();
+      return;
+    }
+
+    const fd = state.formData;
+    const primary = fd.primaryLanguage || 'en';
+    const translated = await _iasTranslateSingle(value, primary, lang);
+
+    const currentEntry = FBackTranslationEntry(achId, field, lang);
+    if (currentEntry.text !== value) return;
+
+    if (translated === null) {
+      currentEntry.forwardStatus = 'error';
+    } else {
+      FSetFieldValue(achId, field, lang, translated);
+      currentEntry.syncedTopText = translated;
+      currentEntry.forwardStatus = null;
+    }
+    reRenderStepModal();
+  }
+
+  function FstartBackEdit(achId, field, lang, el, ev) {
+    if (ev) ev.stopPropagation();
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
+    input.classList.add('ias-inline-input');
+    input.value = FBackTranslationValue(achId, field, lang).text;
+
+    const commit = () => {
+      const previousValue = FBackTranslationValue(achId, field, lang).text;
+      if (input.value !== previousValue) FPushUndo('draft', achId, field, lang, previousValue);
+      FCommitPrimaryEdit(achId, field, lang, input.value);
+    };
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    });
+
+    el.replaceWith(input);
+    input.focus();
+    input.select();
+  }
+
+  function FUndoEntry(kind, achId, field, lang) {
+    if (!state[P + 'UndoHistory']) state[P + 'UndoHistory'] = { real: {}, draft: {} };
+    const forKind  = state[P + 'UndoHistory'][kind] || (state[P + 'UndoHistory'][kind] = {});
+    const forAch   = forKind[achId] || (forKind[achId] = {});
+    const forField = forAch[field] || (forAch[field] = {});
+    return forField[lang] || (forField[lang] = { past: [], future: [] });
+  }
+
+  function FUndoState(kind, achId, field, lang) {
+    const entry = state[P + 'UndoHistory']
+      && state[P + 'UndoHistory'][kind]
+      && state[P + 'UndoHistory'][kind][achId]
+      && state[P + 'UndoHistory'][kind][achId][field]
+      && state[P + 'UndoHistory'][kind][achId][field][lang];
+    return { canUndo: !!(entry && entry.past.length), canRedo: !!(entry && entry.future.length) };
+  }
+
+  function FPushUndo(kind, achId, field, lang, previousValue) {
+    const entry = FUndoEntry(kind, achId, field, lang);
+    entry.past.push(previousValue);
+    if (entry.past.length > IAP_LOC_UNDO_LIMIT) entry.past.shift();
+    entry.future = [];
+  }
+
+  function FRestoreFieldValue(kind, achId, field, lang, value) {
+    if (kind === 'draft') {
+      FCommitPrimaryEdit(achId, field, lang, value);
+      return;
+    }
+    FSetFieldValue(achId, field, lang, value);
+    const primary = state.formData.primaryLanguage || 'en';
+    if (state[P + 'Mode'] === 'review' && lang !== primary) {
+      const backEntry = FBackTranslationEntry(achId, field, lang);
+      if (backEntry.syncedTopText !== value) FRefreshBackTranslation(achId, field, lang, value);
+    }
+    reRenderStepModal();
+  }
+
+  function Fundo(kind, achId, field, lang, ev) {
+    if (ev) ev.stopPropagation();
+    const entry = FUndoEntry(kind, achId, field, lang);
+    if (!entry.past.length) return;
+    const current  = kind === 'draft' ? FBackTranslationValue(achId, field, lang).text : FFieldValue(achId, field, lang);
+    const previous = entry.past.pop();
+    entry.future.push(current);
+    FRestoreFieldValue(kind, achId, field, lang, previous);
+  }
+
+  function Fredo(kind, achId, field, lang, ev) {
+    if (ev) ev.stopPropagation();
+    const entry = FUndoEntry(kind, achId, field, lang);
+    if (!entry.future.length) return;
+    const current = kind === 'draft' ? FBackTranslationValue(achId, field, lang).text : FFieldValue(achId, field, lang);
+    const next     = entry.future.pop();
+    entry.past.push(current);
+    FRestoreFieldValue(kind, achId, field, lang, next);
+  }
+
+  async function FtoggleReviewMode() {
+    const exitingCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+    exitingCards.forEach(c => c.classList.add('is-flip-exit'));
+    await new Promise(r => setTimeout(r, 160));
+    exitingCards.forEach(c => c.classList.remove('is-flip-exit'));
+
+    state[P + 'Mode'] = state[P + 'Mode'] === 'review' ? 'locs' : 'review';
+    reRenderStepModal();
+    if (state[P + 'Mode'] === 'review') FSyncBackTranslations(FEffectiveAchId());
+
+    const enteringCards = Array.from(document.querySelectorAll('.iap-loc-card:not(.iap-loc-card--primary)'));
+    enteringCards.forEach(c => c.classList.add('is-flip-enter'));
+    await new Promise(r => setTimeout(r, 280));
+    enteringCards.forEach(c => c.classList.remove('is-flip-enter'));
+  }
+
+  function FsetReviewAchId(achId) {
+    state[P + 'AchId'] = achId;
+    reRenderStepModal();
+    if (state[P + 'Mode'] === 'review') FSyncBackTranslations(achId);
+  }
+
+  function FsetField(field) {
+    state[P + 'Field'] = field;
+    reRenderStepModal();
+    if (state[P + 'Mode'] === 'review') FSyncBackTranslations(FEffectiveAchId());
+  }
+
+  /* Achievement Localizations' own "Automatically translated fields" settings
+     — mirrors _masIapLocToggleSettingsMenu, against the configured settings-open key and
+     its own DOM id. */
+  function FToggleSettingsMenu(event) {
+    event.stopPropagation();
+    const wasOpen = !!state[P + 'SettingsOpen'];
+    closeAllDropdowns();
+    if (!wasOpen) {
+      state[P + 'SettingsOpen'] = true;
+      document.getElementById(ACFG.settingsWrapId)?.classList.add('is-open');
+    }
+  }
+
+  return {
+    savedAchievements:        FSavedAchievements,
+    effectiveAchId:           FEffectiveAchId,
+    fieldValue:               FFieldValue,
+    fieldHasOverLimitLang:    FFieldHasOverLimitLang,
+    sourceBadge:              FSourceBadge,
+    setFieldValue:            FSetFieldValue,
+    propagateAllFields:       FPropagateAllFields,
+    fieldAutoTranslateEnabled:FFieldAutoTranslateEnabled,
+    triggerAutoTranslate:     FTriggerAutoTranslate,
+    fieldTranslatePending:    FFieldTranslatePending,
+    toggleAutoTranslateField: FToggleAutoTranslateField,
+    backTranslationValue:     FBackTranslationValue,
+    backTranslationEntry:     FBackTranslationEntry,
+    syncBackTranslations:     FSyncBackTranslations,
+    refreshBackTranslation:   FRefreshBackTranslation,
+    commitPrimaryEdit:        FCommitPrimaryEdit,
+    undoEntry:                FUndoEntry,
+    undoState:                FUndoState,
+    pushUndo:                 FPushUndo,
+    restoreFieldValue:        FRestoreFieldValue,
+    toggleSettingsMenu:       FToggleSettingsMenu,
+    // The six a rendered row calls by name, which is why they are returned
+    // under the names a caller will publish them as rather than the local
+    // ones above.
+    startInlineEdit:          FstartInlineEdit,
+    startBackTranslationEdit: FstartBackEdit,
+    undo:                     Fundo,
+    redo:                     Fredo,
+    toggleReviewMode:         FtoggleReviewMode,
+    setReviewAchId:           FsetReviewAchId,
+    setField:                 FsetField,
+  };
+}
+
+/* ══ EPIC'S ACHIEVEMENT LOCALIZATIONS, FROM THE FACTORY (v9.26) ══════════
+   The first caller of makeAchLocFamily, and the whole reason it exists: this
+   is Mac App Store's machinery, instantiated against Epic's list, Epic's
+   four text fields and Epic's own state keys. achfactory926 proves the
+   factory is a faithful transcription by running it AS the Mac App Store and
+   comparing it against the hand-written functions, so what is claimed here —
+   that Epic's tab behaves the way Mac's does rather than merely looking like
+   it — is a tested claim and not a hope.
+
+   THE RECORDS CARRY `locs` THE WAY APPLE'S DO. That shape is the factory's
+   one requirement of a store, and Epic's achievement records take it
+   without changing anything else about them: a language's text at
+   locs[lang][field], its provenance beside it at [field + 'SourceText'] and
+   [field + 'FromSteam']. Epic imports achievements from Steam too
+   (egsSteamAchievements, state.js), so the Steam-authority ordering the
+   factory carries is doing real work here and not riding along unused. */
+const EGS_ACH_LOC = makeAchLocFamily({
+  pid:            'egs',
+  keyPrefix:      'egsAchLoc',
+  listKey:        'egsAchievements',
+  isSaved:        egsAchLocIsSaved,
+  fields:         EGS_ACH_LOC_FIELDS,
+  limits:         EGS_ACH_FIELD_LIMITS,
+  labels:         EGS_ACH_LOC_FIELD_LABELS,
+  translatable:   EGS_ACH_LOC_FIELD_KEYS,
+  settingsWrapId: 'egs-locs-achievements-settings-wrap',
+});
+
+/* PUBLISHED UNDER THE NAMES THE ROWS CALL (v9.26). The cards' onclick
+   attributes are strings built by the unified builder, so these six have to
+   be reachable as globals by name — the factory returns them, this names
+   them. Everything else stays behind EGS_ACH_LOC, where a reader can see at
+   a glance that it is one family and not thirty loose functions. */
+function startEgsAchLocInlineEdit(achId, field, lang, el, ev) {
+  return EGS_ACH_LOC.startInlineEdit(achId, field, lang, el, ev);
+}
+function startEgsAchLocBackTranslationEdit(achId, field, lang, el, ev) {
+  return EGS_ACH_LOC.startBackTranslationEdit(achId, field, lang, el, ev);
+}
+function egsAchLocUndo(kind, achId, field, lang, ev) {
+  return EGS_ACH_LOC.undo(kind, achId, field, lang, ev);
+}
+function egsAchLocRedo(kind, achId, field, lang, ev) {
+  return EGS_ACH_LOC.redo(kind, achId, field, lang, ev);
+}
+function toggleEgsAchLocReviewMode() { return EGS_ACH_LOC.toggleReviewMode(); }
+function setEgsAchLocReviewAchId(achId) { return EGS_ACH_LOC.setReviewAchId(achId); }
+function setEgsAchLocField(field) { return EGS_ACH_LOC.setField(field); }
+function _egsAchLocToggleAutoTranslateField(field) {
+  return EGS_ACH_LOC.toggleAutoTranslateField(field);
+}
+
+/* Which tab Epic's Localizations page is showing. Mirrors setMacLocsView. */
+function setEgsLocsView(view) {
+  state.egsLocsView = view;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
 function _masAchLocSavedAchievements() {
   return (state.macGameCenterAchievements || []).filter(a => a.saved);
 }
