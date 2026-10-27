@@ -32498,6 +32498,15 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   color: var(--pill-ai-color);
 }
 
+/* The Store Page Preview's own language switcher (v9.29), parked top-right
+   above the tabs the way Mac App Store's sits in its header. Absolute so it
+   does not take a row of its own on a page whose first element is a 40px
+   title; the tabs below are the first thing in the flow either way. */
+.egs-sp .egs-sp-langbar {
+  position: absolute; top: 14px; right: 18px; z-index: 2;
+}
+.egs-sp { position: relative; }
+
 /* A SUGGESTED TAG'S NAME INSIDE THE SUMMARY (v9.19). The pill is the
    field, not the answer, so it stays the ordinary selected blue and only
    the names Shipmate put there take the violet — which is what lets a

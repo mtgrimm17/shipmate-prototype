@@ -6574,6 +6574,12 @@ const state = {
      picker above — the tab strip was always drawn and never pressable, so
      half the page Epic publishes had no preview at all. */
   egsPreviewTab: 'overview',
+  /* Which language the Store Page Preview is drawn in (v9.29, by request)
+     — the same control Mac App Store's Product Page Preview has. Surface
+     state, like egsPreviewTab above: null means the primary language, and
+     a code that stops being supported falls back to it on read
+     (_egsEffectivePreviewLang, app.js) rather than being healed in place. */
+  egsPreviewLang: null,
 
   /* WHICH OPERATING SYSTEM'S TAB THE SPECIFICATIONS FORM IS SHOWING
      (v8.88). Surface state, like egsPreviewTab above: the portal opens on
@@ -6982,7 +6988,10 @@ const state = {
   steamLocReviewUndoHistory: { real: {}, draft: {} },
   steamTranslateStatus: {},
   steamTranslatePendingLangs: {},
-  steamAutoTranslateFields: { description: true, developer: false, publisher: false, aboutGame: true },
+  // headline is Epic's own field (EGS_ONLY_LOC_FIELDS, app.js) and on by
+  // default like the other real marketing copy — v9.25 added the field and
+  // left it out of here, which is why its switch read as off (v9.29).
+  steamAutoTranslateFields: { description: true, headline: true, developer: false, publisher: false, aboutGame: true },
   steamReviewSettingsOpen: false,
   /* ── STEAM'S LOCALIZATIONS, NOW A PAGE WITH TABS (v9.27) ──────────────
      The step was a stub. It is Mac's page now: a Store Page tab over the

@@ -8215,7 +8215,9 @@ function buildStorePreviewFlipSection(platformId, target) {
     if (platformId === 'egs') return buildEgsLocalizationReviewSection();
     if (platformId === 'macos') return buildMacLocalizationReviewSection();
     if (platformId === 'macos_full') return buildMacFullLocalizationReviewSection();
-    if (platformId === 'steam') return buildSteamLocalizationReviewSection();
+    // Steam's own door went with its button (v9.29) — Steam - Localizations
+    // is the step now; see buildSteamLocalizationsSection.
+
     return buildLocalizationReviewSection();
   }
   // Business Questions' "IAP Locs" button (buildIapSection, further above) —
@@ -13434,11 +13436,18 @@ function buildMacLocalizationReviewSection() {
    shape-matches LOC_REVIEW_FIELDS above, just Steam's own 5 fields (Title,
    plus its own independent Short Description/Developer/Publisher/About This
    Game) instead of the App Store's 4. */
+/* DEVELOPER AND PUBLISHER ARE NOT LOCALIZABLE HERE EITHER (v9.29, by
+   request). Epic's list lost them in v9.25 on the grounds that a studio
+   name and a publisher name are proper nouns that read the same in every
+   language; that argument was always about the NAMES rather than about
+   Epic, and v9.25's note kept them here only because Steam's page prints
+   them as its own fields. Printing one is not translating it. The values
+   are untouched — the store page still shows them, and they still live in
+   the same per-language store (_steamFieldValue) — they are simply no
+   longer offered as something to review per language. */
 const STEAM_LOC_REVIEW_FIELDS = [
   { value: 'title',       label: 'Title' },
   { value: 'description', label: 'Short Description' },
-  { value: 'developer',   label: 'Developer' },
-  { value: 'publisher',   label: 'Publisher' },
   { value: 'aboutGame',   label: 'About This Game' },
 ];
 
@@ -19898,11 +19907,12 @@ function buildSteamLocalizationsSection() {
          Title and Epic's Product Name use. Developer and Publisher ARE
          offered here, unlike on Epic: Steam's store page prints them as
          its own fields. */
+      /* The gear lists exactly what the dropdown lists — a switch for a
+         field you cannot open is a setting with nowhere to take effect.
+         Developer and Publisher went with the fields in v9.29. */
       settingsRows: [
         ['title', 'Title', LOC_SHARED_AUTO_OVERRIDE],
         ['description', 'Short Description'],
-        ['developer', 'Developer'],
-        ['publisher', 'Publisher'],
         ['aboutGame', 'About This Game'],
       ],
       fieldHasOverLimitLang: _steamFieldHasOverLimitLang,
@@ -21128,12 +21138,32 @@ function buildEgsStorePreviewSection() {
 
   const tab       = (state.egsPreviewTab === 'achievements') ? 'achievements' : 'overview';
 
-  const title     = (fd.title || '').trim();
+  /* ── THE PAGE IS DRAWN IN ONE LANGUAGE AT A TIME (v9.29, by request) ───
+     The dropdown top-right picks it, the way Mac App Store's Product Page
+     Preview has always done. On the primary language every one of these is
+     exactly what it was; on a supporting one they are that language's own
+     copy, read through the same accessor Localizations reads
+     (_steamFieldValue) so the two surfaces cannot disagree about a value.
+
+     EDITABLE IN EITHER, and that is the point of routing the writes as well
+     as the reads: typing into a French card here is the same edit as typing
+     it in Localizations, through the same setter, with the same undo and
+     back-translation machinery behind it. A read-only preview would have
+     been less work and would have made this page a dead end. */
+  const previewLang    = (typeof _egsEffectivePreviewLang === 'function')
+    ? _egsEffectivePreviewLang() : (fd.primaryLanguage || 'en');
+  const isPrimaryLang  = previewLang === (fd.primaryLanguage || 'en');
+  const locVal = (field, fallback) => isPrimaryLang ? fallback
+    : ((typeof _steamFieldValue === 'function' ? _steamFieldValue(field, previewLang) : '') || '');
+  const locSet = (field, primaryCall) => isPrimaryLang ? primaryCall
+    : `_steamSetFieldValue('${field}','${previewLang}', this.value)`;
+
+  const title     = locVal('title', (fd.title || '').trim());
   /* Steam's cached blurb stands in until somebody types their own, resolved
      by egsShortDesc so the page and the status bar cannot disagree. */
-  const desc      = egsShortDesc();
-  const headline  = (a.headline || '').trim();
-  const aboutText = egsBodyText();
+  const desc      = locVal('description', egsShortDesc());
+  const headline  = locVal('headline', (a.headline || '').trim());
+  const aboutText = locVal('aboutGame', egsBodyText());
   const developer = (ws.developer || '').trim();
   const publisher = (ws.publisher || developer || '').trim();
 
@@ -21464,7 +21494,7 @@ function buildEgsStorePreviewSection() {
     id: 'egs-sp-short', cls: 'egs-sp-short', value: desc, multiline: true, rows: 3,
     limit: EGS_PAGE_LIMITS.shortDesc, placeholder: 'Short Description',
     onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.shortDesc})`,
-    onChange: `setEgsProductText('shortDesc', this.value)` });
+    onChange: locSet('description', `setEgsProductText('shortDesc', this.value)`) });
 
   /* GENRES AND FEATURES SIT SIDE BY SIDE, because they do on Epic's own page
      — Rocket League's shows Genres in a narrow left column and Features in a
@@ -21525,12 +21555,12 @@ function buildEgsStorePreviewSection() {
         ${egsPageField({ id: 'egs-sp-headline', cls: 'egs-sp-headline', value: headline,
             limit: EGS_PAGE_LIMITS.headline, placeholder: 'Headline',
             onInput: `updateEgsHeadlineCounter(this)`,
-            onChange: `setEgsPageField('headline', this.value)` })}
+            onChange: locSet('headline', `setEgsPageField('headline', this.value)`) })}
       </div>
       ${egsPageField({ spp: 'description', id: 'egs-sp-body', cls: 'egs-sp-body', value: aboutText, multiline: true, rows: 5,
           limit: bodyLimit, placeholder: 'Long Description',
           onInput: `updateEgsBodyCounter(this)`,
-          onChange: `setWebSiteField('aboutGame', this.value); _egsProductRepaint()` })}
+          onChange: locSet('aboutGame', `setWebSiteField('aboutGame', this.value); _egsProductRepaint()`) })}
     </div>`;
 
   /* ── THE FOOT OF THE PAGE, which on Epic is where everything the developer
@@ -21701,7 +21731,19 @@ function buildEgsStorePreviewSection() {
           rowCls: 'egs-sp-titlerow',
           limit: EGS_PAGE_LIMITS.name, placeholder: 'Game Name',
           onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.name})`,
-          onChange: `setEgsProductShared('title', this.value)` })}
+          onChange: locSet('title', `setEgsProductShared('title', this.value)`) })}
+      ${/* The language switcher, top-right, exactly where Mac App Store's
+            Product Page Preview keeps its own (_macSppLangDropdownHTML). It
+            is drawn only when there is a second language to switch TO. */''}
+      ${(() => {
+        const langs = [fd.primaryLanguage || 'en', ...((fd.localizations || []).slice()
+          .sort((a2, b2) => (OB_LANG_NAMES[a2] || a2).localeCompare(OB_LANG_NAMES[b2] || b2)))];
+        if (langs.length < 2) return '';
+        const opts = langs.map(l => ({ value: l, label: OB_LANG_NAMES[l] || l }));
+        return `<div class="egs-sp-langbar"><div class="ias-locs-lang-group">${
+          swSelect('egs-preview-lang', previewLang, opts, 'setEgsPreviewLang', 'auto', 'right')
+        }</div></div>`;
+      })()}
       <div class="egs-sp-tabs">
         <!-- No Add-Ons tab (v8.54). Epic shows one only for a product that
              HAS add-ons; this card has no notion of them, so it was a tab
@@ -22156,7 +22198,13 @@ function buildSteamActiveCard(pid, force) {
   const checkSVG = smCheckSVG(20);
 
   const binProcSteam = !!(state.platformBuildProcessing?.[pid]);
-  const stepCards = p.steps.map((step, i) => {
+  /* THROUGH THE ONE GATE (v9.29, by request). Every other platform's card
+     builds from _visiblePlatformSteps, which drops Localizations until
+     Game Details names a supporting language — a step whose whole subject
+     is "the other languages" is not a step while there are none. Steam's
+     card read p.steps raw and so kept showing it, which is the one place
+     the rule was not applied rather than a rule Steam was exempt from. */
+  const stepCards = _visiblePlatformSteps(pid).map((step, i) => {
     const done      = isSteamSectionComplete(step.id);
     const numClass  = 'ios-step-num' + (done ? ' is-done' : '');
 
@@ -24563,8 +24611,14 @@ function buildSteamStorePreviewPrototypeSection() {
       </span>
       <div class="ias-label-right">
         <span class="ias-label-note">Reflects your submission data</span>
+        ${/* THE LOCALIZATIONS BUTTON IS GONE (v9.29, by request). Steam has
+             a Localizations STEP since v9.27 — the store page and the
+             achievements, with a tab row — and a second door onto half of
+             it, from the page it is about, is a second place to look. The
+             language dropdown stays: it chooses which language this page is
+             drawn in, which is a different question from reviewing them all
+             side by side. */''}
         <div class="ias-locs-lang-group">
-          <button class="ias-all-locs-btn" onclick="openStorePreviewSection('steam','localization')" title="Review every localized field side by side">Localizations</button>
           ${swSelect('steam-preview-lang', previewLang, previewLangOptions, 'setSteamPreviewLang', '150px', 'right')}
         </div>
       </div>

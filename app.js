@@ -4126,12 +4126,35 @@ const LOC_SURFACE = {
                       screens: [{ stepId: 'gameCenter', flip: 'achievementLocalizations' }] },
     },
   },
+  /* STEAM HAS A STEP NOW (v9.27), AND THIS HAD TO FOLLOW IT (v9.29). This
+     mapped Steam's store-page view to a flip off the Store Page Preview,
+     which is the door v9.29 removed — so a translation arriving while the
+     developer sat in Steam - Localizations would have found its only
+     registered screen unreachable, decided nobody was looking, and not
+     repainted. The achievements view is registered for the first time here
+     too: unmapped, it fell through to "always repaint", which was never
+     wrong but asked for a rebuild on every language of every field. */
   steam: {
-    unifiedStep: null,
-    viewKey: null,
+    unifiedStep: 'localizations',
+    viewKey: 'steamLocsView',
     views: {
       storePage:    { fieldKey: 'steamLocReviewField', modeKey: 'steamLocReviewMode', defaultField: 'title',
-                      screens: [{ stepId: 'storePreviewPrototype', flip: 'localization' }] },
+                      screens: [{ stepId: 'storePreviewPrototype', flip: null }] },
+      achievements: { fieldKey: 'steamAchLocField', modeKey: 'steamAchLocMode', defaultField: 'displayName',
+                      itemFn: () => STEAM_ACH_LOC.effectiveAchId(), screens: [] },
+    },
+  },
+  /* Epic was never mapped at all — it fell through to "always repaint",
+     which is safe and noisy. Its step has the same two views Steam's does
+     (v9.26), so it is mapped the same way. */
+  egs: {
+    unifiedStep: 'localizations',
+    viewKey: 'egsLocsView',
+    views: {
+      storePage:    { fieldKey: 'egsLocReviewField', modeKey: 'egsLocReviewMode', defaultField: 'title',
+                      screens: [{ stepId: 'storePreview', flip: null }] },
+      achievements: { fieldKey: 'egsAchLocField', modeKey: 'egsAchLocMode', defaultField: 'unlockedDisplayName',
+                      itemFn: () => EGS_ACH_LOC.effectiveAchId(), screens: [] },
     },
   },
 };
@@ -13972,6 +13995,45 @@ function _steamBlankLocalizedText() {
   return { description: '', developer: '', publisher: '', aboutGame: '' };
 }
 
+/* ── WHICH DRAWER A FIELD'S OTHER LANGUAGES LIVE IN (v9.29) ──────────────
+   v9.25 routed _steamFieldValue/_steamSetFieldValue for Epic's headline and
+   stopped there, which was half a job: _steamTriggerAutoTranslate reads and
+   writes `ws.localizedStoreText` DIRECTLY — it has to, since it keeps the
+   source text and the in-flight marker alongside the translation — so for
+   the headline it checked a cache that was never written and filed every
+   translation it generated in a drawer nothing reads. Translations WERE
+   being made; the card could just never find them.
+
+   So the store is one function now, and every reader goes through it.
+   Epic's headline map holds the same entry shape the shared store does
+   (the text plus its provenance keys), because that shape is what the
+   trigger needs; a string left there by v9.25-v9.28 is read as one. */
+function _steamLocStore(field, create) {
+  if (EGS_ONLY_LOC_FIELDS.has(field)) {
+    const ea = state.egsSubmitAnswers;
+    if (!ea) return null;
+    if (!ea.localizedHeadline && create) ea.localizedHeadline = {};
+    return ea.localizedHeadline || null;
+  }
+  const ws = state.webSite;
+  if (!ws) return null;
+  if (!ws.localizedStoreText && create) ws.localizedStoreText = {};
+  return ws.localizedStoreText || null;
+}
+function _steamLocEntry(field, lang, create) {
+  const store = _steamLocStore(field, create);
+  if (!store) return null;
+  let entry = store[lang];
+  // v9.25 kept the headline as a bare string per language; read it as the
+  // entry it should always have been rather than losing what it holds.
+  if (typeof entry === 'string') {
+    entry = { [field]: entry };
+    store[lang] = entry;
+  }
+  if (!entry && create) { entry = _steamBlankLocalizedText(); store[lang] = entry; }
+  return entry || null;
+}
+
 function _steamFieldValue(field, lang) {
   if (STEAM_SHARED_LISTING_FIELDS.has(field)) return _iasFieldValue(field, lang);
   // Epic's own, kept out of the shared store — see EGS_ONLY_LOC_FIELDS.
@@ -13980,7 +14042,8 @@ function _steamFieldValue(field, lang) {
     if (!ea) return '';
     const primary = (state.formData || {}).primaryLanguage || 'en';
     if (lang === primary) return ea[field] || '';
-    return ((ea.localizedHeadline || {})[lang]) || '';
+    const entry = _steamLocEntry(field, lang, false);
+    return (entry && entry[field]) || '';
   }
   const ws = state.webSite;
   if (!ws) return '';
@@ -14044,8 +14107,8 @@ function _steamSetFieldValue(field, lang, value) {
       if (_steamFieldAutoTranslateEnabled(field)) _steamTriggerAutoTranslate(field, value);
       return;
     }
-    if (!ea.localizedHeadline) ea.localizedHeadline = {};
-    ea.localizedHeadline[lang] = value;
+    const entry = _steamLocEntry(field, lang, true);
+    if (entry) entry[field] = value;
     return;
   }
   const ws = state.webSite;
@@ -14065,6 +14128,16 @@ function _steamSetFieldValue(field, lang, value) {
 function _steamFieldAutoTranslateEnabled(field) {
   const cfg = state.steamAutoTranslateFields;
   if (!cfg) return STEAM_AUTO_TRANSLATE_DEFAULT_FIELDS.includes(field);
+  /* A FIELD THE CONFIG PREDATES IS NOT ONE SOMEBODY SWITCHED OFF (v9.29).
+     This is the second half of why Epic's Headline never auto-translated:
+     the config object is written out field by field and the headline
+     arrived after it, so `!!cfg.headline` was false for every project —
+     the gear showed the switch unticked and nothing ever asked. An absent
+     key means "no opinion", which is what the defaults are for; an
+     explicit false is still off. */
+  if (!Object.prototype.hasOwnProperty.call(cfg, field)) {
+    return STEAM_AUTO_TRANSLATE_DEFAULT_FIELDS.includes(field);
+  }
   return !!cfg[field];
 }
 
@@ -14089,7 +14162,7 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
   const inFlightKey = sourceKey + 'Pending';
 
   const eligible = supportedLangs.filter(lang => {
-    const entry = ws.localizedStoreText && ws.localizedStoreText[lang];
+    const entry = _steamLocEntry(field, lang, false);
     const cachedSource  = entry ? entry[sourceKey]   : undefined;
     const pendingSource = entry ? entry[inFlightKey] : undefined;
     if (cachedSource === text) return false;
@@ -14099,12 +14172,12 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
   if (!eligible.length) return;
 
   if (!text) {
-    if (!ws.localizedStoreText) ws.localizedStoreText = {};
     eligible.forEach(lang => {
-      if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
-      ws.localizedStoreText[lang][field]     = '';
-      ws.localizedStoreText[lang][sourceKey] = '';
-      delete ws.localizedStoreText[lang][field + 'FromSteam'];
+      const entry = _steamLocEntry(field, lang, true);
+      if (!entry) return;
+      entry[field]     = '';
+      entry[sourceKey] = '';
+      delete entry[field + 'FromSteam'];
       const backEntry = _steamLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _steamLocReviewRefreshBackTranslation(field, lang, '');
     });
@@ -14118,10 +14191,10 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
   state.steamTranslateStatus[field] = 'loading';
   state.steamTranslatePendingLangs = state.steamTranslatePendingLangs || {};
   state.steamTranslatePendingLangs[field] = eligible.slice();
-  if (!ws.localizedStoreText) ws.localizedStoreText = {};
   eligible.forEach(lang => {
-    if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
-    ws.localizedStoreText[lang][inFlightKey] = text;
+    const entry = _steamLocEntry(field, lang, true);
+    if (!entry) return;
+    entry[inFlightKey] = text;
   });
   _locDeferredRerender('steam', 'storePage', field, null);
 
@@ -14175,11 +14248,11 @@ Rules:
     const parsed  = JSON.parse(cleaned);
     const results = parsed.translations || {};
 
-    if (!ws.localizedStoreText) ws.localizedStoreText = {};
+
     eligible.forEach(lang => {
       const translated = results[lang];
-      if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
-      const entry = ws.localizedStoreText[lang];
+      const entry = _steamLocEntry(field, lang, true);
+      if (!entry) return;
       delete entry[inFlightKey];
       if (typeof translated !== 'string' || !translated.trim()) return;
       // Re-check Steam authority at write time, not just when this batch
@@ -20018,6 +20091,20 @@ function setSteamLocsView(view) {
 }
 
 /* Which tab Epic's Localizations page is showing. Mirrors setMacLocsView. */
+/* The language this page is drawn in. Mirrors _steamEffectivePreviewLang:
+   validated on every read, never written back, so a language removed in
+   Game Details cannot leave the preview pointing at nothing. */
+function _egsEffectivePreviewLang() {
+  const fd = state.formData || {};
+  const primary = fd.primaryLanguage || 'en';
+  const valid = new Set([primary, ...(fd.localizations || [])]);
+  return valid.has(state.egsPreviewLang) ? state.egsPreviewLang : primary;
+}
+function setEgsPreviewLang(lang) {
+  state.egsPreviewLang = lang;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
 function setEgsLocsView(view) {
   state.egsLocsView = view;
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
