@@ -13450,11 +13450,22 @@ const STEAM_LOC_REVIEW_FIELDS = [
    Steam's long body copy is "About This Game" and Epic's product page just
    calls it the description. Getting that wrong would put a Steam label on an
    Epic page, which is the kind of detail this whole preview exists to catch. */
+/* DEVELOPER AND PUBLISHER ARE NOT LOCALIZABLE HERE (v9.25, by request), and
+   on reflection they never were: a studio name and a publisher name are
+   proper nouns that read the same in every language, so offering a French
+   card for them was offering to translate something nobody translates. They
+   are still Steam's — STEAM_LOC_REVIEW_FIELDS keeps both, because Steam's
+   store page prints them as its own fields and this list is only about which
+   of them Epic asks you to review.
+
+   HEADLINE JOINS, between the short description and the long one, which is
+   where it sits on the page itself. It is the one field here Steam has no
+   equivalent of, so its text lives in Epic's own store rather than the
+   shared one (EGS_ONLY_LOC_FIELDS, app.js). */
 const EGS_LOC_REVIEW_FIELDS = [
   { value: 'title',       label: 'Product Name' },
   { value: 'description', label: 'Short Description' },
-  { value: 'developer',   label: 'Developer' },
-  { value: 'publisher',   label: 'Publisher' },
+  { value: 'headline',    label: 'Headline' },
   { value: 'aboutGame',   label: 'Description' },
 ];
 
@@ -13486,8 +13497,17 @@ const EGS_LOC_REVIEW_FIELDS = [
    is the reason it was not given its own. */
 function buildEgsLocalizationReviewSection() {
   const langCodes = _iasAllPreviewLangCodes();
-  const field     = state.egsLocReviewField || 'title';
-  const limit     = STEAM_FIELD_CHAR_LIMITS[field];
+  /* A SELECTION LEFT OVER FROM BEFORE v9.25 falls back to Product Name
+     rather than showing a field with no tab left to reselect it from —
+     `egsLocReviewField` is persisted, so a project saved while Developer was
+     on screen would otherwise reopen on a field this list no longer offers.
+     Deliberately not written back to state: render functions here do not
+     mutate it, and the fallback is recomputed the same way every paint. */
+  let field       = state.egsLocReviewField || 'title';
+  if (!EGS_LOC_REVIEW_FIELDS.some(f => f.value === field)) field = 'title';
+  // Epic's own limits, which carry the one field Steam has no table entry
+  // for (EGS_LOC_FIELD_CHAR_LIMITS, app.js).
+  const limit     = EGS_LOC_FIELD_CHAR_LIMITS[field];
   const primary   = state.formData.primaryLanguage || 'en';
   const primaryName = escHtml(OB_LANG_NAMES[primary] || primary);
   const reviewMode  = state.egsLocReviewMode === 'review';
@@ -13496,7 +13516,7 @@ function buildEgsLocalizationReviewSection() {
   const fieldOptions = EGS_LOC_REVIEW_FIELDS.map(f => ({
     value: f.value,
     label: f.label,
-    warning: _steamFieldHasOverLimitLang(f.value, langCodes),
+    warning: _egsLocFieldHasOverLimitLang(f.value, langCodes),
   }));
 
   const undoIconSvg = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 15L3 9l6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 9h11.5A6.5 6.5 0 1 1 14.5 22H10" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -13620,9 +13640,13 @@ function buildEgsLocalizationReviewSection() {
             <input type="checkbox" ${iasAutoCfg.title ? 'checked' : ''} onchange="_iasToggleAutoTranslateField('title')">
             <span>Product Name</span>
           </label>
+          ${/* The gear lists exactly what the field dropdown lists (v9.25):
+                a switch for a field you cannot open is a setting with nowhere
+                to take effect. Headline's switch writes the same config
+                object as the rest — it is keyed by field name and Steam never
+                asks it about a field its page has not got. */''}
           ${settingsRow('description', 'Short Description')}
-          ${settingsRow('developer', 'Developer')}
-          ${settingsRow('publisher', 'Publisher')}
+          ${settingsRow('headline', 'Headline')}
           ${settingsRow('aboutGame', 'Description')}
         </div>
       </div>`;

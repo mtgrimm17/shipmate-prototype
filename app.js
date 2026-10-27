@@ -13893,12 +13893,33 @@ const STEAM_SHARED_LISTING_FIELDS = new Set(['title']);
 // state.js's own comment on steamAutoTranslateFields explains why) rather
 // than "every field except the mirrored one", since Steam has no mirrored
 // field of its own.
-const STEAM_LOC_TRANSLATABLE_FIELDS = ['description', 'developer', 'publisher', 'aboutGame'];
-const STEAM_AUTO_TRANSLATE_DEFAULT_FIELDS = ['description', 'aboutGame'];
+/* `headline` IS IN THIS FAMILY, AND ITS WORDS ARE NOT (v9.25). Epic's
+   Localizations tab offers the page headline, and everything a localizable
+   field needs here — a translate call, a pending state, a source badge, an
+   undo history, a per-language card — is keyed by field name and already
+   generic. What is not shareable is the TEXT: Steam's page has no headline,
+   so _steamFieldValue/_steamSetFieldValue below route this one field to
+   state.egsSubmitAnswers rather than to state.webSite.
+
+   Steam never asks for it. STEAM_LOC_REVIEW_FIELDS does not offer it and
+   STEAM_FIELD_CHAR_LIMITS does not carry it, so Steam's own surfaces — its
+   field dropdown, its language warnings — cannot see a field its store page
+   does not have. Epic's limit lives in EGS_LOC_FIELD_CHAR_LIMITS. */
+const STEAM_LOC_TRANSLATABLE_FIELDS = ['description', 'headline', 'developer', 'publisher', 'aboutGame'];
+const STEAM_AUTO_TRANSLATE_DEFAULT_FIELDS = ['description', 'headline', 'aboutGame'];
+const EGS_ONLY_LOC_FIELDS = new Set(['headline']);
+// Epic's own limit table: Steam's, plus the one field only Epic has.
+const EGS_LOC_FIELD_CHAR_LIMITS = { description: 300, headline: 140 };
+function _egsLocFieldHasOverLimitLang(field, langCodes) {
+  const limit = EGS_LOC_FIELD_CHAR_LIMITS[field];
+  if (limit == null) return false;
+  return langCodes.some(lang => _steamFieldValue(field, lang).length > limit);
+}
 
 // Prompt labels for Steam's own translate call, mirroring IAS_FIELD_LABELS.
 const STEAM_FIELD_LABELS = {
   description: 'short description',
+  headline:    'store page headline',
   developer:   'developer name',
   publisher:   'publisher name',
   aboutGame:   'about this game description',
@@ -13917,6 +13938,14 @@ function _steamBlankLocalizedText() {
 
 function _steamFieldValue(field, lang) {
   if (STEAM_SHARED_LISTING_FIELDS.has(field)) return _iasFieldValue(field, lang);
+  // Epic's own, kept out of the shared store — see EGS_ONLY_LOC_FIELDS.
+  if (EGS_ONLY_LOC_FIELDS.has(field)) {
+    const ea = state.egsSubmitAnswers;
+    if (!ea) return '';
+    const primary = (state.formData || {}).primaryLanguage || 'en';
+    if (lang === primary) return ea[field] || '';
+    return ((ea.localizedHeadline || {})[lang]) || '';
+  }
   const ws = state.webSite;
   if (!ws) return '';
   const fd = state.formData;
@@ -13970,6 +13999,19 @@ function _steamSetFieldValue(field, lang, value) {
   // (_iasSetFieldValue) rather than to state.webSite — there is no
   // independent Steam copy of this field to write into.
   if (STEAM_SHARED_LISTING_FIELDS.has(field)) { _iasSetFieldValue(field, lang, value); return; }
+  if (EGS_ONLY_LOC_FIELDS.has(field)) {
+    const ea = state.egsSubmitAnswers;
+    if (!ea) return;
+    const primary = (state.formData || {}).primaryLanguage || 'en';
+    if (lang === primary) {
+      ea[field] = value;
+      if (_steamFieldAutoTranslateEnabled(field)) _steamTriggerAutoTranslate(field, value);
+      return;
+    }
+    if (!ea.localizedHeadline) ea.localizedHeadline = {};
+    ea.localizedHeadline[lang] = value;
+    return;
+  }
   const ws = state.webSite;
   if (!ws) return;
   const fd = state.formData;
@@ -23827,7 +23869,19 @@ const EGS_PRODUCT_LIST_MAX = { genres: (typeof EGS_GENRE_MAX !== 'undefined' ? E
    state.webSite.aboutGame through setWebSiteField. Only the headline has
    nowhere else to live, so only the headline needs a setter here. */
 function setEgsPageField(field, value) {
-  state.egsSubmitAnswers[field] = (value || '').trim();
+  const v = (value || '').trim();
+  /* THE HEADLINE GOES THROUGH THE LOCALIZATION SETTER (v9.25), which writes
+     the same place this used to write and then fires the translate call the
+     other fields on this page already get. Epic's short description and body
+     reach it through setWebSiteField; the headline had no such route, so
+     typing one here left every other language's card waiting on a
+     translation that was never asked for. */
+  if (typeof EGS_ONLY_LOC_FIELDS !== 'undefined' && EGS_ONLY_LOC_FIELDS.has(field)
+      && typeof _steamSetFieldValue === 'function') {
+    _steamSetFieldValue(field, (state.formData || {}).primaryLanguage || 'en', v);
+  } else {
+    state.egsSubmitAnswers[field] = v;
+  }
   _egsProductRepaint();
 }
 

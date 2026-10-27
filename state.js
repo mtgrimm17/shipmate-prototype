@@ -3743,6 +3743,15 @@ function makeBlankEgsAnswers() {
        separate so the page can draw it as the heading it is, and takes its
        length off the body's allowance. */
     headline:              '',
+    /* AND ITS TRANSLATIONS, WHICH ARE EPIC'S ALONE (v9.25). Every other
+       field on Epic's Localizations tab shares one store with Steam's —
+       v7.31's "two PC storefronts selling one game do not want two French
+       short descriptions" — and the headline cannot join them, because
+       Steam's page has no headline for a French one to belong to. So it
+       keeps its own map here, shaped the way the shared store is shaped:
+       the primary language's copy is `headline` above, every other
+       language's is keyed by code below. */
+    localizedHeadline:     {},
     productDetailsSeen:    false,
     /* ── SPECIFICATIONS (v8.44) ────────────────────────────────────────────
        Epic asks these per operating system behind a Windows/Mac tab strip,
