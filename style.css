@@ -32660,3 +32660,10 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 /* v9.22: a picker's pill is one line; _steamPickFit ends it "and N more". */
 .giarc-picker .loc-primary-name { white-space: nowrap !important; overflow: hidden !important; text-overflow: clip !important; }
 .giarc-picker .loc-primary-pill .steam-tag-more { color: inherit; opacity: .7; }
+/* v9.23: a picker whose every pick is suggested wears the violet in full —
+   fill, ring and ink — never a blue box with violet words. */
+.giarc-picker .loc-primary-pill.ai-confident {
+  --ring-top: var(--pill-ai-stroke-top); --ring-bottom: var(--pill-ai-stroke-bottom);
+  background: var(--pill-ai-bg); color: var(--pill-ai-color); border-color: transparent;
+}
+.giarc-picker .loc-primary-pill.ai-confident:hover { background: var(--pill-ai-bg-hover); color: var(--pill-ai-color-hover); }

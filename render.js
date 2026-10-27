@@ -22217,7 +22217,14 @@ function _steamTagPicker(field, list, max, question, tip) {
     <div class="giarc-card giarc-depth-1 giarc-inline steam-tag-block" data-key="${key}">
       <div class="giarc-row">
         <div class="loc-primary-wrap sw-select-wrap giarc-picker steam-tag-picker${open ? ' is-open' : ''}" data-giarc-picker="${key}">
-          <button type="button" class="loc-primary-pill${cur.length ? '' : ' is-empty'}"
+          <button type="button" class="loc-primary-pill${cur.length ? '' : ' is-empty'}${
+                    /* ALL OF IT SUGGESTED → THE BOX IS VIOLET TOO (v9.23). Jaco:
+                       "que los cajetines sean morados también; aquí se combina
+                       borde morado con pill azul. Recuerda que todo lo AI
+                       inferred es morado." A mixed list stays blue with its
+                       suggested names violet; once you pick one yourself the
+                       box is yours. */
+                    cur.length && cur.every(isAi) ? ' ai-confident' : ''}"
                   onclick="toggleGiarcPicker(event,'${key}')">
             <span class="loc-primary-name">${summaryHtml}</span>
             <svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
