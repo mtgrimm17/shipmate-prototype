@@ -8547,7 +8547,14 @@ function isSteamSectionComplete(sectionId) {
   if (sectionId === 'uploadBuild') return _uploadBuildComplete('steam');
 
   if (sectionId === 'screenshots') {
+    /* WHAT THE PAGE SHOWS COUNTS (v9.20). Jaco: "screenshots don't show as
+       checked on the Shippy panel even though they're there." The store
+       page's carousel draws state.uploads.screenshots (and the trailers);
+       this asked only the per-platform screenshot picker, which a filled-in
+       submission never touched — so the carousel was full and the tick
+       empty. Either source now counts. */
     const ps = state.platformScreenshots?.steam;
+    if ((state.uploads?.screenshots || []).length > 0) return true;
     return !!(ps && (ps.selected.length > 0 || ps.custom.length > 0));
   }
   if (sectionId === 'improveSubmission') return !!state.steamSubmitAnswers.improveSubmissionSeen;
