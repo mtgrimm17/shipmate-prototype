@@ -3713,16 +3713,29 @@ function egsSteamAchievements() {
         hidden:      x.hidden === true,
         icon:        ((x.image || {}).dataUrl) || '',
         xp:          (isFinite(xp) && xp > 0) ? xp : null,
+        /* WHERE THE ROW CAME FROM, CARRIED THROUGH (v9.28). This list is a
+           FILTERED view, so its own position means nothing to
+           _steamAchPair; the record it is mapped from already knows both
+           the key and the position in Steam's listing, and passing them on
+           is what lets Epic's achievements be matched to a Steam
+           localization at all. */
+        steamKey:    x.steamKey || '',
+        steamIndex:  (x.steamIndex == null) ? null : x.steamIndex,
       };
     });
   } else {
     const base = ((state.steamAchievementsBaseline || {}).achievements) || [];
-    out = base.filter(x => x && (x.name || '').trim()).map(x => ({
+    /* Indexed BEFORE filtering, for the same reason: the baseline is what
+       steamIndex indexes into. */
+    out = base.map((x, i) => [x, i])
+      .filter(([x]) => x && (x.name || '').trim()).map(([x, i]) => ({
       name:        (x.name || '').trim(),
       description: (x.description || '').trim(),
       hidden:      false,
       icon:        '',
       xp:          null,
+      steamKey:    x.identifier || '',
+      steamIndex:  i,
     }));
   }
   return out.sort((a, b) => a.name.localeCompare(b.name));

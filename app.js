@@ -4457,9 +4457,38 @@ function _steamRepropagateStorePage() {
   if (typeof _masPropagateAllFields === 'function') _masPropagateAllFields();
 }
 
+/* WHAT A STEAM IMPORT LEAVES FOR THE OTHER LANGUAGES (v9.28).
+
+   Epic's and Steam's achievement lists are rebuilt wholesale by a scrape
+   (replaceEgsAchievementsFromSteam / replaceSteamAchievementsFromSteam) and
+   arrive collapsed, so no editor ever runs over them and nothing asks for
+   their translations. This is the counterpart to the macGameCenterAchievements
+   loop in _applySteamAchievements, and it is a separate function only
+   because two stores need it and a test needs to be able to name it.
+
+   Each family's own write-time guard still protects a genuine Steam
+   localization from being replaced by a machine one, whichever resolves
+   first. */
+function _steamAchImportFallback() {
+  if (typeof EGS_ACH_LOC === 'object') {
+    (state.egsAchievements || []).forEach(a => {
+      EGS_ACH_LOC_FIELD_KEYS.forEach(f => EGS_ACH_LOC.triggerAutoTranslate(a.id, f, a[f] || ''));
+    });
+  }
+  if (typeof STEAM_ACH_LOC === 'object') {
+    (state.steamAchievements || []).forEach(a => {
+      STEAM_ACH_LOC_FIELD_KEYS.forEach(f => STEAM_ACH_LOC.triggerAutoTranslate(a.id, f, a[f] || ''));
+    });
+  }
+}
+
 function _steamRepropagateAchievements() {
   if (typeof _iasAchLocPropagateAllFields === 'function') _iasAchLocPropagateAllFields();
   if (typeof _masAchLocPropagateAllFields === 'function') _masAchLocPropagateAllFields();
+  // Epic and Steam have achievement localizations of their own since v9.26
+  // and v9.27, and were left out of every propagate site until v9.28.
+  if (typeof EGS_ACH_LOC === 'object')   EGS_ACH_LOC.propagateAllFields();
+  if (typeof STEAM_ACH_LOC === 'object') STEAM_ACH_LOC.propagateAllFields();
 }
 
 (function initStepModalInteractionTracking() {
@@ -8547,6 +8576,8 @@ function _propagateAllLocalizationFeatures() {
   _masAchLocPropagateAllFields(); // no-op until Mac App Store has saved achievements
   _iasAchLocPropagateAllFields(); // no-op until the App Store has saved achievements
   _macFullAchLocPropagateAllFields(); // no-op until Mac App Store Full has saved achievements
+  EGS_ACH_LOC.propagateAllFields();   // no-op until Epic has a named achievement
+  STEAM_ACH_LOC.propagateAllFields(); // no-op until Steam has one
 }
 
 function setObLangPreset(preset) {
@@ -11520,6 +11551,11 @@ async function _applySteamAchievements(appId, expectedTitle) {
   state.macGameCenterAchievements.forEach(a => {
     ACHIEVEMENT_LOC_TRANSLATABLE_FIELDS.forEach(field => _masAchLocTriggerAutoTranslate(a.id, field, a[field] || ''));
   });
+  // The same fallback for Epic's and Steam's own newly-imported lists
+  // (v9.28) — both arrive collapsed from the same scrape and neither went
+  // through an editor, so without this every supporting language's card
+  // stays blank on an imported title.
+  _steamAchImportFallback();
   // Same fallback, same reasoning, for App Store (ios)'s own newly-imported
   // achievements — _iasAchLocTriggerAutoTranslate's own write-time guard.
   state.iosGameCenterAchievements.forEach(a => {
@@ -20652,9 +20688,81 @@ async function _checkSteamLocalizedAchievementsInner(lang) {
       }
     }
   });
+  /* AND THE TWO STORES THE FACTORY SERVES (v9.28). Epic's and Steam's
+     achievements can come from the same Steam import Apple's do, so a real
+     translation Steam already has belongs on their cards too — it was going
+     unused, which is half of "not pulling or generating correctly".
+
+     Written through the same shape: the localized text, a FromSteam flag so
+     the card shows Steam's mark and the auto-translate fallback leaves it
+     alone (_steamAlreadySupplied), the source text it was a translation of,
+     and a back-translation refresh. */
+  _steamPullLocalizedAchievements(lang, parsed, baseline);
   // Deferred — see _checkSteamLocalizedDescription's own comment (above,
   // this file) for why this can't be a direct reRenderStepModal() call.
   if (changed) _locDeferredRerender('macos', 'achievements', null, null);
+}
+
+/* One pass per store, each with its own names for the same two things:
+   Steam gives a name and a description, Steam's own card calls them
+   displayName and description, and Epic's calls them the unlocked pair.
+
+   EPIC'S LOCKED PAIR MIRRORS, while it is still the copy the import made it
+   — the same rule, and the same reason, as Mac's pre-earned description
+   (_steamAchPreEarnedMirrors): the import seeds both faces from Steam's one
+   string, so a locked face nobody has touched should follow the unlocked
+   one rather than stay in the default language. */
+function _steamPullLocalizedAchievements(lang, parsed, baseline) {
+  const stores = [];
+  if (typeof STEAM_ACH_LOC === 'object') stores.push({
+    fam: STEAM_ACH_LOC, pid: 'steam', list: state.steamAchievements || [],
+    pairs: [['displayName', 'name'], ['description', 'description']], mirror: null,
+  });
+  if (typeof EGS_ACH_LOC === 'object') stores.push({
+    fam: EGS_ACH_LOC, pid: 'egs', list: state.egsAchievements || [],
+    pairs: [['unlockedDisplayName', 'name'], ['unlockedDescription', 'description']],
+    mirror: { unlockedDisplayName: 'lockedDisplayName',
+              unlockedDescription: 'lockedDescription' },
+  });
+
+  stores.forEach(store => {
+    let touched = false;
+    store.list.forEach(a => {
+      if (!a.fromSteam) return;
+      const pair = _steamAchPair(a, parsed, baseline);
+      if (!pair) return;
+      if (!a.locs) a.locs = {};
+      if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
+      const entry = a.locs[lang];
+
+      store.pairs.forEach(([field, from]) => {
+        // Steam falls back to the listing's default language rather than
+        // erroring, so a translation equal to the baseline is not one.
+        const localized = ((pair.localized || {})[from] || '').trim();
+        const base      = ((pair.base || {})[from] || '').trim();
+        if (!localized || localized === base) return;
+        entry[field]                  = localized;
+        entry[field + 'FromSteam']    = true;
+        entry[field + 'SourceText']   = a[field] || '';
+        touched = true;
+        const back = store.fam.backTranslationEntry(a.id, field, lang);
+        if (back.syncedTopText !== localized) {
+          store.fam.refreshBackTranslation(a.id, field, lang, localized);
+        }
+        const twin = store.mirror && store.mirror[field];
+        if (twin && (a[twin] || '') === (a[field] || '')) {
+          entry[twin]                = localized;
+          entry[twin + 'FromSteam']  = true;
+          entry[twin + 'SourceText'] = a[twin] || '';
+          const tBack = store.fam.backTranslationEntry(a.id, twin, lang);
+          if (tBack.syncedTopText !== localized) {
+            store.fam.refreshBackTranslation(a.id, twin, lang, localized);
+          }
+        }
+      });
+    });
+    if (touched) _locDeferredRerender(store.pid, 'achievements', null, null);
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -24977,9 +25085,20 @@ function _egsPinPanel(root) {
    to copy the records it was meant to overwrite back over themselves. */
 function _egsAchievementsFromSteam() {
   const shown = (typeof egsSteamAchievements === 'function') ? egsSteamAchievements() : [];
-  return shown.map(x => {
+  return shown.map((x, i) => {
     const a = makeBlankEgsAchievement();
     a.open = false;
+    /* WHERE THIS ROW CAME FROM (v9.28). _steamAchPair matches a record to
+       Steam's localized list by steamKey, or by position in the import;
+       without these two the Steam-localized pull cannot find Epic's rows at
+       all and a real translation Steam already has goes unused. The same
+       pair Mac's imported achievements have carried all along. */
+    a.fromSteam  = true;
+    /* NOT `i` — this list is filtered, so its own position is not the
+       position in Steam's listing. egsSteamAchievements carries both
+       through from the record that knows them. */
+    if (x.steamIndex != null) a.steamIndex = x.steamIndex;
+    if (x.steamKey) a.steamKey = x.steamKey;
     a.visibility          = x.hidden ? 'hidden' : 'shown';
     a.unlockedDisplayName = x.name || '';
     a.unlockedDescription = x.description || '';
@@ -25094,6 +25213,15 @@ function setEgsAchField(id, key, value) {
 }
 function commitEgsAchField(id, key, value) {
   setEgsAchField(id, key, value);
+  /* AND THE OTHER LANGUAGES FOLLOW (v9.28). v9.26 gave Epic an
+     Achievements tab that reads locs[lang][field] and nothing ever wrote
+     one: the factory makes the writers, and this is one of the four places
+     that has to call them. Mac's own editor has done this since v8.x
+     (saveMacGcAchievement); Epic's never did, so every supporting
+     language's card sat blank however much was typed here. */
+  if (EGS_ACH_LOC_FIELD_KEYS.indexOf(key) >= 0) {
+    EGS_ACH_LOC.triggerAutoTranslate(id, key, value);
+  }
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
 }
 
@@ -25231,6 +25359,10 @@ function setSteamAchField(id, field, value) {
   const a = _steamAch(id);
   if (!a) return;
   a[field] = value;
+  // The same wiring Epic's editor gets, for the same reason (v9.28).
+  if (STEAM_ACH_LOC_FIELD_KEYS.indexOf(field) >= 0) {
+    STEAM_ACH_LOC.triggerAutoTranslate(id, field, value);
+  }
   if (field === 'hidden' && typeof reRenderStepModal === 'function') reRenderStepModal();
 }
 
@@ -25423,10 +25555,19 @@ function removeSteamAchIcon(id, which) {
    in the payload at all, so Unachieved Icon is left empty for the developer
    to upload rather than filled with the wrong artwork. */
 function replaceSteamAchievementsFromSteam(parsed) {
+  /* INDEXED BEFORE FILTERING (v9.28): steamIndex indexes Steam's own
+     listing, which is what the baseline holds, so a row dropped for having
+     no name must not shift the rows after it. */
   const made = (parsed || [])
-    .filter(p => p && (p.name || '').trim())
-    .map(p => ({
+    .map((p, i) => [p, i])
+    .filter(([p]) => p && (p.name || '').trim())
+    .map(([p, i]) => ({
       id: generateId('steamach'),
+      // See _egsAchievementsFromSteam's note (v9.28): this is what lets the
+      // Steam-localized pull find these rows again.
+      fromSteam:      true,
+      steamIndex:     i,
+      steamKey:       p.identifier || undefined,
       displayName:    (p.name || '').trim(),
       description:    (p.description || '').trim(),
       hidden:         p.hidden === true,
