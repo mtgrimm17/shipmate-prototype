@@ -22426,7 +22426,44 @@ function buildSteamContentRatingSection() {
 
   // Content categories — each item is a ynRow
   // Filter uses snapshot so questions don't vanish while actively answering
-  let catHtml = steamTogglePill ? `<div class="cr-pinned">${steamTogglePill}</div>` : '';   // pinned — see buildContentRatingSection
+  /* THE APP STORE'S PINNED BAR, AND ITS LINE IN SHIPPY (v9.35). Jaco: "¿puedes
+     hacer que el content rating de Steam siga el mismo pinned message y Shippy
+     panel que, por ejemplo, el de iOS?" Steam's bar was the bare toggle. It
+     is now buildContentRatingSection's box — the toggle and the sentence in
+     one `.sw-tip-box` — counting the same way: Shipmate's answers by their
+     meta's `confidence` (provenance does not expire on confirming), and,
+     when Shipmate answered nothing, what is still left for you. The status
+     row is the one the guide panel copies (`.cr-inferred-status`); the "Click
+     All" row stays beside the toggle it is about. Counted over the content
+     categories and the five mature declarations. */
+  const _steamCrIds = [...STEAM_CONTENT_CATEGORIES.flatMap(g => g.items.map(i => i.id)),
+                       'gen_mature', 'freq_violence', 'some_nudity', 'freq_nudity', 'adult_sexual'];
+  const _steamCrTotal = _steamCrIds.length;
+  const _steamCrInferred = steamCollapse
+    ? _steamCrIds.filter(id => (typeof _getAnswerMeta === 'function' ? _getAnswerMeta('steam', id) : null)?.confidence !== undefined).length
+    : 0;
+  const _steamCrLeft = _steamCrIds.filter(id => sca[id] !== 'yes' && sca[id] !== 'no').length;
+  const _steamAllWord = `<span class="cr-inferred-all-word">All</span>`;
+  const _steamStatus = html => `<div class="cr-inferred-row cr-inferred-status">${html}</div>`;
+  const _steamCrText = _steamCrInferred > 0
+    ? (steamShowAll
+        ? _steamStatus(`All ${_steamCrTotal} questions from Steam's content survey.`)
+        : _steamStatus(`Shipmate inferred ${_steamCrInferred} out of ${_steamCrTotal} responses.`)
+          + `<div class="cr-inferred-row cr-inferred-howto">Click ${_steamAllWord} to review before submitting.</div>`)
+    : `${_steamCrTotal - _steamCrLeft} of ${_steamCrTotal} answered.`;
+  /* BEFORE ANY INFERENCE THE PANEL STILL COUNTS (v9.35). Jaco: "¿y que en
+     modo normal, en Shippy ponga X de X contestadas?" With no inference there
+     is no toggle and so no bar — but the panel copies its line from the
+     bar's sentence, so it said nothing. The sentence is still emitted, in a
+     bar that is never drawn, for the panel to copy: "12 of 49 answered." */
+  let catHtml = steamTogglePill
+    ? `<div class="cr-pinned">
+         <div class="sw-tip-box cr-pinned-bar">
+           ${steamTogglePill}
+           <div class="sw-tip-text">${_steamCrText}</div>
+         </div>
+       </div>`
+    : `<div class="cr-pinned" hidden style="display:none"><div class="sw-tip-text">${_steamCrText}</div></div>`;
   STEAM_CONTENT_CATEGORIES.forEach(grp => {
     const items = (steamCollapse && !steamShowAll)
       ? grp.items.filter(item => !steamAnsweredSet?.has(item.id))

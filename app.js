@@ -30109,6 +30109,8 @@ const SM_CR_AGE_HEAD = 'Additional Information';
 function _smIsContentBody(sm) {
   if (!sm) return false;
   if (sm.stepId === 'contentRating') return true;
+  // Steam's Content Rating is its store page's Content flip (v9.35).
+  if (sm.platformId === 'steam' && sm.stepId === 'storePreviewPrototype') return _smFlipTarget('steam') === 'content';
   return sm.stepId === 'storePreview' && _smFlipTarget(sm.platformId) === 'content';
 }
 
@@ -30167,6 +30169,7 @@ function _smEgsContentItems() {
 
 function _smContentItems(pid) {
   if (pid === 'egs') return _smEgsContentItems();
+  if (pid === 'steam') return typeof _smSteamFlipItems === 'function' ? _smSteamFlipItems('content') : null;
   if (typeof IOS_CR_CATEGORIES === 'undefined' || typeof _getLiveAnswer !== 'function') return null;
   if (pid !== 'ios' && pid !== 'macos' && pid !== 'macos_full') return null;
   const blank = v => v === undefined || v === null || v === '';

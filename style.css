@@ -32740,3 +32740,17 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .dp-counter-row .ias-char-count.is-over { color: var(--magenta); font-weight: 600; }
 /* v9.34: the suggestion note, in Shippy's Tags counter, in the AI violet. */
 .gd-tagcap-note.is-ai { color: var(--pill-ai-color); }
+
+/* v9.35: Steam's Content Questions opened 6px under the modal's title when
+   there is no pinned bar above them (Jaco: "que el inicio de contenido de
+   preguntas respire un poco más con respecto al título del modal, que está
+   pegadito"). The first heading takes the room the bar would have given. */
+.submit-modal-steam-spp .ios-step-body-content > .ios-content-step-label:first-child { margin-top: 18px; }
+
+/* "Shipmate inferred N…" in Shippy wears the same type as Tags' "N suggested
+   by Shipmate" note (v9.35) — 12/16 mono in the AI violet — so the panel says
+   "this came from Shipmate" one way everywhere. */
+#app-guide .sm-cr-line-moved .cr-inferred-status {
+  font-family: var(--mono); font-size: 12px; line-height: 16px; letter-spacing: normal;
+  font-weight: 400; text-transform: none; color: var(--pill-ai-color);
+}
