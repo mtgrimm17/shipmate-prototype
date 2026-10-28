@@ -2010,6 +2010,11 @@ function toggleOnboardingPlatform(pid) {
   // clicking its (no longer rendered) tile isn't reachable anyway, but this
   // still lets a direct call deactivate one without tripping the guard.
   if (HIDDEN_PLATFORMS.has(pid) && !state.activePlatforms.has(pid)) return;
+  // NON_SUBMISSION_PLATFORMS (render.js, v9.34 — Web) is the stricter case
+  // and is guarded the same way round: a direct call may still turn one OFF,
+  // which is how a project carrying a stale id gets rid of it, but never on.
+  if (typeof isSubmissionPlatform === 'function'
+      && !isSubmissionPlatform(pid) && !state.activePlatforms.has(pid)) return;
   if (state.activePlatforms.has(pid)) {
     state.activePlatforms.delete(pid);
   } else {
@@ -7484,6 +7489,10 @@ function activatePlatform(platformId) {
   // already excludes it from the picker entirely, so it can't be clicked
   // there either; this only matters for a direct call.
   if (HIDDEN_PLATFORMS.has(platformId)) return;
+  // And a platform that is not a submission at all (NON_SUBMISSION_PLATFORMS,
+  // render.js — Web, which belongs to Marketing - Website). The picker above
+  // never offers one; this is the direct-call door.
+  if (typeof isSubmissionPlatform === 'function' && !isSubmissionPlatform(platformId)) return;
   state.activePlatforms.add(platformId);
   // See toggleOnboardingPlatform's identical call — Submission's own
   // "add a platform" entry point needs the same one-time seed.

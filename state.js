@@ -1736,10 +1736,19 @@ function _visiblePlatformSteps(pid) {
    during render, which this codebase separates on purpose (render reads, app.js
    writes) — and there is nothing to persist anyway, since the same fallback
    runs again on the next read. selectPlatformTab (app.js) is the only writer. */
+/* The id whose pane the Submission section is showing. Both reads go through
+   isSubmissionPlatform (render.js, v9.34) so a platform that is not a
+   submission — Web, which lives in Marketing - Website — can neither be
+   remembered as the open tab nor be picked as the fallback when none is. The
+   `typeof` guard is this file's standing one for a render.js delegate: every
+   call happens at runtime, so it is only ever the load-time path that falls
+   back, and at load there is nothing active to choose anyway. */
 function submissionTab() {
+  const ok = pid => (typeof isSubmissionPlatform === 'function')
+    ? isSubmissionPlatform(pid) : !!PLATFORMS[pid];
   const t = state.submission?.tab;
-  if (t && state.activePlatforms.has(t)) return t;
-  return PLATFORM_ORDER.find(pid => state.activePlatforms.has(pid)) || null;
+  if (t && state.activePlatforms.has(t) && ok(t)) return t;
+  return PLATFORM_ORDER.find(pid => state.activePlatforms.has(pid) && ok(pid)) || null;
 }
 
 /* The steps a pane draws, for ANY platform, in one expression.

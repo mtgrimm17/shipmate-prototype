@@ -1328,7 +1328,8 @@ function buildObPlatTilesHTML() {
      ten, so it is derived now and the next tile costs nothing. style.css
      carries .pg-2/3/6/7/8/9/10/11; past that the bare .platform-grid's
      four-column fallback takes over, which is a layout, not a break. */
-  const visibleTiles = PLATFORMS_OB.filter(({ id }) => !HIDDEN_PLATFORMS.has(id));
+  const visibleTiles = PLATFORMS_OB.filter(({ id }) =>
+    !HIDDEN_PLATFORMS.has(id) && isSubmissionPlatform(id));
   const tiles = visibleTiles.map(({ id, iconKey, label, comingSoon }) => {
     const icon = `<span class="platform-tile-icon">${protoTileIcon(iconKey, id)}</span>`
       + `<span class="platform-tile-label">${label}</span>`;
@@ -2417,6 +2418,35 @@ const PLATFORM_ORDER = ['steam', 'macos', 'macos_full', 'ios', 'android', 'web',
 // precedent this mechanism follows. Hiding Mac App Store Full for the demo —
 // it stays fully built (state/steps/answers intact), just not newly selectable.
 const HIDDEN_PLATFORMS = new Set(['macos_full']);
+
+/* ── PLATFORMS THAT ARE NOT SUBMISSIONS (v9.34) ───────────────────────────
+   Web is the whole of this set and the reason is specific to it: the website
+   Shipmate builds is already a first-class thing in Marketing - Website,
+   where it is edited and published. Carrying it in Submission as well made it
+   a platform you "submit" to, with a Deploy button standing in for a store
+   review it never has — two doors onto one artefact, and the Submission one
+   describing it wrongly.
+
+   THIS IS NOT HIDDEN_PLATFORMS, and the difference is the point. That set
+   hides a platform still being built, so it deliberately leaves a project
+   that already had one switched on alone: the work is real and will come
+   back. Web is not coming back to Submission, so its exclusion is total —
+   the tile, the picker, the tab, and the pane a restored project might
+   otherwise still open on.
+
+   WHAT STAYS: PLATFORMS.web itself, its steps, its state, its preview
+   (buildWebSitePreviewSection) and every path Marketing reaches them by
+   (_mktWebInnerHTML, _markStepVisited's web arm, platformAccountReady's web
+   exemption). None of that is Submission's, and none of it is touched. The
+   one-line way to put Web back in Submission is to empty this set. */
+const NON_SUBMISSION_PLATFORMS = new Set(['web']);
+
+/* Submission's one question about a platform id, asked in one place so the
+   tile grid, the picker, the tab strip and the pane cannot answer it three
+   different ways. */
+function isSubmissionPlatform(pid) {
+  return !!PLATFORMS[pid] && !NON_SUBMISSION_PLATFORMS.has(pid);
+}
 
 // Fake binary findings — platform-specific, each with a "View Fix" payload
 const BIN_FINDINGS = {
@@ -5112,7 +5142,7 @@ function buildSubnavAddPlatform() {
      filtered here (never offer one) where activePlatforms is not (a hidden one
      already on keeps its tab) — same asymmetry as before. */
   const inactive = PLATFORM_ORDER.filter(pid =>
-    PLATFORMS[pid] && !state.activePlatforms.has(pid) && !HIDDEN_PLATFORMS.has(pid));
+    isSubmissionPlatform(pid) && !state.activePlatforms.has(pid) && !HIDDEN_PLATFORMS.has(pid));
   const open = !!(state.submission && state.submission.addOpen);
   /* COMING_SOON_PLATFORMS (egs/psn/xbox/nintendo) get the same dimmed, inert,
      locked row Basic Info's Select Platforms grid gives their tiles. */
@@ -5362,7 +5392,14 @@ function renderDashboard() {
   // Info's tile grid and the "+ Add platform" picker's `inactive` list
   // just below); if one were somehow already active on a project (state
   // predating the hide), its card stays right where it already is.
-  const active   = PLATFORM_ORDER.filter(pid => state.activePlatforms.has(pid));
+  //
+  // It DOES filter NON_SUBMISSION_PLATFORMS, which is the opposite case: Web
+  // is not a submission at all, so a project that still carries it (a version
+  // saved before v9.34, say) must not open a tab on it. Nothing is deleted
+  // from activePlatforms — the id stays, the Submission section simply does
+  // not draw it, which is reversible by emptying that set.
+  const active   = PLATFORM_ORDER.filter(pid =>
+    state.activePlatforms.has(pid) && isSubmissionPlatform(pid));
 
   /* ONE platform's pane, not every platform's card. buildActiveCard and the
      four builders under it are still here and still correct — they are what
