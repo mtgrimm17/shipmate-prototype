@@ -20624,12 +20624,13 @@ function buildEgsSpecificationsSection() {
           </select>
         </div>`;
     }
+    // No counter on a requirement (Jaco: "quítame el contador de caracteres
+    // de Epic/Steam en los System Requirements, salvo que sea el de Notes");
+    // the limit is held by maxlength, as Steam's boxes hold theirs.
     return `
-      <div class="steam-sysreq-cell dp-counted${val.length > EGS_SPEC_MAX ? ' is-over' : ''}">
-        <input class="form-input" type="text" value="${escHtml(val)}" aria-label="${aria}"
-               oninput="_dpCount(this, ${EGS_SPEC_MAX})"
+      <div class="steam-sysreq-cell">
+        <input class="form-input" type="text" maxlength="${EGS_SPEC_MAX}" value="${escHtml(val)}" aria-label="${aria}"
                onchange="setEgsSpecField('${tab.id}','${r.id}','${which}', this.value)">
-        ${_dpCounterRow(val, EGS_SPEC_MAX)}
       </div>`;
   };
   const star = r => r.required ? ' <span class="egs-spec-req" aria-hidden="true">*</span>' : '';
