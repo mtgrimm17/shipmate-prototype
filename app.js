@@ -34921,6 +34921,21 @@ function _smTabGo(set, id) {
    `steamTopGenreBlocked` asks whether it fits; the pills read the same two
    so a pill greys out exactly when this returns early. */
 function setSteamTopGenre(g) {
+  /* A SUGGESTED PILL IS CONFIRMED BY A PRESS, AS ON THE APP STORE (v9.36).
+     Jaco: "que en las pills tenga el mismo comportamiento que en iOS: click
+     to confirm, not deselect." Pressing a violet top-level genre makes it
+     the developer's (blue) and keeps it; pressing a blue one takes it off,
+     as before. Removing a suggestion outright is still one press away in
+     Shippy, where every tag carries its ×. */
+  const cur0 = state.steamSubmitAnswers.topGenres || [];
+  if (cur0.includes(g) && typeof steamTagIsInferred === 'function' && steamTagIsInferred('topGenres', g)) {
+    if (!state.steamAnswerMeta) state.steamAnswerMeta = {};
+    const k = steamTagMetaKey('topGenres', g);
+    state.steamAnswerMeta[k] = { ...(state.steamAnswerMeta[k] || {}), humanConfirmed: true };
+    reRenderStepModal();
+    if (typeof renderGuide === 'function') renderGuide();
+    return;
+  }
   if (typeof steamTopGenreBlocked === 'function' && steamTopGenreBlocked(g)) return;
   const before = (state.steamSubmitAnswers.topGenres || []).slice();
   state.steamSubmitAnswers.topGenres = steamTopGenreNext(g);
