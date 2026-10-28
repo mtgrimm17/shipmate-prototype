@@ -20595,60 +20595,94 @@ function buildEgsSpecificationsSection() {
       </div>`;
   };
 
-  const rowsHtml = EGS_SPEC_ROWS.filter(r => !r.winOnly || tab.directx).map(r => `
-    <div class="egs-spec-group">
-      <h6 class="egs-spec-head">${escHtml(r.label)}</h6>
-      ${cell(r, 'min')}
-      ${cell(r, 'rec')}
+  /* STEAM'S FORM, FIELD FOR FIELD (v9.40). Jaco: "¿puedes hacer que el
+     formato y estilo sea igual que el de Steam? Separación vertical, etc."
+     The two stores ask the same thing — each requirement, Minimum and
+     Recommended — so they now ask it in one shape: Steam's OS pills, its
+     "Runs on …" Yes / No, and its grid — the requirement named in a column
+     on the left, MINIMUM and RECOMMENDED heading the two columns, one row
+     per requirement at Steam's spacing. DirectX, a closed list, is a
+     picker as Steam's is. Epic's data, limits and handlers are unchanged
+     (setEgsSpecField, setEgsSpecSupported…); the box counts only while you
+     are in it, as every store field does since v9.31. */
+  const sTabs = EGS_SPEC_OS.map(o => {
+    const on   = o.id === tab.id;
+    const done = specs[o.id].supported && egsSpecOsFilled(o.id);
+    return `<button type="button" class="steam-sysreq-tab${on ? ' is-current' : ''}${done ? ' is-done' : ''}"
+                    onclick="setEgsSpecTab('${o.id}')">${escHtml(o.label)}</button>`;
+  }).join('');
+  const sCell = (r, which) => {
+    const val = sp[r.id][which] || '';
+    const aria = escHtml(tab.label + ' ' + r.label + ' ' + (which === 'min' ? 'minimum' : 'recommended'));
+    if (r.options) {
+      return `
+        <div class="steam-sysreq-cell">
+          <select class="form-input" aria-label="${aria}"
+                  onchange="setEgsSpecField('${tab.id}','${r.id}','${which}', this.value)">
+            <option value=""${val ? '' : ' selected'}>Select…</option>
+            ${r.options.map(v => `<option${val === v ? ' selected' : ''}>${escHtml(v)}</option>`).join('')}
+          </select>
+        </div>`;
+    }
+    return `
+      <div class="steam-sysreq-cell dp-counted${val.length > EGS_SPEC_MAX ? ' is-over' : ''}">
+        <input class="form-input" type="text" value="${escHtml(val)}" aria-label="${aria}"
+               oninput="_dpCount(this, ${EGS_SPEC_MAX})"
+               onchange="setEgsSpecField('${tab.id}','${r.id}','${which}', this.value)">
+        ${_dpCounterRow(val, EGS_SPEC_MAX)}
+      </div>`;
+  };
+  const star = r => r.required ? ' <span class="egs-spec-req" aria-hidden="true">*</span>' : '';
+  const sRows = EGS_SPEC_ROWS.filter(r => !r.winOnly || tab.directx).map(r => `
+    <div class="steam-sysreq-row">
+      <div class="steam-sysreq-label">${escHtml(r.label)}${star(r)}:</div>
+      ${sCell(r, 'min')}
+      ${sCell(r, 'rec')}
     </div>`).join('');
-
-  const notesLeft = EGS_SPEC_NOTES_MAX - (sp.notes || '').length;
+  const devices = `
+    <div class="steam-sysreq-row egs-sysreq-wide">
+      <div class="steam-sysreq-label">Input devices:</div>
+      <div class="steam-sysreq-cell egs-sysreq-span">
+        <div class="ob-preset-pills">${EGS_INPUT_DEVICES.map(d => {
+          const on = (sp.inputDevices || []).indexOf(d) >= 0;
+          return `<button type="button" class="ob-preset-pill${on ? ' is-active' : ''}"
+                          onclick="toggleEgsSpecInputDevice('${tab.id}','${egsJsStr(d)}', ${!on})">${escHtml(d)}</button>`;
+        }).join('')}</div>
+      </div>
+    </div>`;
+  const notesVal = sp.notes || '';
+  const notes = `
+    <div class="steam-sysreq-row egs-sysreq-wide">
+      <div class="steam-sysreq-label">Additional Notes:</div>
+      <div class="steam-sysreq-cell egs-sysreq-span dp-counted${notesVal.length > EGS_SPEC_NOTES_MAX ? ' is-over' : ''}">
+        <input class="form-input" type="text" value="${escHtml(notesVal)}"
+               aria-label="${escHtml(tab.label + ' additional notes')}"
+               oninput="_dpCount(this, ${EGS_SPEC_NOTES_MAX})"
+               onchange="setEgsSpecNotes('${tab.id}', this.value)">
+        ${_dpCounterRow(notesVal, EGS_SPEC_NOTES_MAX)}
+      </div>
+    </div>`;
+  const body = sp.supported ? `
+    <div class="steam-sysreq-grid">
+      <div class="steam-sysreq-row steam-sysreq-head">
+        <div class="steam-sysreq-label"></div>
+        <div class="steam-sysreq-cell">Minimum</div>
+        <div class="steam-sysreq-cell">Recommended</div>
+      </div>
+      ${sRows}
+      ${devices}
+      ${notes}
+    </div>`
+    : `<div class="form-hint" style="margin-top:12px;">Not shipping on ${escHtml(tab.label)}, so the store page prints nothing for it.</div>`;
 
   return `
-    <div class="egs-spec-tabs" role="tablist">${tabsHtml}</div>
-
-    <label class="egs-spec-switchrow">
-      <button type="button" role="switch" aria-checked="${!!sp.supported}"
-              class="egs-spec-switch${sp.supported ? ' is-on' : ''}"
-              onclick="setEgsSpecSupported('${tab.id}', ${!sp.supported})"></button>
-      <span>My product supports this OS</span>
-    </label>
-
-    ${rowsHtml}
-
-    <div class="egs-spec-group">
-      <h6 class="egs-spec-head">Additional input device</h6>
-      <div class="egs-spec-cell">
-        <div class="egs-spec-cell-head"><span class="egs-spec-label">Device type</span></div>
-        <div class="cq-check-list${off ? ' egs-spec-dim' : ''}">
-          <div class="cq-checkboxes">
-            ${EGS_INPUT_DEVICES.map(d => {
-              const on = (sp.inputDevices || []).indexOf(d) >= 0;
-              return `<label class="cq-check-row">
-                <input type="checkbox" ${on ? 'checked' : ''} ${off ? 'disabled' : ''}
-                       onchange="toggleEgsSpecInputDevice('${tab.id}','${egsJsStr(d)}', this.checked)">
-                <span>${escHtml(d)}</span></label>`;
-            }).join('')}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="egs-spec-group">
-      <h6 class="egs-spec-head">Additional notes</h6>
-      <div class="egs-spec-cell">
-        <div class="egs-spec-cell-head">
-          <span class="egs-spec-label">Notes</span>
-          <span class="egs-spec-count">${notesLeft}</span>
-        </div>
-        <div class="egs-spec-box${off ? ' is-off' : ''}">
-          <input type="text" class="egs-spec-input" maxlength="${EGS_SPEC_NOTES_MAX}"
-                 value="${escHtml(sp.notes || '')}" ${off ? 'disabled' : ''}
-                 aria-label="${escHtml(tab.label + ' additional notes')}"
-                 oninput="egsSpecCount(this, ${EGS_SPEC_NOTES_MAX})"
-                 onchange="setEgsSpecNotes('${tab.id}', this.value)">
-        </div>
-      </div>
+    <div class="egs-sysreq-steamform">
+      <div class="steam-sysreq-tabs">${sTabs}</div>
+      ${ynRow(`Runs on ${tab.label}`, sp.supported ? 'yes' : 'no',
+          `setEgsSpecSupported('${tab.id}', true)`,
+          `setEgsSpecSupported('${tab.id}', false)`,
+          'Only an operating system you ship on gets requirements on the store page.')}
+      ${body}
     </div>`;
 }
 

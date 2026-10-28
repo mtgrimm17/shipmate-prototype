@@ -32754,3 +32754,15 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   font-family: var(--mono); font-size: 12px; line-height: 16px; letter-spacing: normal;
   font-weight: 400; text-transform: none; color: var(--pill-ai-color);
 }
+
+/* Epic Specifications (v9.40): each requirement's Minimum and Recommended
+   side by side, as Steam's form and both store pages print them. */
+.egs-spec-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; align-items: start; }
+.egs-spec-pair > .egs-spec-cell { min-width: 0; margin-top: 0; }
+
+/* Epic Specifications in Steam's form (v9.40): the two wide rows span both
+   columns; the counter, shown only while editing, sits under its box. */
+.egs-sysreq-steamform .egs-sysreq-span { grid-column: 2 / -1; }
+.egs-sysreq-steamform .steam-sysreq-cell.dp-counted { position: relative; }
+.egs-sysreq-steamform .steam-sysreq-cell .dp-counter-row { position: absolute; right: 2px; top: 100%; margin-top: 1px; font-size: 10.5px; }
+.egs-sysreq-steamform .steam-sysreq-label .egs-spec-req { color: rgb(247, 216, 43); }
