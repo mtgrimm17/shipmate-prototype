@@ -11672,6 +11672,13 @@ const ACH_LANG_SURFACE = {
   ios:   { id: 'ias-gc-lang',    setter: 'setIasPreviewLang',
            lang:  () => _iasEffectivePreviewLang(),
            value: (a, f, l) => _iasAchLocFieldValue(a, f, l) },
+  /* Epic's Achievements tab has no picker of its own — it is INSIDE the
+     Store Page Preview, under the one at the top of that page — so its entry
+     here is a reader, not a second control. _achLangBarHTML('egs') is never
+     called; the id is recorded only so the two cannot drift apart. */
+  egs:   { id: 'egs-preview-lang', setter: 'setEgsPreviewLang',
+           lang:  () => _egsEffectivePreviewLang(),
+           value: (a, f, l) => EGS_ACH_LOC.fieldValue(a, f, l) },
 };
 
 function _achLangOf(pid) {
@@ -20948,21 +20955,30 @@ function egsAchTip(text) {
                 onclick="event.stopPropagation()"><span class="tooltip-icon">?</span></span>`;
 }
 
+/* `readOnly` (v9.33) is how this card shows a language other than the
+   primary one. DISABLED would have been the lazier choice and is the wrong
+   one: a disabled field is greyed out and skipped by the keyboard, which is
+   what `hidden` already means on the Locked pane, and a translation you
+   cannot read is no use as a preview. Read-only keeps the text legible and
+   selectable and only refuses the one thing that would do damage — typing,
+   which would land in the primary record. */
 function egsAchField(o) {
   const val  = o.value || '';
   const over = val.length > EGS_ACH_CHAR_MAX;
   const dis  = o.disabled ? ' disabled' : '';
+  const ro   = o.readOnly && !o.disabled ? ' readonly' : '';
   const body = o.multiline
-    ? `<textarea class="egs-ach-input${over ? ' is-over-limit' : ''}" id="${o.id}" rows="2"${dis}
+    ? `<textarea class="egs-ach-input${over ? ' is-over-limit' : ''}" id="${o.id}" rows="2"${dis}${ro}
                  placeholder="${escHtml(o.placeholder || '')}"
                  oninput="updateIapCharCounter(this, ${EGS_ACH_CHAR_MAX})"
                  onchange="${o.onChange}">${escHtml(val)}</textarea>`
-    : `<input class="egs-ach-input${over ? ' is-over-limit' : ''}" id="${o.id}" type="text"${dis}
+    : `<input class="egs-ach-input${over ? ' is-over-limit' : ''}" id="${o.id}" type="text"${dis}${ro}
               placeholder="${escHtml(o.placeholder || '')}" value="${escHtml(val)}"
               oninput="updateIapCharCounter(this, ${EGS_ACH_CHAR_MAX})"
               onchange="${o.onChange}">`;
   return `
-    <div class="egs-ach-field${o.disabled ? ' is-disabled' : ''}">
+    <div class="egs-ach-field${o.disabled ? ' is-disabled' : ''}${
+      o.readOnly && !o.disabled ? ' is-readonly' : ''}">
       <label class="egs-ach-label" for="${o.id}">${escHtml(o.label)}${
         o.required ? ' <span class="egs-ach-req">*</span>' : ''}</label>
       ${body}
@@ -21007,6 +21023,26 @@ function buildEgsAchEditor(a) {
   const xpErr  = egsAchXpError(a.xp);
   const tier   = egsAchXpTier(a.xp);
 
+  /* ── THE CARD IS IN THE PAGE'S LANGUAGE TOO (v9.33, by request) ───────
+     The rows behind this card already follow the picker at the top of the
+     Store Page Preview; the card you open on top of one was still showing
+     English underneath them, which is the preview contradicting itself one
+     click in.
+
+     The four fields Epic translates (EGS_ACH_LOC_FIELDS) now read whatever
+     language the page is in, and off the primary one they stop taking
+     typing — the same rule Steam - Achievements follows, for the same
+     reason: an onchange here calls commitEgsAchField, which writes the
+     PRIMARY record whatever language is on screen.
+
+     THE REST OF THE CARD STAYS LIVE, and that is the useful part of the
+     distinction rather than an omission: Visibility, XP, the two icons and
+     Flavor text are one value for the product, not one per language —
+     Epic's own Localizations list holds four fields, and these are not
+     among them. Only what has a translation behaves like a translation. */
+  const roLoc = !_achLangIsPrimary('egs');
+  const locV  = (field) => _achLangText('egs', a.id, field, a[field] || '');
+
   /* THE PORTAL'S OWN WORDS, from the (i) beside Visibility. Quoted rather
      than paraphrased: it is the only place that says what Hidden does to a
      player, and a paraphrase of a rule is how a prototype teaches a rule
@@ -21038,27 +21074,28 @@ function buildEgsAchEditor(a) {
       until it is unlocked, so Epic does not take either here. The locked icon is still yours to
       set &mdash; it is what a player sees on the &ldquo;Hidden Achievement&rdquo; row.</div>` : ''}
     ${egsAchField({ id: `egs-ach-lockedDisplayName-${a.id}`, label: 'Locked display name',
-        value: a.lockedDisplayName, disabled: hidden,
+        value: locV('lockedDisplayName'), disabled: hidden, readOnly: roLoc,
         placeholder: hidden ? '' : 'What the row says before it is unlocked',
         onChange: `commitEgsAchField('${a.id}','lockedDisplayName', this.value)` })}
     ${egsAchField({ id: `egs-ach-lockedDescription-${a.id}`, label: 'Locked description',
-        value: a.lockedDescription, disabled: hidden, multiline: true,
+        value: locV('lockedDescription'), disabled: hidden, multiline: true, readOnly: roLoc,
         placeholder: hidden ? '' : 'How to earn it, as much as you want to give away',
         onChange: `commitEgsAchField('${a.id}','lockedDescription', this.value)` })}`;
 
   const unlockedPane = `
     ${egsAchIconWell(a, 'unlocked')}
     ${egsAchField({ id: `egs-ach-unlockedDisplayName-${a.id}`, label: 'Unlocked display name',
-        value: a.unlockedDisplayName, required: true,
+        value: locV('unlockedDisplayName'), required: true, readOnly: roLoc,
         placeholder: 'The achievement’s name',
         onChange: `commitEgsAchField('${a.id}','unlockedDisplayName', this.value)` })}
     ${egsAchField({ id: `egs-ach-unlockedDescription-${a.id}`, label: 'Unlocked description',
-        value: a.unlockedDescription, required: true, multiline: true,
+        value: locV('unlockedDescription'), required: true, multiline: true, readOnly: roLoc,
         placeholder: 'What the player did to earn it',
         onChange: `commitEgsAchField('${a.id}','unlockedDescription', this.value)` })}`;
 
   return `
     <div class="egs-ach-editor" onclick="event.stopPropagation();">
+      ${_achLangNoteHTML('egs')}
       <!-- NO ACHIEVEMENT ID (v8.61). Epic's form asks for one because the row
            it creates has to be linked to an EOS achievement by key; this card
            is a preview of the store page, where no such key is ever printed.
@@ -21202,13 +21239,7 @@ function buildEgsAchievementsPanel() {
 
      The hidden rule still wins over both — a hidden achievement withholds
      its name in every language (egsAchievements, state.js). */
-  const achLang = (typeof _egsEffectivePreviewLang === 'function')
-    ? _egsEffectivePreviewLang() : ((state.formData || {}).primaryLanguage || 'en');
-  const achIsPrimary = achLang === ((state.formData || {}).primaryLanguage || 'en');
-  const locAch = (recId, field, fallback) => {
-    if (achIsPrimary || !recId || typeof EGS_ACH_LOC !== 'object') return fallback;
-    return (EGS_ACH_LOC.fieldValue(recId, field, achLang) || '').trim() || fallback;
-  };
+  const locAch = (recId, field, fallback) => _achLangText('egs', recId, field, fallback);
 
   const rows = list.map(x => {
     const rec  = x.recordId ? own.find(a => a.id === x.recordId) : null;

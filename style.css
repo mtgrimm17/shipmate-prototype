@@ -32505,9 +32505,21 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 /* IN THE FLOW, NOT OVER IT (v9.32). See the note at _sppLangBarHTML: the
    absolute version of this sat on top of the Game Name box and its
    counter. A row of its own, right-aligned, cannot overlap anything. */
+/* CLEAR OF EVERYTHING, ABOVE AND BELOW (v9.33). v9.32 took the picker out
+   of the title box by giving it a row of its own, but the row was a tight
+   one: ten pixels under the pill and the Game Name box starts, which at this
+   page's zoom reads as the two touching. So it is lifted into the card's own
+   top padding and the gap beneath it is nearly doubled — it now sits closer
+   to the card's edge than to anything it could be mistaken for a part of,
+   which is what tells you it belongs to the page rather than to the title.
+   The numbers are a pair, not two independent paddings, and they are set
+   against the TITLE BOX rather than the row that holds it: the row carries
+   its own padding, so a margin measured row-to-row overstates the gap a
+   reader sees by about seven pixels. What lands on screen is 14px of card
+   padding above the pill and 20px between the pill and the box below it. */
 .spp-langbar {
   display: flex; justify-content: flex-end;
-  margin: 0 0 10px; position: relative; z-index: 2;
+  margin: -10px 0 27px; position: relative; z-index: 2;
 }
 
 /* THE BANNER A READ-ONLY EDITOR OWES ITS READER (v9.32). Steam -
@@ -32526,10 +32538,13 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   line-height: 1.4;
 }
 
-/* A read-only field still reads as a field, just not as an invitation. */
+/* A read-only field still reads as a field, just not as an invitation.
+   Epic's achievement card joined this list in v9.33; its own `is-disabled`
+   state is a different thing and keeps its own greying. */
 .iap-product-field input.form-input[readonly],
 .steam-ach-editor input.form-input[readonly],
-.steam-ach-editor textarea.form-input[readonly] {
+.steam-ach-editor textarea.form-input[readonly],
+.egs-ach-editor .egs-ach-input[readonly] {
   background: var(--panel-2);
   cursor: default;
 }
