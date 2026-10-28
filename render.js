@@ -22436,13 +22436,18 @@ function buildSteamContentRatingSection() {
      row is the one the guide panel copies (`.cr-inferred-status`); the "Click
      All" row stays beside the toggle it is about. Counted over the content
      categories and the five mature declarations. */
+  /* AND THE GENERATIVE-AI QUESTION COUNTS TOO (v9.39). Jaco: "dice que
+     inferred 49 de 49, pero falta la de si uso AI." It is one of the
+     questionnaire's answers — required, and the one the section's own tick
+     waits for — so it is in the total, the answered count and Shipmate's. */
   const _steamCrIds = [...STEAM_CONTENT_CATEGORIES.flatMap(g => g.items.map(i => i.id)),
-                       'gen_mature', 'freq_violence', 'some_nudity', 'freq_nudity', 'adult_sexual'];
+                       'gen_mature', 'freq_violence', 'some_nudity', 'freq_nudity', 'adult_sexual', 'usesAI'];
+  const _steamCrVal = id => id === 'usesAI' ? a.usesAI : sca[id];
   const _steamCrTotal = _steamCrIds.length;
   const _steamCrInferred = steamCollapse
     ? _steamCrIds.filter(id => (typeof _getAnswerMeta === 'function' ? _getAnswerMeta('steam', id) : null)?.confidence !== undefined).length
     : 0;
-  const _steamCrLeft = _steamCrIds.filter(id => sca[id] !== 'yes' && sca[id] !== 'no').length;
+  const _steamCrLeft = _steamCrIds.filter(id => _steamCrVal(id) !== 'yes' && _steamCrVal(id) !== 'no').length;
   const _steamAllWord = `<span class="cr-inferred-all-word">All</span>`;
   const _steamStatus = html => `<div class="cr-inferred-row cr-inferred-status">${html}</div>`;
   const _steamCrText = _steamCrInferred > 0
@@ -22590,21 +22595,27 @@ function buildSteamContentRatingSection() {
         </div>` : ''}
     </div>` : '';
 
+  /* A HEADING ONLY OVER QUESTIONS (v9.39). Jaco: "when only the last
+     question is left, you were still showing me the 'Mature Content' section
+     title, even if no questions were left in that category." The category
+     groups above already skip an empty group in the Unanswered view; these
+     two sections were printed unconditionally. Each now prints its heading
+     only when it has something under it — and Generative AI follows the
+     same Unanswered filter as every other question. */
+  const matureBody = matureHtml + violentSub + nuditySub + matureFieldBlock;
+  const aiVisible = !(steamCollapse && !steamShowAll) || !steamAnsweredSet?.has('usesAI') || a.usesAI === 'yes';
   return `
     ${catHtml}
-    <div class="ios-q-divider"></div>
+    ${matureBody.trim() ? `<div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Mature Content</div>
-    ${matureHtml}
-    ${violentSub}
-    ${nuditySub}
-    ${matureFieldBlock}
-    <div class="ios-q-divider"></div>
+    ${matureBody}` : ''}
+    ${aiVisible ? `<div class="ios-q-divider"></div>
     <div class="ios-content-step-label">Generative AI</div>
     ${ynRow('Uses generative AI', a.usesAI,
       "answerSteamField('usesAI','yes')",
       "answerSteamField('usesAI','no')",
       'Does this game use generative AI to create content — including the game, store page, or marketing materials?')}
-    ${aiLiveBlock}`;
+    ${aiLiveBlock}` : ''}`;
 }
 
 /* ── Steam: Store Tags (PDF 9) ──────────────────────── */
