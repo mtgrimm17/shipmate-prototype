@@ -23985,6 +23985,19 @@ function answerGIARCSingle(key, optIndex) {
   const q = GOOGLE_IARC_BY_KEY[key];
   if (!q) return;
   const current = state.cqAnswers[key];
+  /* PRESSING A SUGGESTED ANSWER CONFIRMS IT, AS ON THE APP STORE (v9.37).
+     Jaco: "¿me estás diciendo que si pulso una pill inferida (morada) en
+     content rating se pone azul?" — it did not: the type rows confirmed,
+     but every other question CLEARED its violet answer and left itself
+     unanswered. Now a violet answer pressed turns blue and stays; pressing
+     the blue one clears it, as before. */
+  const m0 = state.cqAnswerMeta[key];
+  if (current === optIndex && m0 && m0.source && !m0.humanConfirmed) {
+    state.cqAnswerMeta[key] = { ...m0, humanConfirmed: true };
+    reRenderAndroidStepModal();
+    updateAndroidCard();
+    return;
+  }
   if (current === optIndex) {
     // Clicking the already-selected option again clears it (and whatever
     // it revealed) rather than leaving it stuck selected.
@@ -24008,6 +24021,15 @@ function answerGIARCSingle(key, optIndex) {
 function answerGIARCMultiOpt(key, optIndex) {
   const q = GOOGLE_IARC_BY_KEY[key];
   if (!q) return;
+  // A suggested pick pressed is confirmed rather than unticked (v9.37).
+  const m0 = state.cqAnswerMeta[key];
+  if (Array.isArray(state.cqAnswers[key]) && state.cqAnswers[key].includes(optIndex)
+      && m0 && m0.source && !m0.humanConfirmed) {
+    state.cqAnswerMeta[key] = { ...m0, humanConfirmed: true };
+    reRenderAndroidStepModal();
+    updateAndroidCard();
+    return;
+  }
   const opt     = giarcOptionEntries(q).find(o => o.index === optIndex);
   const current = Array.isArray(state.cqAnswers[key]) ? state.cqAnswers[key].slice() : [];
   if (current.includes(optIndex)) {
