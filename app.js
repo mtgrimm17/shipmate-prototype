@@ -25979,6 +25979,16 @@ function updateSteamCard() {
 /* Toggle/answer helpers */
 function answerSteamField(fieldId, value) {
   const current = state.steamSubmitAnswers[fieldId];
+  // A suggested answer pressed is confirmed, not cleared (v9.38).
+  const m0 = state.steamAnswerMeta && state.steamAnswerMeta[fieldId];
+  if (current === value && m0 && !m0.humanConfirmed) {
+    state.steamAnswerMeta[fieldId] = { ...m0, humanConfirmed: true };
+    reRenderSteamStepModal();
+    updateSteamCard();
+    return;
+  }
+  if (state.steamAnswerMeta && state.steamAnswerMeta[fieldId])
+    state.steamAnswerMeta[fieldId] = { ...state.steamAnswerMeta[fieldId], humanConfirmed: true };
   state.steamSubmitAnswers[fieldId] = (current === value) ? null : value;
   reRenderSteamStepModal();
   updateSteamCard();
@@ -25996,6 +26006,18 @@ function answerSteamContentItem(itemId, value) {
   }
   const sca = state.steamSubmitAnswers.steamContentAnswers;
   const current = sca[itemId];
+  /* PRESSING A SUGGESTED ANSWER CONFIRMS IT (v9.38), as on the App Store and,
+     since v9.37, Epic. Jaco: "in 9.37 I still see the same issue in Steam
+     content rating questions — inferred pills don't turn blue." Pressing the
+     lit violet pill cleared it; now it turns blue and stays. Pressing the
+     blue one clears it, as before. */
+  const m0 = state.steamAnswerMeta && state.steamAnswerMeta[itemId];
+  if (current === value && m0 && !m0.humanConfirmed) {
+    state.steamAnswerMeta[itemId] = { ...m0, humanConfirmed: true };
+    reRenderSteamStepModal();
+    updateSteamCard();
+    return;
+  }
   const newVal  = (current === value) ? null : value;
   sca[itemId] = newVal;
   // Mark human-confirmed — removes AI badge
