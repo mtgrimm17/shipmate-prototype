@@ -32502,10 +32502,37 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
    above the tabs the way Mac App Store's sits in its header. Absolute so it
    does not take a row of its own on a page whose first element is a 40px
    title; the tabs below are the first thing in the flow either way. */
-.egs-sp .egs-sp-langbar {
-  position: absolute; top: 14px; right: 18px; z-index: 2;
+/* IN THE FLOW, NOT OVER IT (v9.32). See the note at _sppLangBarHTML: the
+   absolute version of this sat on top of the Game Name box and its
+   counter. A row of its own, right-aligned, cannot overlap anything. */
+.spp-langbar {
+  display: flex; justify-content: flex-end;
+  margin: 0 0 10px; position: relative; z-index: 2;
 }
-.egs-sp { position: relative; }
+
+/* THE BANNER A READ-ONLY EDITOR OWES ITS READER (v9.32). Steam -
+   Achievements and the two Game Center steps are editors; off the primary
+   language their text fields show a translation and stop taking typing, and
+   a field that quietly refuses the keyboard is worse than one that says why.
+   Quiet by design — it is a caption, not a warning. */
+.ach-lang-note {
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* A read-only field still reads as a field, just not as an invitation. */
+.iap-product-field input.form-input[readonly],
+.steam-ach-editor input.form-input[readonly],
+.steam-ach-editor textarea.form-input[readonly] {
+  background: var(--panel-2);
+  cursor: default;
+}
 
 /* A SUGGESTED TAG'S NAME INSIDE THE SUMMARY (v9.19). The pill is the
    field, not the answer, so it stays the ordinary selected blue and only

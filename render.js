@@ -11628,6 +11628,89 @@ function _iasSppLangDropdownHTML() {
           </div>`;
 }
 
+/* ══ THE PREVIEW LANGUAGE PICKER, ONE ROW, FOUR SURFACES (v9.32) ════════
+   Epic's Store Page Preview had one; Steam - Achievements and the two Game
+   Center steps are getting one, by request, and it has to sit where its
+   store's preview keeps its own. One helper so they cannot drift apart in
+   placement, and so the next surface that needs one has nothing to copy.
+
+   DRAWN ONLY WHEN THERE IS SOMEWHERE TO SWITCH TO: a picker holding one
+   language is a label with a chevron. */
+function _sppLangBarHTML(id, lang, setterFn) {
+  const fd = state.formData || {};
+  const langs = [fd.primaryLanguage || 'en', ...((fd.localizations || []).slice()
+    .sort((a, b) => (OB_LANG_NAMES[a] || a).localeCompare(OB_LANG_NAMES[b] || b)))];
+  if (langs.length < 2) return '';
+  const opts = langs.map(l => ({ value: l, label: OB_LANG_NAMES[l] || l }));
+  return `<div class="spp-langbar"><div class="ias-locs-lang-group">${
+    swSelect(id, lang, opts, setterFn, 'auto', 'right')
+  }</div></div>`;
+}
+
+/* ══ ONE LANGUAGE SETTING, TWO WINDOWS ONTO IT (v9.32) ═══════════════════
+   Steam - Achievements, Mac App Store - Game Center and App Store - Game
+   Center each now carry the same language picker their store's Store/Product
+   Page Preview carries, and carry it by reading and writing the SAME state
+   that picker reads and writes (state.steamPreviewLang / masPreviewLang /
+   iasPreviewLang). "Synced with its counterpart" is therefore not a second
+   mechanism to keep in step — there is one setting and two places to see it,
+   which is the only arrangement that cannot drift.
+
+   WHAT A NON-PRIMARY LANGUAGE DOES TO AN EDITOR is the part worth stating,
+   because these three are editors, not previews. Their text fields fill with
+   that language's text and go read-only. A box that took typing while showing
+   Spanish would write what you typed into the English record — the one bug
+   this feature could plausibly introduce — so it doesn't take typing.
+   Translations are written in Localizations; this is a window onto them. */
+const ACH_LANG_SURFACE = {
+  steam: { id: 'steam-ach-lang', setter: 'setSteamPreviewLang',
+           lang:  () => _steamEffectivePreviewLang(),
+           value: (a, f, l) => STEAM_ACH_LOC.fieldValue(a, f, l) },
+  macos: { id: 'mas-gc-lang',    setter: 'setMasPreviewLang',
+           lang:  () => _masEffectivePreviewLang(),
+           value: (a, f, l) => _masAchLocFieldValue(a, f, l) },
+  ios:   { id: 'ias-gc-lang',    setter: 'setIasPreviewLang',
+           lang:  () => _iasEffectivePreviewLang(),
+           value: (a, f, l) => _iasAchLocFieldValue(a, f, l) },
+};
+
+function _achLangOf(pid) {
+  const s = ACH_LANG_SURFACE[pid];
+  const primary = (state.formData || {}).primaryLanguage || 'en';
+  if (!s) return primary;
+  try { return s.lang() || primary; } catch (e) { return primary; }
+}
+
+function _achLangIsPrimary(pid) {
+  return _achLangOf(pid) === ((state.formData || {}).primaryLanguage || 'en');
+}
+
+function _achLangBarHTML(pid) {
+  const s = ACH_LANG_SURFACE[pid];
+  return s ? _sppLangBarHTML(s.id, _achLangOf(pid), s.setter) : '';
+}
+
+/* The text one field should SHOW. Falls back to the primary language's own
+   text when a translation is missing, so switching language never blanks a
+   row: an untranslated achievement reads as untranslated rather than as
+   deleted. */
+function _achLangText(pid, achId, field, fallback) {
+  const s = ACH_LANG_SURFACE[pid];
+  if (!s || !achId || _achLangIsPrimary(pid)) return fallback;
+  let v = '';
+  try { v = (s.value(achId, field, _achLangOf(pid)) || '').trim(); } catch (e) { v = ''; }
+  return v || fallback;
+}
+
+/* The one-line banner a read-only editor owes the reader: what they are
+   looking at, and where the text is actually written. */
+function _achLangNoteHTML(pid) {
+  if (_achLangIsPrimary(pid)) return '';
+  const l = _achLangOf(pid);
+  return `<div class="ach-lang-note">Showing ${escHtml(OB_LANG_NAMES[l] || l)}. `
+       + `Translations are edited in Localizations.</div>`;
+}
+
 function _macSppLangDropdownHTML() {
   const fd = state.formData;
   const previewPrimaryLang = fd.primaryLanguage || 'en';
@@ -12711,7 +12794,12 @@ const GC_ACHIEVEMENT_FIELD_LIMITS = { refName: 255, displayName: 30, earnedDescr
 // about it is actually IAP-specific. `setterFnName` is the platform-specific
 // field setter to call (setMacGameCenterAchievementField /
 // setMacFullGameCenterAchievementField).
-function _gcCounterField(setterFnName, id, field, label, value, placeholder) {
+/* `readOnly` (v9.32) is how a Game Center step shows a language other than
+   the primary one: the field still measures itself against the store's limit
+   for THAT language, which is the number that matters there, but it will not
+   take typing, because what you typed would land in the primary record.
+   Every caller that passes six arguments is unaffected. */
+function _gcCounterField(setterFnName, id, field, label, value, placeholder, readOnly) {
   const limit = GC_ACHIEVEMENT_FIELD_LIMITS[field];
   const v = value || '';
   const overLimit = v.length > limit;
@@ -12719,7 +12807,7 @@ function _gcCounterField(setterFnName, id, field, label, value, placeholder) {
   return `
     <div class="iap-product-field">
       <label class="form-label">${label}</label>
-      <input class="form-input${overLimit ? ' is-over-limit' : ''}" type="text" value="${escHtml(v)}" placeholder="${placeholder}"
+      <input class="form-input${overLimit ? ' is-over-limit' : ''}" type="text" value="${escHtml(v)}" placeholder="${placeholder}"${readOnly ? ' readonly' : ''}
              oninput="${setterFnName}('${id}','${field}',this.value); updateIapCharCounter(this, ${limit})">
       <div class="ias-char-counter-row">
         <span class="ias-char-error">${overLimit ? `Must be less than ${limit} characters.` : ''}</span>
@@ -12735,7 +12823,8 @@ function _gcCounterField(setterFnName, id, field, label, value, placeholder) {
 // the Display Name when one exists, falling back to the internal Reference
 // Name so a not-yet-filled-in achievement still has a recognizable label.
 function _macGcAchievementCollapsedRow(a) {
-  const displayName = (a.displayName || '').trim() || a.refName.trim() || 'Untitled Achievement';
+  const displayName = _achLangText('macos', a.id, 'displayName', (a.displayName || '')).trim()
+    || a.refName.trim() || 'Untitled Achievement';
   const badges = [
     a.pointValue ? `${escHtml(String(a.pointValue))} pts` : '',
     a.hidden ? 'Hidden' : '',
@@ -12762,8 +12851,13 @@ function _macGcAchievementCollapsedRow(a) {
 // Name/Earned Description/Pre-Earned Description/Image, then the Save
 // button.
 function _macGcAchievementExpandedRow(a) {
-  const headerLabel = (a.displayName || '').trim() || a.refName.trim() || 'New Achievement';
+  const headerLabel = _achLangText('macos', a.id, 'displayName', (a.displayName || '')).trim()
+    || a.refName.trim() || 'New Achievement';
   const img = a.image;
+  /* Reference Name is internal and has no translation, so it stays live in
+     every language; the three player-facing fields are the ones that change. */
+  const ro = !_achLangIsPrimary('macos');
+  const lv = (field, fallback) => _achLangText('macos', a.id, field, fallback || '');
   const overAnyLimit = Object.keys(GC_ACHIEVEMENT_FIELD_LIMITS)
     .some(field => (a[field] || '').length > GC_ACHIEVEMENT_FIELD_LIMITS[field]);
   return `
@@ -12796,9 +12890,9 @@ function _macGcAchievementExpandedRow(a) {
           <button class="yn-btn yn-no ${!a.achievableMultipleTimes ? 'is-selected' : ''}" onclick="setMacGameCenterAchievementField('${a.id}','achievableMultipleTimes',false)">NO</button>
         </div>
       </div>
-      ${_gcCounterField('setMacGameCenterAchievementField', a.id, 'displayName', 'Display Name', a.displayName, 'Shown to players, e.g. Speed Runner')}
-      ${_gcCounterField('setMacGameCenterAchievementField', a.id, 'earnedDescription', 'Earned Description', a.earnedDescription, 'Shown after the player earns it')}
-      ${_gcCounterField('setMacGameCenterAchievementField', a.id, 'preEarnedDescription', 'Pre-Earned Description', a.preEarnedDescription, 'Shown before the player earns it')}
+      ${_gcCounterField('setMacGameCenterAchievementField', a.id, 'displayName', 'Display Name', lv('displayName', a.displayName), 'Shown to players, e.g. Speed Runner', ro)}
+      ${_gcCounterField('setMacGameCenterAchievementField', a.id, 'earnedDescription', 'Earned Description', lv('earnedDescription', a.earnedDescription), 'Shown after the player earns it', ro)}
+      ${_gcCounterField('setMacGameCenterAchievementField', a.id, 'preEarnedDescription', 'Pre-Earned Description', lv('preEarnedDescription', a.preEarnedDescription), 'Shown before the player earns it', ro)}
       <div class="form-group" style="margin-top:8px;margin-bottom:0;">
         <label class="form-label">Image</label>
         ${img
@@ -12827,12 +12921,14 @@ function buildMacGameCenterSection() {
   // it.
   const achLocsBtn = '';
   return `
+    ${_achLangBarHTML('macos')}
     <div class="form-group iap-products-group" style="margin-bottom:8px;">
       <div class="iap-products-label-row">
         <label class="form-label">Achievements <span class="form-hint-inline">(optional)</span></label>
         ${achLocsBtn}
       </div>
     </div>
+    ${_achLangNoteHTML('macos')}
     ${achievements.map(a => a.collapsed
         ? _macGcAchievementCollapsedRow(a)
         : _macGcAchievementExpandedRow(a)
@@ -12854,7 +12950,8 @@ function buildMacGameCenterSection() {
    ═══════════════════════════════════════════════════ */
 
 function _iosGcAchievementCollapsedRow(a) {
-  const displayName = (a.displayName || '').trim() || a.refName.trim() || 'Untitled Achievement';
+  const displayName = _achLangText('ios', a.id, 'displayName', (a.displayName || '')).trim()
+    || a.refName.trim() || 'Untitled Achievement';
   const badges = [
     a.pointValue ? `${escHtml(String(a.pointValue))} pts` : '',
     a.hidden ? 'Hidden' : '',
@@ -12876,8 +12973,14 @@ function _iosGcAchievementCollapsedRow(a) {
 }
 
 function _iosGcAchievementExpandedRow(a) {
-  const headerLabel = (a.displayName || '').trim() || a.refName.trim() || 'New Achievement';
+  const headerLabel = _achLangText('ios', a.id, 'displayName', (a.displayName || '')).trim()
+    || a.refName.trim() || 'New Achievement';
   const img = a.image;
+  /* See _macGcAchievementExpandedRow's note: Reference Name is internal and
+     stays live, the three player-facing fields follow the chosen language and
+     stop taking typing off the primary one. */
+  const roAttr = _achLangIsPrimary('ios') ? '' : ' readonly';
+  const lv = (field, fallback) => _achLangText('ios', a.id, field, fallback || '');
   return `
     <div class="iap-product-row ios-gc-row" data-ach-id="${a.id}" style="flex-direction:column;align-items:stretch;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;cursor:pointer;" onclick="saveIosGcAchievement('${a.id}')" title="Click to collapse">
@@ -12914,17 +13017,17 @@ function _iosGcAchievementExpandedRow(a) {
       </div>
       <div class="iap-product-field">
         <label class="form-label">Display Name</label>
-        <input class="form-input" type="text" value="${escHtml(a.displayName)}" placeholder="Shown to players, e.g. Speed Runner"
+        <input class="form-input" type="text" value="${escHtml(lv('displayName', a.displayName))}" placeholder="Shown to players, e.g. Speed Runner"${roAttr}
                oninput="setIosGameCenterAchievementField('${a.id}','displayName',this.value)">
       </div>
       <div class="iap-product-field">
         <label class="form-label">Earned Description</label>
-        <input class="form-input" type="text" value="${escHtml(a.earnedDescription)}" placeholder="Shown after the player earns it"
+        <input class="form-input" type="text" value="${escHtml(lv('earnedDescription', a.earnedDescription))}" placeholder="Shown after the player earns it"${roAttr}
                oninput="setIosGameCenterAchievementField('${a.id}','earnedDescription',this.value)">
       </div>
       <div class="iap-product-field">
         <label class="form-label">Pre-Earned Description</label>
-        <input class="form-input" type="text" value="${escHtml(a.preEarnedDescription)}" placeholder="Shown before the player earns it"
+        <input class="form-input" type="text" value="${escHtml(lv('preEarnedDescription', a.preEarnedDescription))}" placeholder="Shown before the player earns it"${roAttr}
                oninput="setIosGameCenterAchievementField('${a.id}','preEarnedDescription',this.value)">
       </div>
       <div class="form-group" style="margin-top:8px;margin-bottom:0;">
@@ -12949,12 +13052,14 @@ function buildIosGameCenterSection() {
   // matching note above).
   const achLocsBtn = '';
   return `
+    ${_achLangBarHTML('ios')}
     <div class="form-group iap-products-group" style="margin-bottom:8px;">
       <div class="iap-products-label-row">
         <label class="form-label">Achievements <span class="form-hint-inline">(optional)</span></label>
         ${achLocsBtn}
       </div>
     </div>
+    ${_achLangNoteHTML('ios')}
     ${achievements.map(a => a.collapsed
         ? _iosGcAchievementCollapsedRow(a)
         : _iosGcAchievementExpandedRow(a)
@@ -21083,9 +21188,33 @@ function buildEgsAchievementsPanel() {
      every row carries its id and opens its editor. The difference is the
      `recordId` the resolver puts on an editable row, so there is no second
      mode flag to get wrong. */
+  /* ── AND IN THE LANGUAGE THE PAGE IS IN (v9.32, by request) ───────────
+     The dropdown at the top of the Store Page Preview chooses the language
+     for the page; the Achievements tab is part of that page, and was still
+     reading the primary one. Each row's words come from the same family
+     Localizations writes (EGS_ACH_LOC), so the tab and the Localizations
+     step cannot show different French.
+
+     A MISSING TRANSLATION FALLS BACK rather than going blank, which is what
+     a store does: Steam serves the default language where it has no
+     translation, and a list of empty rows would read as data loss instead
+     of as work still to do.
+
+     The hidden rule still wins over both — a hidden achievement withholds
+     its name in every language (egsAchievements, state.js). */
+  const achLang = (typeof _egsEffectivePreviewLang === 'function')
+    ? _egsEffectivePreviewLang() : ((state.formData || {}).primaryLanguage || 'en');
+  const achIsPrimary = achLang === ((state.formData || {}).primaryLanguage || 'en');
+  const locAch = (recId, field, fallback) => {
+    if (achIsPrimary || !recId || typeof EGS_ACH_LOC !== 'object') return fallback;
+    return (EGS_ACH_LOC.fieldValue(recId, field, achLang) || '').trim() || fallback;
+  };
+
   const rows = list.map(x => {
     const rec  = x.recordId ? own.find(a => a.id === x.recordId) : null;
     const open = !!(rec && rec.open);
+    const name = x.hidden ? x.name : locAch(x.recordId, 'unlockedDisplayName', x.name);
+    const desc = x.hidden ? x.description : locAch(x.recordId, 'unlockedDescription', x.description);
     return `
     <div class="egs-sp-ach-row${rec ? ' is-editable' : ''}${open ? ' is-open' : ''}"
          ${rec ? `onclick="toggleEgsAchievement('${rec.id}')"` : ''}>
@@ -21094,11 +21223,11 @@ function buildEgsAchievementsPanel() {
           ? `<img src="${escHtml(x.icon)}" alt="">`
           : `<span class="egs-sp-ach-icon-empty">${trophySvg}</span>`}</div>
         <div class="egs-sp-ach-text">
-          <div class="egs-sp-ach-name">${x.name
-            ? escHtml(x.name)
+          <div class="egs-sp-ach-name">${name
+            ? escHtml(name)
             : `<span class="egs-spp-placeholder">Untitled achievement</span>`}</div>
-          <div class="egs-sp-ach-desc">${x.description
-            ? escHtml(x.description)
+          <div class="egs-sp-ach-desc">${desc
+            ? escHtml(desc)
             : `<span class="egs-spp-placeholder">${x.hidden ? 'Hidden until unlocked' : 'No description'}</span>`}</div>
           <div class="egs-sp-ach-xp">${x.xp
             ? `${x.xp} XP`
@@ -21721,23 +21850,20 @@ function buildEgsStorePreviewSection() {
             parked in it read as a stray label rather than as the title's
             count. egs-sp-titlerow turns the row into a flex line and centres
             the number against the box. */''}
+      ${/* ABOVE THE TITLE, IN THE FLOW (v9.32). v9.29 parked this absolutely
+            at the card's top-right, which put it straight through the Game
+            Name box and the counter that sits beside it — the one row on
+            this page whose right edge is already occupied. A control that
+            overlaps what it is positioned over is not placed, it is
+            floating; so it is the page's first row now, right-aligned, and
+            the title begins beneath it. Nothing can be under it because
+            nothing is beside it. */''}
+      ${_sppLangBarHTML('egs-preview-lang', previewLang, 'setEgsPreviewLang')}
       ${egsPageField({ spp: 'title', id: 'egs-sp-name', cls: 'egs-sp-title', value: title,
           rowCls: 'egs-sp-titlerow',
           limit: EGS_PAGE_LIMITS.name, placeholder: 'Game Name',
           onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.name})`,
           onChange: locSet('title', `setEgsProductShared('title', this.value)`) })}
-      ${/* The language switcher, top-right, exactly where Mac App Store's
-            Product Page Preview keeps its own (_macSppLangDropdownHTML). It
-            is drawn only when there is a second language to switch TO. */''}
-      ${(() => {
-        const langs = [fd.primaryLanguage || 'en', ...((fd.localizations || []).slice()
-          .sort((a2, b2) => (OB_LANG_NAMES[a2] || a2).localeCompare(OB_LANG_NAMES[b2] || b2)))];
-        if (langs.length < 2) return '';
-        const opts = langs.map(l => ({ value: l, label: OB_LANG_NAMES[l] || l }));
-        return `<div class="egs-sp-langbar"><div class="ias-locs-lang-group">${
-          swSelect('egs-preview-lang', previewLang, opts, 'setEgsPreviewLang', 'auto', 'right')
-        }</div></div>`;
-      })()}
       <div class="egs-sp-tabs">
         <!-- No Add-Ons tab (v8.54). Epic shows one only for a product that
              HAS add-ons; this card has no notion of them, so it was a tab
@@ -22819,20 +22945,26 @@ function buildSteamAchievementsSection() {
       </div>`;
   };
 
+  /* Off the primary language the two text boxes are a window onto the
+     translation, not a way to write one (see _achLangText above). The
+     checkbox and the two icon wells are the same in every language, so
+     they stay live. */
+  const roAttr = _achLangIsPrimary('steam') ? '' : ' readonly';
   const editor = a => `
     <div class="steam-ach-editor" onclick="event.stopPropagation();">
+      ${_achLangNoteHTML('steam')}
       <div class="steam-ach-field">
         <label class="steam-ach-label" for="steam-ach-name-${a.id}">Display Name</label>
         <input class="form-input" id="steam-ach-name-${a.id}" type="text"
-               value="${escHtml(a.displayName || '')}"
-               placeholder="What the achievement is called"
+               value="${escHtml(_achLangText('steam', a.id, 'displayName', a.displayName || ''))}"
+               placeholder="What the achievement is called"${roAttr}
                oninput="setSteamAchField('${a.id}','displayName', this.value)">
       </div>
       <div class="steam-ach-field">
         <label class="steam-ach-label" for="steam-ach-desc-${a.id}">Description</label>
         <textarea class="form-input steam-ach-desc-input" id="steam-ach-desc-${a.id}" rows="2"
-                  placeholder="What the player did to earn it"
-                  oninput="setSteamAchField('${a.id}','description', this.value)">${escHtml(a.description || '')}</textarea>
+                  placeholder="What the player did to earn it"${roAttr}
+                  oninput="setSteamAchField('${a.id}','description', this.value)">${escHtml(_achLangText('steam', a.id, 'description', a.description || ''))}</textarea>
       </div>
       <label class="steam-ach-hidden-row">
         <input type="checkbox" ${a.hidden ? 'checked' : ''}
@@ -22849,8 +22981,8 @@ function buildSteamAchievementsSection() {
 
   const rows = list.map(a => {
     const src  = (typeof steamAchievementTileIcon === 'function') ? steamAchievementTileIcon(a) : '';
-    const name = (a.displayName || '').trim();
-    const desc = (a.description || '').trim();
+    const name = _achLangText('steam', a.id, 'displayName', (a.displayName || '')).trim();
+    const desc = _achLangText('steam', a.id, 'description', (a.description || '')).trim();
     return `
       <div class="steam-ach-row${a.open ? ' is-open' : ''}" onclick="toggleSteamAchievement('${a.id}')">
         <div class="steam-ach-rowhead">
@@ -22883,7 +23015,8 @@ function buildSteamAchievementsSection() {
         list.length === 1 ? '' : 's'}</span>` : ''}
     </div>`;
 
-  return `${addHtml}${list.length ? `<div class="steam-ach-list">${rows}</div>` : ''}`;
+  return `${_achLangBarHTML('steam')}${addHtml}${
+    list.length ? `<div class="steam-ach-list">${rows}</div>` : ''}`;
 }
 
 function buildSteamSysreqSection() {
