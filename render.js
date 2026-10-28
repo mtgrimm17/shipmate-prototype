@@ -21287,17 +21287,14 @@ function buildEgsStorePreviewSection() {
     const v = value || '';
     const over = v.length > limit;
     return `
-    <div class="egs-sp-meta-row is-edit egs-sp-meta-counted">
+    <div class="egs-sp-meta-row is-edit egs-sp-meta-counted dp-counted${over ? ' is-over' : ''}">
       <span>${label}</span>
       <input class="egs-sp-edit egs-sp-metafield${v.trim() ? '' : ' egs-sp-edit-empty'}${
              over ? ' is-over-limit' : ''}"
              id="${id}" type="text" value="${escHtml(v)}" placeholder="Not set"
-             oninput="updateIapCharCounter(this, ${limit})"
+             oninput="_dpCount(this, ${limit})"
              onchange="setEgsProductShared('${key}', this.value)">
-      <div class="ias-char-counter-row">
-        <span class="ias-char-error">${over ? `Must be less than ${limit} characters.` : ''}</span>
-        <span class="ias-char-count${over ? ' is-over' : ''}">${limit - v.length}</span>
-      </div>
+      ${_dpCounterRow(v, limit)}
     </div>`;
   };
 
@@ -22712,6 +22709,17 @@ function computeSteamPlayerBadges() {
 
    It stays the input's NEXT SIBLING, which is how updateIapCharCounter
    finds the row to patch on every keystroke. */
+/* DEVELOPER AND PUBLISHER COUNT ONLY WHILE YOU ARE IN THEM (v9.30). Jaco:
+   "en Steam y en Epic, en Developer y Publisher, no pongas siempre los
+   caracteres restantes, solo cuando he engageado con esos fields, y que los
+   marques en rojo — 122/120 por ejemplo — si se pasan." The count reads
+   used/limit, is hidden at rest (visibility, so nothing moves when it
+   appears), shows while the field has focus, and stays on in red while the
+   value is over the limit, focused or not (_dpCount, app.js). */
+function _dpCounterRow(value, max) {
+  const len = (value || '').length;
+  return `<div class="ias-char-counter-row dp-counter-row"><span class="ias-char-count${len > max ? ' is-over' : ''}">${len}/${max}</span></div>`;
+}
 function _steamSppCounter(value, max) {
   const len  = (value || '').length;
   const over = len > max;
@@ -24044,21 +24052,21 @@ function buildSteamStorePreviewPrototypeSection() {
       <div class="steam-spp-devrow"><span class="steam-spp-label">Release Date:</span>
         <span class="steam-spp-printed" id="steam-spp-releasedate">${escHtml(releaseDateText)}</span></div>
       <div class="steam-spp-devrow"><span class="steam-spp-label">Developer:</span>
-        <div class="steam-spp-fieldrow steam-spp-devfield">
+        <div class="steam-spp-fieldrow steam-spp-devfield dp-counted${devRaw.length > STEAM_PAGE_LIMITS.developer ? ' is-over' : ''}">
           <input type="text" data-spp-el="devpub" class="steam-spp-inline-input steam-spp-edit${devRaw ? '' : ' is-todo'}${
                    devRaw.length > STEAM_PAGE_LIMITS.developer ? ' is-over-limit' : ''}" id="steam-spp-dev-input" value="${escHtml(devRaw)}"
                  placeholder="Developer Name"
-                 oninput="_steamSppDevPubInput('developer', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.developer})">
-          ${_steamSppCounter(devRaw, STEAM_PAGE_LIMITS.developer)}
+                 oninput="_steamSppDevPubInput('developer', this.value); _dpCount(this, ${STEAM_PAGE_LIMITS.developer})">
+          ${_dpCounterRow(devRaw, STEAM_PAGE_LIMITS.developer)}
         </div></div>
       ${devStatusHtml}
       <div class="steam-spp-devrow steam-spp-devrow-close"><span class="steam-spp-label">Publisher:</span>
-        <div class="steam-spp-fieldrow steam-spp-devfield">
+        <div class="steam-spp-fieldrow steam-spp-devfield dp-counted${pubRaw.length > STEAM_PAGE_LIMITS.publisher ? ' is-over' : ''}">
           <input type="text" data-spp-el="devpub" class="steam-spp-inline-input steam-spp-edit${pubRaw ? '' : ' is-todo'}${
                    pubRaw.length > STEAM_PAGE_LIMITS.publisher ? ' is-over-limit' : ''}" id="steam-spp-pub-input" value="${escHtml(pubRaw)}"
                  placeholder="Publisher Name"
-                 oninput="_steamSppDevPubInput('publisher', this.value); updateIapCharCounter(this, ${STEAM_PAGE_LIMITS.publisher})">
-          ${_steamSppCounter(pubRaw, STEAM_PAGE_LIMITS.publisher)}
+                 oninput="_steamSppDevPubInput('publisher', this.value); _dpCount(this, ${STEAM_PAGE_LIMITS.publisher})">
+          ${_dpCounterRow(pubRaw, STEAM_PAGE_LIMITS.publisher)}
         </div></div>
       ${pubStatusHtml}
       <div class="steam-spp-tags">

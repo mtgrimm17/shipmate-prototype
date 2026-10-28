@@ -35115,3 +35115,14 @@ function _steamPickFit() {
     soon();
   });
 })();
+
+/* Developer / Publisher on Steam and Epic (v9.30, _dpCounterRow in render.js):
+   used/limit, red and kept on screen while over. */
+function _dpCount(input, max) {
+  const len = (input.value || '').length, over = len > max;
+  input.classList.toggle('is-over-limit', over);
+  const wrap = input.closest('.dp-counted');
+  if (wrap) wrap.classList.toggle('is-over', over);
+  const c = wrap && wrap.querySelector('.dp-counter-row .ias-char-count');
+  if (c) { c.textContent = `${len}/${max}`; c.classList.toggle('is-over', over); }
+}

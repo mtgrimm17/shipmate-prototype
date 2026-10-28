@@ -32684,3 +32684,11 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
    the class every suggested answer wears, so no pill can be half of each. */
 .ai-confident { --ring-top: var(--pill-ai-stroke-top); --ring-bottom: var(--pill-ai-stroke-bottom); }
 .steam-top-pills .ob-preset-pill.is-active.ai-confident { border-color: transparent; }
+
+/* v9.30: Developer / Publisher counters show while the field is focused, and
+   stay — red — while it is over its limit. Hidden by visibility so the row
+   never moves when the count appears. */
+.dp-counted .dp-counter-row { visibility: hidden; }
+.dp-counted:focus-within .dp-counter-row,
+.dp-counted.is-over .dp-counter-row { visibility: visible; }
+.dp-counted .dp-counter-row .ias-char-count.is-over { color: var(--magenta); font-weight: 600; }
