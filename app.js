@@ -34800,12 +34800,15 @@ window.renderGuide = function () {
   const note = n > max ? `Steam accepts twenty — remove ${n - max}.`
              : n === max ? 'All twenty used. Remove one to add another.'
              : '';
+  // The page's own "N suggested" line moved here (v9.34).
+  const inferred = (typeof steamInferredTagCount === 'function') ? steamInferredTagCount() : 0;
   el.innerHTML =
     `<div class="gd-tagcap-row"><span>Tags</span>` +
     `<span class="gd-tagcap-n"><b>${n}</b> / ${max}</span></div>` +
     `<div class="gd-tagcap-track"><i style="width:${
        Math.min(100, Math.round(n / max * 100))}%"></i></div>` +
-    (note ? `<div class="gd-tagcap-note">${escHtml(note)}</div>` : '');
+    (note ? `<div class="gd-tagcap-note">${escHtml(note)}</div>` : '') +
+    (inferred ? `<div class="gd-tagcap-note is-ai">${inferred} suggested by Shipmate — remove any that do not fit.</div>` : '');
   /* AND IT TAKES THE RESERVED SLOT'S ROOM RATHER THAN ADDING TO IT. The
      modal arm inserts an EMPTY `.sm-cr-line-slot` under the eyebrow in
      every step, holding open the room a status line would need so the

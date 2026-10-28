@@ -22773,16 +22773,13 @@ function buildSteamStoreTagsSection() {
   return `
     <div class="giarc-root giarc-flat steam-tags">
       ${sections}
-      <div class="steam-tag-total${over ? ' is-over' : (full ? ' is-full' : '')}">${
-        all.length} of ${STEAM_TAG_TOTAL_MAX} tags${
-        over ? ' — Steam accepts twenty' :
-        full ? ' — remove one to add another' : ''}</div>
-      ${/* NOT "press one to confirm" (v9.19). In Content Rating pressing an
-            answer re-asserts the same value, which is what makes a press a
-            confirmation there; pressing a chosen TAG unticks it. A
-            suggestion here is confirmed by being left alone, so the line
-            says the only thing a press can do. */''}
-      ${inferred ? `<div class="steam-tag-inferred">${inferred} suggested by Shipmate — remove any that do not fit.</div>` : ''}
+      ${/* THE COUNT AND THE SUGGESTION NOTE LIVE IN SHIPPY (v9.34). Jaco: "en
+            Tags, que no ponga abajo el mensaje de 0/x tags y suggested; eso
+            debería ir en el panel lateral de Shippy, ya que hay un contador
+            con barra de progreso." The panel's counter (gd-tagcap, app.js)
+            already said "N / 20" with a bar; it now also carries the cap
+            note and the "N suggested by Shipmate" line, and the page ends
+            at its last picker. */''}
     </div>`;
 }
 

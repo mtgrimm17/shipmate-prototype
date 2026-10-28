@@ -32738,3 +32738,5 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .dp-counted:focus-within .dp-counter-row,
 .dp-counted.is-over .dp-counter-row { visibility: visible; }
 .dp-counter-row .ias-char-count.is-over { color: var(--magenta); font-weight: 600; }
+/* v9.34: the suggestion note, in Shippy's Tags counter, in the AI violet. */
+.gd-tagcap-note.is-ai { color: var(--pill-ai-color); }
