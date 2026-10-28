@@ -5465,7 +5465,13 @@ function updateIapCharCounter(inputEl, limit) {
   const isOver = remaining < 0;
   inputEl.classList.toggle('is-over-limit', isOver);
   const counterRow = inputEl.nextElementSibling;
-  if (counterRow && counterRow.classList.contains('ias-char-counter-row')) {
+  // The store pages' fields count used/limit (v9.31, _dpCounterRow).
+  if (counterRow && counterRow.classList.contains('dp-counter-row')) {
+    const countEl = counterRow.querySelector('.ias-char-count');
+    if (countEl) { countEl.textContent = `${inputEl.value.length}/${limit}`; countEl.classList.toggle('is-over', isOver); }
+    const wrap = inputEl.closest('.dp-counted');
+    if (wrap) wrap.classList.toggle('is-over', isOver);
+  } else if (counterRow && counterRow.classList.contains('ias-char-counter-row')) {
     const errorEl = counterRow.querySelector('.ias-char-error');
     const countEl = counterRow.querySelector('.ias-char-count');
     if (errorEl) errorEl.textContent = isOver ? `Must be less than ${limit} characters.` : '';

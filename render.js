@@ -20767,12 +20767,9 @@ function egsPageField(o) {
      is. It stays the input's NEXT SIBLING, which is how updateIapCharCounter
      finds it. */
   return `
-    <div class="egs-sp-fieldrow${o.rowCls ? ' ' + o.rowCls : ''}">
+    <div class="egs-sp-fieldrow dp-counted${over ? ' is-over' : ''}${o.rowCls ? ' ' + o.rowCls : ''}">
       ${body}
-      <div class="ias-char-counter-row">
-        <span class="ias-char-error">${over ? `Must be less than ${o.limit} characters.` : ''}</span>
-        <span class="ias-char-count${over ? ' is-over' : ''}">${o.limit - val.length}</span>
-      </div>
+      ${_dpCounterRow(val, o.limit)}
     </div>`;
 }
 
@@ -22720,14 +22717,10 @@ function _dpCounterRow(value, max) {
   const len = (value || '').length;
   return `<div class="ias-char-counter-row dp-counter-row"><span class="ias-char-count${len > max ? ' is-over' : ''}">${len}/${max}</span></div>`;
 }
+/* Steam's page fields count the same way as Developer / Publisher (v9.31):
+   used/limit, only while you are in the field, red and kept while over. */
 function _steamSppCounter(value, max) {
-  const len  = (value || '').length;
-  const over = len > max;
-  return `
-      <div class="ias-char-counter-row">
-        <span class="ias-char-error">${over ? `Must be less than ${max} characters.` : ''}</span>
-        <span class="ias-char-count${over ? ' is-over' : ''}">${max - len}</span>
-      </div>`;
+  return _dpCounterRow(value, max);
 }
 
 /* ══ STEAMWORKS' OWN REQUIREMENTS FORM (v8.93) ══════════════════

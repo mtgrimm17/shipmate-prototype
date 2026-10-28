@@ -32688,7 +32688,11 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 /* v9.30: Developer / Publisher counters show while the field is focused, and
    stay — red — while it is over its limit. Hidden by visibility so the row
    never moves when the count appears. */
-.dp-counted .dp-counter-row { visibility: hidden; }
+/* v9.31: every store-page field on Steam and Epic, not only Developer and
+   Publisher — the field right before the count, or the row around both. */
+.dp-counter-row { visibility: hidden; }
+:focus + .dp-counter-row,
+.is-over-limit + .dp-counter-row,
 .dp-counted:focus-within .dp-counter-row,
 .dp-counted.is-over .dp-counter-row { visibility: visible; }
-.dp-counted .dp-counter-row .ias-char-count.is-over { color: var(--magenta); font-weight: 600; }
+.dp-counter-row .ias-char-count.is-over { color: var(--magenta); font-weight: 600; }
