@@ -29514,6 +29514,8 @@ textarea.egs-sp-body {
    both at --text-dim. */
 .egs-sp textarea.egs-sp-short,
 .egs-sp textarea.egs-sp-body,
+/* v9.45: the body is a rendered block now, not a textarea — same type. */
+.egs-sp div.egs-sp-body,
 .egs-sp .egs-spp-p {
   font-size: 16px;
   font-weight: 400;
@@ -29526,6 +29528,8 @@ textarea.egs-sp-body {
    That is the headline, "Body", "Follow Us" and "<title> System
    Requirements" — the same heading four times, as Epic has it. */
 .egs-sp .egs-spp-h2,
+/* v9.45: and the headline is the h2 it always was on Epic's own page. */
+.egs-sp h2.egs-sp-headline,
 .egs-sp input.egs-sp-headline {
   font-size: 20px;
   font-weight: 700;
@@ -29536,6 +29540,9 @@ textarea.egs-sp-body {
   margin-bottom: 10px;
 }
 .egs-sp input.egs-sp-headline { margin-bottom: 0; }
+/* A rendered headline keeps the 10px Epic puts under a heading; the gap
+   between one block and the next is .egs-sp-about's own. */
+.egs-sp h2.egs-sp-headline { margin: 0 0 10px; }
 /* No "Body" label between them any more (v8.52), and the headline's own
    counter row already carries the gap. */
 .egs-sp .egs-sp-headline-wrap { margin-bottom: 0; }
@@ -32766,3 +32773,100 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .egs-sysreq-steamform .steam-sysreq-cell.dp-counted { position: relative; }
 .egs-sysreq-steamform .steam-sysreq-cell .dp-counter-row { position: absolute; right: 2px; top: 100%; margin-top: 1px; font-size: 10.5px; }
 .egs-sysreq-steamform .steam-sysreq-label .egs-spec-req { color: rgb(247, 216, 43); }
+
+/* ══ EPIC'S ABOUT SECTION (v9.45) ═══════════════════════════════════════
+   The editor is a list of blocks with one budget over it, and the preview
+   draws what the list holds. Both borrow the page's existing vocabulary
+   rather than inventing one: the rows are the Steam achievement rows'
+   shape, the image well is Epic's own achievement well, and the budget
+   number is an .ias-char-count like every other count in the app. */
+.egs-about-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; margin: 0 0 6px;
+}
+.egs-about-budget { display: flex; align-items: baseline; gap: 8px; }
+.egs-about-budget-label {
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.egs-about-budget .ias-char-count { font-size: 15px; font-weight: 600; }
+.egs-about-blockcount { font-size: 12px; color: var(--text-dim); }
+.egs-about-rule { margin: 0 0 14px; }
+/* Over budget is a sentence, not just a red number: the number says how far,
+   the sentence says what to do about it. */
+.egs-about-overnote {
+  margin: 0 0 14px; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid var(--magenta); color: var(--magenta);
+  background: var(--magenta-soft); font-size: 12px; line-height: 1.45;
+}
+.egs-about-list { display: flex; flex-direction: column; gap: 8px; }
+.egs-about-row {
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--panel); cursor: pointer;
+}
+.egs-about-row.is-open { background: var(--panel-2); border-color: var(--border-hover); }
+.egs-about-rowhead { display: flex; align-items: center; gap: 10px; padding: 11px 12px; }
+.egs-about-kind {
+  flex: 0 0 auto; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-dim); border: 1px solid var(--border);
+  border-radius: 5px; padding: 2px 6px;
+}
+.egs-about-rowtext {
+  flex: 1 1 auto; min-width: 0; font-size: 13px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.egs-about-placeholder { color: var(--text-faint); }
+/* Tabular so twelve costs read as a column you can scan, not twelve widths. */
+.egs-about-cost {
+  flex: 0 0 auto; font-size: 11px; color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.egs-about-rowbtns { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; }
+.egs-about-move, .egs-about-x {
+  background: none; border: 0; color: var(--text-faint); cursor: pointer;
+  font-size: 11px; line-height: 1; padding: 4px 5px; border-radius: 4px;
+}
+.egs-about-move:hover:not(:disabled), .egs-about-x:hover:not(:disabled) {
+  color: var(--text); background: var(--panel-3);
+}
+.egs-about-move:disabled, .egs-about-x:disabled { opacity: 0.25; cursor: default; }
+.egs-about-x:hover:not(:disabled) { color: var(--magenta); }
+.egs-about-editor {
+  padding: 2px 12px 14px; cursor: default;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.egs-about-field { display: flex; flex-direction: column; gap: 6px; }
+.egs-about-label { font-size: 12px; color: var(--text-dim); }
+.egs-about-body { resize: vertical; min-height: 120px; line-height: 1.5; }
+.egs-about-thumb {
+  width: 64px; height: 36px; object-fit: cover;
+  border-radius: 6px; border: 1px solid var(--border); flex-shrink: 0;
+}
+.egs-about-add { display: flex; gap: 8px; margin-top: 12px; }
+/* A read-only block off the primary language, same as every other editor
+   that shows a translation (v9.32). */
+.egs-about-editor input.form-input[readonly],
+.egs-about-editor textarea.form-input[readonly] {
+  background: var(--panel-2); cursor: default;
+}
+
+/* The preview's own About block: a door, drawn as the store draws it.
+   THE TWO GAPS ARE DIFFERENT ON PURPOSE. Inside a block, a heading pays the
+   10px Epic's h2 pays the text under it; between blocks the section pays
+   more, so twelve of them read as twelve things rather than as one long
+   column. The 24 is chosen rather than measured — it is the page's 48 block
+   rhythm halved, since these are parts of one block and not blocks of their
+   own — and it is the number to check against the portal if the About
+   section ever looks too loose. */
+.egs-sp-about { display: flex; flex-direction: column; gap: 24px; }
+.egs-sp-about-block { display: flex; flex-direction: column; }
+.egs-sp-about-img {
+  width: 100%; height: auto; display: block; border-radius: 8px;
+}
+/* An image block with no file still shows its place in the layout — the
+   page the developer is building, not the page they have finished. */
+.egs-sp-about-imgempty {
+  width: 100%; aspect-ratio: 16 / 9; border-radius: 8px;
+  border: 1px dashed var(--border-hover); color: var(--text-faint);
+  display: flex; align-items: center; justify-content: center; font-size: 13px;
+}

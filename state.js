@@ -1256,6 +1256,17 @@ const PLATFORMS = {
          order means a developer working from their docs is never asked for
          something two screens ahead of where they are. */
       { id: 'productDetails',    label: 'Product Details'                              },
+      /* ABOUT IS ITS OWN STEP (v9.45). It was two fields typed directly onto
+         the Store Page Preview — one headline, one body — which is one of
+         Epic's twelve blocks. Twelve blocks with a shared character budget,
+         an order you can change and images among them do not fit on a
+         preview page beside the thing they are previewing: add, remove and
+         reorder controls would have to be drawn on the rendered page, and
+         the budget meter has nowhere to live there at all. So it gets the
+         room its own step gives it, and the preview keeps the job a preview
+         is good at — showing the result and opening the editor when pressed
+         (buildEgsStorePreviewSection's About block). */
+      { id: 'about',             label: 'About'                                        },
       /* NO 'specifications', 'socialMedia' OR 'contentRating' ROW (v8.57) —
          removed as Submission steps per request, now that the Store Page
          Preview carries a door to each of them: the System Requirements block
@@ -3469,10 +3480,196 @@ function egsShortDesc() {
   return ((state.steamLocInfo && state.steamLocInfo.shortDescription) || '').trim();
 }
 
-function egsBodyText() {
-  const own = ((state.webSite || {}).aboutGame || '').trim();
-  if (own) return own;
-  return ((state.formData || {}).description || '').trim();
+/* ══ EPIC'S ABOUT SECTION, AS EPIC BUILDS IT (v9.45) ═════════════════════
+   Read off dev.epicgames.com's own documentation rather than described from
+   memory. Two pages say it, and between them they say all of it:
+
+     Manage Pages > About — "You can write up to 12 blocks of content. Each
+     block can include text or an image. You must include at least one text
+     block."
+
+     Storefront Media Guide > About Section — "The text limit is 10,000
+     characters or 30 images. Note that images count towards the character
+     limit." Image files: at least 700px wide, 4MB, .jpg/.jpeg/.png/.gif.
+
+   WHAT THIS REPLACES, and why it was wrong. Shipmate modelled this section
+   as exactly two fields — one headline, one body — sharing 10,000 characters
+   between them (egsBodyLimit, below). That is ONE of Epic's twelve blocks,
+   and modelling it as the whole section turned a page-wide budget into a
+   per-field limit. A developer who had spent 9,000 characters could not see
+   that their next block had 1,000 left, because there was no next block.
+
+   TWO NUMBERS EPIC'S OWN DOCS DISAGREE ABOUT. "Up to 12 blocks" and "10,000
+   characters or 30 images" cannot both be true of images: thirty image
+   blocks do not fit in twelve. The block cap is what the portal's editor
+   enforces, so it is the cap here, and thirty images is unreachable by
+   construction rather than by a second rule. The per-image cost is the one
+   number neither page states outright — it is DERIVED from Epic's own
+   sentence, 10,000 over 30, and it is the value to re-check against the
+   portal before trusting the meter to the character. */
+const EGS_ABOUT_MAX_BLOCKS   = 12;
+const EGS_ABOUT_TOTAL_CHARS  = 10000;
+const EGS_ABOUT_IMAGE_COST   = Math.floor(EGS_ABOUT_TOTAL_CHARS / 30);   // 333
+const EGS_ABOUT_HEADLINE_MAX = 140;
+const EGS_ABOUT_IMAGE = {
+  minWidth: 700,
+  bytes:    4 * 1024 * 1024,
+  accept:   'image/jpeg,image/png,image/gif',
+  types:    ['image/jpeg', 'image/png', 'image/gif'],
+  note:     'At least 700px wide. JPG, PNG or GIF. 4MB maximum',
+};
+
+function makeBlankEgsAboutTextBlock() {
+  return { id: generateId('abt'), kind: 'text', headline: '', body: '', locs: {} };
+}
+function makeBlankEgsAboutImageBlock() {
+  return { id: generateId('abi'), kind: 'image', image: null, locs: {} };
+}
+
+/* THE IMPLICIT FIRST BLOCK. Epic requires one text block and Shipmate has
+   always had the words for it — Game Details' Description, or whatever a
+   Steam scrape left in webSite.aboutGame — so a project that has never
+   opened this step still has an About section, exactly as it did when this
+   was two fields.
+
+   RETURNED, NOT WRITTEN. egsAboutBlocks() is a pure read: it hands back the
+   seed block without putting it in state, the way steamInfoGenres() hands
+   back scraped genres for a game that has not been tagged. State is seeded
+   only when somebody edits (seedEgsAboutBlocks, called by the editor's own
+   handlers), so opening a page never silently creates content. */
+function _egsAboutSeedBlock() {
+  const a    = state.egsSubmitAnswers || {};
+  const body = ((state.webSite || {}).aboutGame || '').trim()
+            || ((state.formData || {}).description || '').trim();
+  const head = (a.headline || '').trim();
+  if (!body && !head) return null;
+  return { id: 'about-seed', kind: 'text', headline: head, body,
+           locs: _egsAboutSeedLocs(), isSeed: true };
+}
+
+/* ── AND THE TRANSLATIONS COME WITH IT (v9.45) ───────────────────────────
+   The headline and the body were localizable fields before they were blocks
+   — the headline in Epic's own drawer (egsSubmitAnswers.localizedHeadline),
+   the body in the store Steam shares (webSite.localizedStoreText[lang]
+   .aboutGame). A project that had been translated and then opened after
+   this change would have found its About section in English again, with the
+   French still sitting in two maps nothing reads any more. That is the kind
+   of data loss nobody reports as a bug; they just retype it.
+
+   So the seed block carries them onto itself, where the About tab now looks
+   for them. ONE-WAY AND ONE-TIME: this runs while the section is still the
+   implicit seed, so the moment anybody edits, seedEgsAboutBlocks freezes
+   whatever this produced into real state and the old maps stop being read.
+   Nothing is deleted from them — an old project that is rolled back finds
+   its translations where it left them.
+
+   The bare-string shape v9.25-v9.28 wrote is read here too, the same way
+   _steamLocEntry read it, because those projects exist. */
+function _egsAboutSeedLocs() {
+  const out = {};
+  const a   = state.egsSubmitAnswers || {};
+  const ws  = state.webSite || {};
+  const put = (lang, field, text) => {
+    const v = (text || '').trim();
+    if (!v) return;
+    out[lang] = out[lang] || {};
+    out[lang][field] = v;
+  };
+  const heads = a.localizedHeadline || {};
+  Object.keys(heads).forEach(lang => {
+    const e = heads[lang];
+    put(lang, 'headline', typeof e === 'string' ? e : (e && e.headline));
+  });
+  const shared = ws.localizedStoreText || {};
+  Object.keys(shared).forEach(lang => {
+    const e = shared[lang];
+    put(lang, 'body', e && e.aboutGame);
+  });
+  return out;
+}
+
+function egsAboutBlocks() {
+  const own = Array.isArray(state.egsAboutBlocks) ? state.egsAboutBlocks.filter(Boolean) : [];
+  if (own.length) return own;
+  const seed = _egsAboutSeedBlock();
+  return seed ? [seed] : [];
+}
+
+/* The moment before the first edit: turn whatever egsAboutBlocks() has been
+   showing into real state, so the edit has something to land in. A no-op
+   once there are blocks of its own, like seedMacAppStoreListing. */
+function seedEgsAboutBlocks() {
+  if (Array.isArray(state.egsAboutBlocks) && state.egsAboutBlocks.length) return;
+  const seed = _egsAboutSeedBlock();
+  const b = makeBlankEgsAboutTextBlock();
+  if (seed) { b.headline = seed.headline; b.body = seed.body; }
+  state.egsAboutBlocks = [b];
+}
+
+function egsAboutTextBlocks() {
+  return egsAboutBlocks().filter(b => b.kind === 'text');
+}
+
+/* WHAT ONE BLOCK SPENDS, in the language being counted. A text block spends
+   its headline and its body — they shared the 10,000 when they were the only
+   two fields and they still do. An image spends EGS_ABOUT_IMAGE_COST whether
+   or not a file has been chosen yet: the block is the commitment, and a
+   meter that only charged for uploaded files would let a developer lay out
+   twelve image blocks and then discover the budget as they filled them. */
+function egsAboutBlockCost(b, lang) {
+  if (!b) return 0;
+  if (b.kind === 'image') return EGS_ABOUT_IMAGE_COST;
+  const v = egsAboutFieldValue(b, lang);
+  return (v.headline || '').length + (v.body || '').length;
+}
+
+/* One block's words in one language. The primary language reads the block
+   itself; every other reads its own entry and falls back to nothing — a
+   missing translation is missing, not a copy of the English. */
+function egsAboutFieldValue(b, lang) {
+  const primary = (state.formData || {}).primaryLanguage || 'en';
+  if (!b || b.kind !== 'text') return { headline: '', body: '' };
+  if (!lang || lang === primary) return { headline: b.headline || '', body: b.body || '' };
+  const e = (b.locs && b.locs[lang]) || {};
+  return { headline: e.headline || '', body: e.body || '' };
+}
+
+function egsAboutUsed(lang) {
+  return egsAboutBlocks().reduce((n, b) => n + egsAboutBlockCost(b, lang), 0);
+}
+function egsAboutRemaining(lang) {
+  return EGS_ABOUT_TOTAL_CHARS - egsAboutUsed(lang);
+}
+function egsAboutOverBudget(lang) {
+  return egsAboutUsed(lang) > EGS_ABOUT_TOTAL_CHARS;
+}
+
+/* EPIC'S OWN REQUIREMENT, AND NOTHING MORE: at least one text block with
+   words in it, every image block carrying a file, and the page inside its
+   budget. The headline is optional on every block — it is a heading for the
+   prose under it, and prose with no heading is still prose. */
+function egsAboutComplete() {
+  const blocks = egsAboutBlocks();
+  if (!blocks.length) return false;
+  if (blocks.length > EGS_ABOUT_MAX_BLOCKS) return false;
+  if (egsAboutOverBudget()) return false;
+  if (blocks.some(b => b.kind === 'image' && !((b.image || {}).dataUrl))) return false;
+  return blocks.some(b => b.kind === 'text' && (b.body || '').trim());
+}
+
+/* THE SECTION AS ONE RUN OF TEXT, for everything that wants prose rather
+   than blocks: the checklist's Description row, the press kit, the
+   generated website. Headline then body, blocks in order, blank line
+   between — which is how the page reads them out loud. */
+function egsBodyText(lang) {
+  return egsAboutTextBlocks()
+    .map(b => {
+      const v = egsAboutFieldValue(b, lang);
+      return [v.headline.trim(), v.body.trim()].filter(Boolean).join('\n\n');
+    })
+    .filter(Boolean)
+    .join('\n\n')
+    .trim();
 }
 
 /* ── THE CONNECT GATE, AND WHO IT STILL APPLIES TO (v8.55) ────────────────
@@ -3555,6 +3752,31 @@ const EGS_ACH_LOC_AUTOCFG_DEFAULT = EGS_ACH_LOC_FIELD_KEYS.reduce(
    pressed, blank. The unlocked display name is what its own editor marks
    required, so it is the honest test for "this is an achievement, not an
    empty row", and it keeps a half-typed row out of the picker. */
+/* ── WHICH ABOUT BLOCKS CAN BE TRANSLATED (v9.45) ───────────────────────
+   The text ones. An image block has no words in it, so it is not a row in
+   the Localizations picker — and because the factory filters the list with
+   this, an About section that is all images simply has no About tab, which
+   is the truth rather than an empty one. */
+const EGS_ABOUT_LOC_FIELDS = [
+  { value: 'headline', label: 'Headline' },
+  { value: 'body',     label: 'Text' },
+];
+const EGS_ABOUT_LOC_FIELD_KEYS = EGS_ABOUT_LOC_FIELDS.map(f => f.value);
+/* The headline keeps Epic's own 140; the text has no limit of its own
+   because the 10,000 it draws on is the whole section's, and a per-field
+   number would be a different number every time another block changed.
+   An absent limit is handled by _locsCardsHtml's own `limit == null` arm. */
+const EGS_ABOUT_LOC_FIELD_LIMITS = { headline: EGS_ABOUT_HEADLINE_MAX };
+const EGS_ABOUT_LOC_FIELD_LABELS = {
+  headline: 'about section headline',
+  body:     'about section text',
+};
+const EGS_ABOUT_LOC_AUTOCFG_DEFAULT = { headline: true, body: true };
+
+function egsAboutLocIsSaved(b) {
+  return !!b && b.kind === 'text' && !!((b.headline || '').trim() || (b.body || '').trim());
+}
+
 function egsAchLocIsSaved(a) {
   return !!(a && (a.unlockedDisplayName || '').trim());
 }
@@ -3930,6 +4152,12 @@ function isEgsSectionComplete(sectionId) {
     const { total, answered } = androidCqProgress();
     return total > 0 && answered === total;
   }
+
+  /* ABOUT IS EPIC'S OWN RULE, AND ONLY EPIC'S (v9.45): at least one block of
+     text with words in it, no image block left without a file, and the whole
+     section inside the 10,000 characters it shares. The headline on a block
+     is optional, so it is not a term — see egsAboutComplete. */
+  if (sectionId === 'about') return egsAboutComplete();
 
   const a = state.egsSubmitAnswers;
 
@@ -6675,6 +6903,15 @@ const state = {
      egsAchievements() for which list the page reads. */
   egsAchievements: [],
 
+  /* EPIC'S ABOUT SECTION, AS BLOCKS (v9.45). Empty means "nobody has edited
+     it yet", not "there is nothing there": egsAboutBlocks() hands back a
+     seed block built from Game Details' Description for as long as this is
+     empty, and seedEgsAboutBlocks() turns that seed into real state the
+     moment the first edit lands. See the block model above egsBodyText. */
+  egsAboutBlocks: [],
+  /* Which block the About step has open, and the step's own scratch state. */
+  egsAboutOpenId: null,
+
   /* STEAM'S OWN ACHIEVEMENTS (v8.98) — the list the Store Page Preview's
      Achievements block shows and the Steam - Achievements section edits,
      in the Steamworks Achievement Configuration page's own shape (see
@@ -6710,6 +6947,22 @@ const state = {
   egsAchLocUndoHistory:          {},
   egsAchLocTranslateStatus:      {},
   egsAchLocTranslatePendingLangs:{},
+
+  /* ── EPIC'S ABOUT BLOCKS, PER LANGUAGE (v9.45) ──────────────────────────
+     The same ten keys again, off `egsAboutLoc`, because the About section is
+     the same kind of object the achievement list is: a list of records with
+     translatable fields. It is driven by the same factory
+     (makeAchLocFamily, app.js), which derives every key below from the
+     prefix — so the names are not a style, they are the contract. */
+  egsAboutLocAchId:                null,
+  egsAboutLocField:                'body',
+  egsAboutLocMode:                 'all',        // 'all' | 'review'
+  egsAboutLocSettingsOpen:         false,
+  egsAboutLocAutoTranslateFields:  null,         // null = the defaults below
+  egsAboutLocBackTranslation:      {},
+  egsAboutLocUndoHistory:          {},
+  egsAboutLocTranslateStatus:      {},
+  egsAboutLocTranslatePendingLangs:{},
 
   // Per-field AI inference metadata for Steam (mirrors iosAnswerMeta)
   steamAnswerMeta: {},

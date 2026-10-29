@@ -4160,6 +4160,12 @@ const LOC_SURFACE = {
                       screens: [{ stepId: 'storePreview', flip: null }] },
       achievements: { fieldKey: 'egsAchLocField', modeKey: 'egsAchLocMode', defaultField: 'unlockedDisplayName',
                       itemFn: () => EGS_ACH_LOC.effectiveAchId(), screens: [] },
+      /* The About tab repaints the Store Page Preview, because that page
+         draws the blocks (buildEgsStorePreviewSection's About block) and a
+         translation landing while it is open should show up there. */
+      about:        { fieldKey: 'egsAboutLocField', modeKey: 'egsAboutLocMode', defaultField: 'body',
+                      itemFn: () => EGS_ABOUT_LOC.effectiveAchId(),
+                      screens: [{ stepId: 'storePreview', flip: null }] },
     },
   },
 };
@@ -13981,9 +13987,20 @@ const STEAM_SHARED_LISTING_FIELDS = new Set(['title']);
    does not have. Epic's limit lives in EGS_LOC_FIELD_CHAR_LIMITS. */
 const STEAM_LOC_TRANSLATABLE_FIELDS = ['description', 'headline', 'developer', 'publisher', 'aboutGame'];
 const STEAM_AUTO_TRANSLATE_DEFAULT_FIELDS = ['description', 'headline', 'aboutGame'];
-const EGS_ONLY_LOC_FIELDS = new Set(['headline']);
-// Epic's own limit table: Steam's, plus the one field only Epic has.
-const EGS_LOC_FIELD_CHAR_LIMITS = { description: 300, headline: 140 };
+/* ── EMPTY SINCE v9.45, AND KEPT ────────────────────────────────────────
+   Its one member was `headline`, the field Epic had and Steam did not, which
+   is why the shared per-language store needed a second drawer at all. The
+   About section's headlines live on their own blocks now
+   (EGS_ABOUT_LOC_FIELDS), so no field is Epic-only any more and every read
+   goes to the shared drawer.
+
+   The set stays rather than the branch coming out, because it is the one
+   place the rule is written down: a field only one of these two stores has
+   gets its own drawer by name, not by accident. _steamLocStore below is the
+   function that reads it. */
+const EGS_ONLY_LOC_FIELDS = new Set();
+// Epic's own limit table. `headline` left it with the field itself.
+const EGS_LOC_FIELD_CHAR_LIMITS = { description: 300 };
 function _egsLocFieldHasOverLimitLang(field, langCodes) {
   const limit = EGS_LOC_FIELD_CHAR_LIMITS[field];
   if (limit == null) return false;
@@ -20060,6 +20077,49 @@ function _egsAchLocToggleAutoTranslateField(field) {
   return EGS_ACH_LOC.toggleAutoTranslateField(field);
 }
 
+/* ══ EPIC'S ABOUT BLOCKS, PER LANGUAGE (v9.45) ═══════════════════════════
+   The factory's third caller, and the one that shows what it was for: the
+   About section became a LIST of records with translatable fields, which is
+   the same object an achievement list is, so it is the same twenty-line
+   config rather than a fourth hand-written family.
+
+   WHAT IS DIFFERENT, and why it still fits. The list is heterogeneous —
+   text blocks and image blocks — where every other caller's is uniform. The
+   factory already has the seam for that: `isSaved` is how a store says
+   which of its records count, and an image block has no words, so it is not
+   one. The picker, the cards and the auto-translate queue all read the
+   filtered list, so none of them has to know image blocks exist. */
+const EGS_ABOUT_LOC = makeAchLocFamily({
+  pid:            'egs',
+  keyPrefix:      'egsAboutLoc',
+  listKey:        'egsAboutBlocks',
+  isSaved:        egsAboutLocIsSaved,
+  fields:         EGS_ABOUT_LOC_FIELDS,
+  limits:         EGS_ABOUT_LOC_FIELD_LIMITS,
+  labels:         EGS_ABOUT_LOC_FIELD_LABELS,
+  translatable:   EGS_ABOUT_LOC_FIELD_KEYS,
+  settingsWrapId: 'egs-locs-about-settings-wrap',
+});
+
+function startEgsAboutLocInlineEdit(id, field, lang, el, ev) {
+  return EGS_ABOUT_LOC.startInlineEdit(id, field, lang, el, ev);
+}
+function startEgsAboutLocBackTranslationEdit(id, field, lang, el, ev) {
+  return EGS_ABOUT_LOC.startBackTranslationEdit(id, field, lang, el, ev);
+}
+function egsAboutLocUndo(kind, id, field, lang, ev) {
+  return EGS_ABOUT_LOC.undo(kind, id, field, lang, ev);
+}
+function egsAboutLocRedo(kind, id, field, lang, ev) {
+  return EGS_ABOUT_LOC.redo(kind, id, field, lang, ev);
+}
+function toggleEgsAboutLocReviewMode() { return EGS_ABOUT_LOC.toggleReviewMode(); }
+function setEgsAboutLocReviewId(id) { return EGS_ABOUT_LOC.setReviewAchId(id); }
+function setEgsAboutLocField(field) { return EGS_ABOUT_LOC.setField(field); }
+function _egsAboutLocToggleAutoTranslateField(field) {
+  return EGS_ABOUT_LOC.toggleAutoTranslateField(field);
+}
+
 /* ══ STEAM'S ACHIEVEMENT LOCALIZATIONS (v9.27) ═══════════════════════════
    The second caller of makeAchLocFamily, and the one that pays for it: a
    twenty-line config where v9.26's note said a fifth hand-written family
@@ -25282,6 +25342,146 @@ function _egsEnsureAchievements() {
   return (state.egsAchievements || []).length > 0;
 }
 
+/* ══ EPIC'S ABOUT SECTION — THE HANDLERS (v9.45) ═════════════════════════
+   The model is in state.js, above egsBodyText; these are the twelve-block
+   editor's own verbs. Every one of them seeds first, because until somebody
+   edits, egsAboutBlocks() has been showing a block that is not in state yet
+   (see _egsAboutSeedBlock) and an edit with nowhere to land would vanish on
+   the next render. */
+
+function _egsAboutBlock(id) {
+  return (state.egsAboutBlocks || []).find(b => b && b.id === id) || null;
+}
+
+/* ADD IS REFUSED AT TWELVE rather than silently capped, because the button
+   is disabled at twelve and a direct call should do what the button does. */
+function addEgsAboutBlock(kind) {
+  seedEgsAboutBlocks();
+  if (state.egsAboutBlocks.length >= EGS_ABOUT_MAX_BLOCKS) return;
+  const b = (kind === 'image') ? makeBlankEgsAboutImageBlock() : makeBlankEgsAboutTextBlock();
+  state.egsAboutBlocks.push(b);
+  state.egsAboutOpenId = b.id;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  setTimeout(() => {
+    const el = document.getElementById('egs-about-body-' + b.id);
+    if (el) { try { el.focus(); } catch (e) {} }
+  }, 0);
+}
+
+/* THE LAST TEXT BLOCK CANNOT GO. Epic's own rule — "You must include at
+   least one text block" — and the portal enforces it by refusing the delete
+   rather than by letting you save an invalid page. The ✕ on that one block
+   is disabled in the editor; this is the same answer for a direct call. */
+function egsAboutCanRemove(id) {
+  seedEgsAboutBlocks();
+  const b = _egsAboutBlock(id);
+  if (!b) return false;
+  if (b.kind !== 'text') return true;
+  return (state.egsAboutBlocks || []).filter(x => x && x.kind === 'text').length > 1;
+}
+
+function removeEgsAboutBlock(id) {
+  if (!egsAboutCanRemove(id)) return;
+  state.egsAboutBlocks = (state.egsAboutBlocks || []).filter(b => b && b.id !== id);
+  if (state.egsAboutOpenId === id) state.egsAboutOpenId = null;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* Order is the page's order — Epic prints the blocks top to bottom as they
+   sit here — so moving one is a real edit and not a view preference. */
+function moveEgsAboutBlock(id, dir) {
+  seedEgsAboutBlocks();
+  const list = state.egsAboutBlocks || [];
+  const i = list.findIndex(b => b && b.id === id);
+  const j = i + (dir === 'up' ? -1 : 1);
+  if (i < 0 || j < 0 || j >= list.length) return;
+  const t = list[i]; list[i] = list[j]; list[j] = t;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+function toggleEgsAboutBlock(id) {
+  state.egsAboutOpenId = (state.egsAboutOpenId === id) ? null : id;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* WRITES THE PRIMARY LANGUAGE, ALWAYS. The editor's fields go read-only off
+   the primary language (the rule Steam - Achievements and the two Game
+   Centers follow since v9.32), so there is no language to branch on here:
+   if this is reached at all, the primary record is what is being edited.
+   Translations are written in Localizations. */
+function setEgsAboutField(id, field, value) {
+  seedEgsAboutBlocks();
+  const b = _egsAboutBlock(id);
+  if (!b || b.kind !== 'text') return;
+  if (field !== 'headline' && field !== 'body') return;
+  b[field] = value;
+  /* No re-render: this is an oninput on a live field, and repainting under
+     the caret is how an editor loses a keystroke. The budget meter is
+     patched in place by _egsAboutPaintBudget instead. */
+  if (typeof _egsAboutPaintBudget === 'function') _egsAboutPaintBudget();
+  if (typeof _egsProductRepaint === 'function') _egsProductRepaint();
+}
+
+/* EPIC'S OWN FILE RULES (Storefront Media Guide > About Section): at least
+   700px wide, 4MB, JPG/PNG/GIF. Width is a WARNING rather than a refusal —
+   Epic states a minimum rather than an exact size, and a narrow image is a
+   quality problem the developer can judge, where a wrong type or an
+   oversized file is a file the portal will not take at all. */
+function handleEgsAboutImage(event, id) {
+  const file = event.target && event.target.files && event.target.files[0];
+  if (!file) return;
+  seedEgsAboutBlocks();
+  const b = _egsAboutBlock(id);
+  if (!b) return;
+  const repaint = () => { if (typeof reRenderStepModal === 'function') reRenderStepModal(); };
+  if (EGS_ABOUT_IMAGE.types.indexOf(file.type) < 0) {
+    b.image = { name: file.name, dataUrl: '', error: 'Epic takes JPG, PNG or GIF.' };
+    repaint(); return;
+  }
+  if (file.size > EGS_ABOUT_IMAGE.bytes) {
+    b.image = { name: file.name, dataUrl: '',
+                error: `That file is ${Math.round(file.size / (1024 * 1024) * 10) / 10}MB. Epic's limit is 4MB.` };
+    repaint(); return;
+  }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const dataUrl = ev.target.result;
+    const img = new Image();
+    img.onload = () => {
+      const warn = img.naturalWidth < EGS_ABOUT_IMAGE.minWidth
+        ? `That image is ${img.naturalWidth}px wide. Epic asks for at least ${EGS_ABOUT_IMAGE.minWidth}px.` : '';
+      b.image = { name: file.name, dataUrl, w: img.naturalWidth, h: img.naturalHeight, warn };
+      repaint();
+    };
+    img.onerror = () => { b.image = { name: file.name, dataUrl }; repaint(); };
+    img.src = dataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeEgsAboutImage(id) {
+  seedEgsAboutBlocks();
+  const b = _egsAboutBlock(id);
+  if (!b) return;
+  b.image = null;
+  if (typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
+/* The budget meter, patched rather than re-rendered — see setEgsAboutField.
+   Reads the same functions the full render reads, so the live number and the
+   painted one cannot drift. */
+function _egsAboutPaintBudget() {
+  const el = document.getElementById('egs-about-budget');
+  if (!el) return;
+  const lang = (typeof _egsEffectivePreviewLang === 'function')
+    ? _egsEffectivePreviewLang() : ((state.formData || {}).primaryLanguage || 'en');
+  const used = egsAboutUsed(lang);
+  el.textContent = `${used.toLocaleString()} / ${EGS_ABOUT_TOTAL_CHARS.toLocaleString()}`;
+  el.classList.toggle('is-over', used > EGS_ABOUT_TOTAL_CHARS);
+  const wrap = el.closest('.egs-about-budget');
+  if (wrap) wrap.classList.toggle('is-over', used > EGS_ABOUT_TOTAL_CHARS);
+}
+
 function addEgsAchievement() {
   adoptEgsAchievements();
   const a = makeBlankEgsAchievement();
@@ -26293,6 +26493,17 @@ function _postInferenceSetup(stepId) {
     if (p === 'steam')      state.steamContentRatingExpanded   = false;
     if (p === 'macos_full') state.macFullContentRatingExpanded = false;
   }
+  /* EPIC TOO, SINCE v9.45 — it was simply missing from the list above, so it
+     was the one storefront that finished inferring and then showed you all
+     fourteen topics with the answered ones indistinguishable from the rest.
+
+     It is set here rather than in the loop because Epic's filter is not the
+     others': theirs hide what was answered AT INFERENCE TIME and so need a
+     snapshot (takeFilterSnapshot); Epic's hides a topic once its whole
+     subtree is complete, computed live (giarcIsSubtreeComplete), so there is
+     nothing to freeze. The flag is also the other way round — egsCrShowAll
+     true means All — which is why it cannot just join the list. */
+  if (state.activePlatforms.has('egs')) state.egsCrShowAll = false;
   // If inference concluded the app has IAPs, pre-fill demo-ready products so the
   // Business step's IAP list is already populated (App Store + Mac App Store +
   // Mac App Store Full).

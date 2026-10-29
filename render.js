@@ -7590,6 +7590,7 @@ function _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus) {
     if (stepId === 'storePreview')            body = flipTarget ? buildStorePreviewFlipSection(platformId, flipTarget) : buildEgsStorePreviewSection();
     else if (stepId === 'contentRating')      body = buildEgsContentRatingSection();
     else if (stepId === 'productDetails')     body = buildEgsProductDetailsSection();
+    else if (stepId === 'about')              body = buildEgsAboutSection();
     else if (stepId === 'specifications')     body = buildEgsSpecificationsSection();
     else if (stepId === 'socialMedia')        body = buildEgsSocialMediaSection();
     else if (stepId === 'logo')               body = buildEgsLogoSection();
@@ -13634,11 +13635,15 @@ const STEAM_LOC_REVIEW_FIELDS = [
    where it sits on the page itself. It is the one field here Steam has no
    equivalent of, so its text lives in Epic's own store rather than the
    shared one (EGS_ONLY_LOC_FIELDS, app.js). */
+/* ── TWO FIELDS, NOT FOUR (v9.45) ────────────────────────────────────────
+   Headline and Description left this list when the About section stopped
+   being one headline and one body. They were not deleted: they became the
+   About tab, where each of Epic's twelve blocks carries its own pair
+   (EGS_ABOUT_LOC_FIELDS, state.js). A single "Headline" row here would now
+   mean the first block's, which is a question nobody asked. */
 const EGS_LOC_REVIEW_FIELDS = [
   { value: 'title',       label: 'Product Name' },
   { value: 'description', label: 'Short Description' },
-  { value: 'headline',    label: 'Headline' },
-  { value: 'aboutGame',   label: 'Description' },
 ];
 
 /* ── EPIC GAMES STORE — LOCALIZATION REVIEW  (v7.31) ──────────────────────
@@ -18113,6 +18118,11 @@ function buildMacFullIapLocalizationsSection() {
 const LOC_VIEW_OPTIONS = [
   { value: 'storePage',    label: 'Store Page' },
   { value: 'iaps',         label: 'IAPs' },
+  /* ABOUT JOINED IN v9.45, and it is an ITEM VIEW like Achievements rather
+     than a field of the Store Page: Epic's About section is up to twelve
+     blocks, each with its own headline and text, so "which block" is a
+     question this page has to ask before "which field". */
+  { value: 'about',        label: 'About' },
   { value: 'achievements', label: 'Achievements' },
 ];
 
@@ -18327,10 +18337,18 @@ function _buildUnifiedLocalizationsSection(p) {
      achievement has the text that makes it one. */
   const achIsSaved = p.achievements.isSaved || (x => x.saved);
   const savedAchievements = (state[p.achievements.savedKey] || []).filter(achIsSaved);
+  /* AND ABOUT, THE SECOND ITEM VIEW (v9.45). Optional in the same way
+     `p.iaps` is: a store without one simply has no tab, which is also what
+     Epic gets before anybody has written an About block. */
+  const aboutIsSaved = p.about && (p.about.isSaved || (x => true));
+  const savedAbout = p.about ? (state[p.about.savedKey] || []).filter(aboutIsSaved) : [];
   const hasIaps = savedProducts.length > 0;
   const hasAchievements = savedAchievements.length > 0;
+  const hasAbout = savedAbout.length > 0;
   const visibleViewOptions = LOC_VIEW_OPTIONS.filter(opt =>
-    (opt.value !== 'iaps' || hasIaps) && (opt.value !== 'achievements' || hasAchievements));
+    (opt.value !== 'iaps' || hasIaps)
+    && (opt.value !== 'achievements' || hasAchievements)
+    && (opt.value !== 'about' || hasAbout));
 
   // A view whose tab just disappeared (its last IAP/Achievement was deleted
   // from Business Questions/Game Center elsewhere) falls back to Store Page
@@ -18339,7 +18357,9 @@ function _buildUnifiedLocalizationsSection(p) {
   // mutate state in this codebase — so it's recomputed the same way, safely,
   // on every render until the user (or setIosLocsView etc.) picks a real tab.
   let view = state[p.viewStateKey] || 'storePage';
-  if ((view === 'iaps' && !hasIaps) || (view === 'achievements' && !hasAchievements)) view = 'storePage';
+  if ((view === 'iaps' && !hasIaps)
+      || (view === 'achievements' && !hasAchievements)
+      || (view === 'about' && !hasAbout)) view = 'storePage';
 
   let field, fieldOptions, itemId, itemOptions, itemSetterName, reviewMode,
       toggleReviewFnName, cardsCfg, settingsHtml, emptyState, cardClass;
@@ -18454,65 +18474,71 @@ function _buildUnifiedLocalizationsSection(p) {
       };
     }
   } else {
-    // achievements — savedAchievements computed above, alongside
-    // hasAchievements. Same note as the iaps branch's own emptyState: this
-    // branch only runs when hasAchievements is true, so it's unreachable in
-    // practice, left as a harmless defensive fallback.
+    /* ── ONE BRANCH, TWO ITEM VIEWS (v9.45) ────────────────────────────
+       This was the achievements branch. About arrived with exactly the same
+       shape — pick a record, pick one of its fields, draw a card per
+       language — so rather than a second copy of sixty lines that would
+       drift from this one, the branch reads its config out of `ic` and the
+       view name says which. Everything below is unchanged apart from that
+       substitution; `achEmpty`'s default wording still names Game Center,
+       because a caller that does not pass `emptyText` is a Game Center. */
+    const ic    = (view === 'about') ? p.about : p.achievements;
+    const items = (view === 'about') ? savedAbout : savedAchievements;
     const achEmpty = `<div class="cq-inline-empty">${
-      p.achievements.emptyText || 'No saved achievements yet — add one from Game Center.'}</div>`;
-    if (!savedAchievements.length) emptyState = achEmpty;
-    itemId = p.achievements.effectiveItemId();
-    const item = savedAchievements.find(x => x.id === itemId);
+      ic.emptyText || 'No saved achievements yet — add one from Game Center.'}</div>`;
+    if (!items.length) emptyState = achEmpty;
+    itemId = ic.effectiveItemId();
+    const item = items.find(x => x.id === itemId);
     if (!emptyState && !item) emptyState = achEmpty;
     // Game Center's three, or whatever this store's achievements are made of.
-    const achFields = p.achievements.fields || ACHIEVEMENT_LOC_FIELDS;
-    field = state[p.achievements.fieldKey] || achFields[0].value;
+    const achFields = ic.fields || ACHIEVEMENT_LOC_FIELDS;
+    field = state[ic.fieldKey] || achFields[0].value;
     if (!achFields.some(f => f.value === field)) field = achFields[0].value;
     // Shared with the cards' pending test below, same as the Store Page branch.
-    const achAutoCfg = state[p.achievements.autoCfgKey]
-      || p.achievements.autoCfgDefault
+    const achAutoCfg = state[ic.autoCfgKey]
+      || ic.autoCfgDefault
       || { displayName: true, earnedDescription: true, preEarnedDescription: true };
-    const limit = (p.achievements.limits || ACHIEVEMENT_FIELD_LIMITS)[field];
-    reviewMode = state[p.achievements.modeKey] === 'review';
+    const limit = (ic.limits || ACHIEVEMENT_FIELD_LIMITS)[field];
+    reviewMode = state[ic.modeKey] === 'review';
     fieldOptions = achFields.map(f => ({
       value: f.value,
       label: f.label,
-      warning: emptyState ? false : p.achievements.fieldHasOverLimitLang(itemId, f.value, langCodes),
+      warning: emptyState ? false : ic.fieldHasOverLimitLang(itemId, f.value, langCodes),
     }));
     /* What to call each one in the picker: Game Center's display name, or
        whatever the store's own record calls itself. */
-    const achLabel = p.achievements.itemLabel || (x => x.displayName || x.refName);
-    itemOptions = savedAchievements.map(x => ({
+    const achLabel = ic.itemLabel || (x => x.displayName || x.refName);
+    itemOptions = items.map(x => ({
       value: x.id, label: escHtml(achLabel(x) || '') || 'Untitled Achievement' }));
-    itemSetterName = p.achievements.itemSetterFn;
+    itemSetterName = ic.itemSetterFn;
     cardClass = 'iap-loc';
     settingsHtml = _locsSettingsMenu({
-      wrapId: `${p.idPrefix}-locs-achievements-settings-wrap`,
-      isOpen: !!state[p.achievements.settingsOpenKey],
+      wrapId: `${p.idPrefix}-locs-${view}-settings-wrap`,
+      isOpen: !!state[ic.settingsOpenKey],
       // See the Store Page branch's own note above — same fix, same reason.
-      toggleMenuOnclick: `_locsToggleSettingsMenu(event, '${p.achievements.settingsOpenKey}', '${p.idPrefix}-locs-achievements-settings-wrap')`,
-      toggleFieldOnclick: (key) => `${p.achievements.toggleAutoTranslateFieldFn}('${key}')`,
+      toggleMenuOnclick: `_locsToggleSettingsMenu(event, '${ic.settingsOpenKey}', '${p.idPrefix}-locs-${view}-settings-wrap')`,
+      toggleFieldOnclick: (key) => `${ic.toggleAutoTranslateFieldFn}('${key}')`,
       autoCfg: achAutoCfg,
-      rows: p.achievements.settingsRows
+      rows: ic.settingsRows
         || [['displayName', 'Display Name'], ['earnedDescription', 'Earned Description'], ['preEarnedDescription', 'Pre-Earned Description']],
     });
-    toggleReviewFnName = p.achievements.toggleReviewModeFn;
+    toggleReviewFnName = ic.toggleReviewModeFn;
     if (!emptyState) {
       cardsCfg = {
         langCodes, primary, primaryName, limit, reviewMode, cardClass,
-        fieldValue: (lang) => p.achievements.fieldValue(itemId, field, lang),
-        backValue: (lang) => p.achievements.backTranslationValue(itemId, field, lang),
+        fieldValue: (lang) => ic.fieldValue(itemId, field, lang),
+        backValue: (lang) => ic.backTranslationValue(itemId, field, lang),
         // Steam localizes achievements too — see the Store Page branch's own
         // note above for what this second arm is for.
-        translatePending: (lang) => p.achievements.fieldTranslatePending(itemId, field, lang)
+        translatePending: (lang) => ic.fieldTranslatePending(itemId, field, lang)
           || (typeof _locAwaitingSteamOrQueue === 'function' && _locAwaitingSteamOrQueue(
-               'achievements', lang, field, !!achAutoCfg[field], p.achievements.fieldValue(itemId, field, primary))),
-        sourceBadge: (lang) => p.achievements.sourceBadge(itemId, field, lang),
-        undoState: (kind, lang) => p.achievements.undoState(kind, itemId, field, lang),
-        undoOnclick: (kind, lang) => `${p.achievements.undoFn}('${kind}','${itemId}','${field}','${lang}')`,
-        redoOnclick: (kind, lang) => `${p.achievements.redoFn}('${kind}','${itemId}','${field}','${lang}')`,
-        inlineOnclick: (lang) => `${p.achievements.inlineEditFn}('${itemId}','${field}','${lang}',this,event)`,
-        backOnclick: (lang) => `${p.achievements.backEditFn}('${itemId}','${field}','${lang}',this,event)`,
+               'achievements', lang, field, !!achAutoCfg[field], ic.fieldValue(itemId, field, primary))),
+        sourceBadge: (lang) => ic.sourceBadge(itemId, field, lang),
+        undoState: (kind, lang) => ic.undoState(kind, itemId, field, lang),
+        undoOnclick: (kind, lang) => `${ic.undoFn}('${kind}','${itemId}','${field}','${lang}')`,
+        redoOnclick: (kind, lang) => `${ic.redoFn}('${kind}','${itemId}','${field}','${lang}')`,
+        inlineOnclick: (lang) => `${ic.inlineEditFn}('${itemId}','${field}','${lang}',this,event)`,
+        backOnclick: (lang) => `${ic.backEditFn}('${itemId}','${field}','${lang}',this,event)`,
       };
     }
   }
@@ -18533,7 +18559,10 @@ function _buildUnifiedLocalizationsSection(p) {
   const itemDropdown = view === 'storePage'
     ? ''
     : swSelect(`${p.idPrefix}-locs-item`, itemId, itemOptions, itemSetterName, 'auto', 'right');
-  const fieldDropdown = swSelect(`${p.idPrefix}-locs-field`, field, fieldOptions, view === 'storePage' ? p.storePage.fieldSetterFn : (view === 'iaps' ? p.iaps.fieldSetterFn : p.achievements.fieldSetterFn), 'auto', 'right');
+  const fieldDropdown = swSelect(`${p.idPrefix}-locs-field`, field, fieldOptions, view === 'storePage' ? p.storePage.fieldSetterFn
+    : view === 'iaps' ? p.iaps.fieldSetterFn
+    : view === 'about' ? p.about.fieldSetterFn
+    : p.achievements.fieldSetterFn, 'auto', 'right');
 
   // By request: the "Localizations" title text is gone (the sub-tabs below
   // already say which section this is), the leftmost Store Page/IAPs/
@@ -20448,6 +20477,173 @@ function egsTagBox(o) {
     </div>`;
 }
 
+/* ══ EPIC'S ABOUT SECTION, THE EDITOR (v9.45) ════════════════════════════
+   Twelve blocks, each text or an image, sharing one 10,000-character budget
+   (the model and Epic's own sources are in state.js, above egsBodyText).
+
+   WHY THE BUDGET IS A HEADER AND NOT A PER-FIELD COUNTER. Every other field
+   in Shipmate counts itself, because every other field has a limit of its
+   own. These do not: a block's allowance is whatever the other eleven have
+   left, so a number under the body box would be a different number every
+   time a different block changed, and reading it would tell you nothing
+   about the one you were typing in. One meter, at the top, for the one
+   budget there is. The per-block cost still shows on each collapsed row, so
+   "which block is eating it" is answerable without opening them.
+
+   IMAGES COST THE SAME WHETHER OR NOT ONE IS CHOSEN. See egsAboutBlockCost:
+   the block is the commitment. */
+function buildEgsAboutSection() {
+  const blocks  = egsAboutBlocks();
+  const lang    = (typeof _egsEffectivePreviewLang === 'function')
+    ? _egsEffectivePreviewLang() : ((state.formData || {}).primaryLanguage || 'en');
+  const primary = (state.formData || {}).primaryLanguage || 'en';
+  const isPrimary = lang === primary;
+  const ro      = isPrimary ? '' : ' readonly';
+  const used    = egsAboutUsed(lang);
+  const over    = used > EGS_ABOUT_TOTAL_CHARS;
+  const full    = blocks.length >= EGS_ABOUT_MAX_BLOCKS;
+  const textCount = blocks.filter(b => b.kind === 'text').length;
+
+  const langBar = (typeof _sppLangBarHTML === 'function')
+    ? _sppLangBarHTML('egs-about-lang', lang, 'setEgsPreviewLang') : '';
+
+  /* EPIC'S REQUIREMENT, SAID ONCE, at the top where it is a rule rather than
+     an error on whichever block happens to be last. */
+  const head = `
+    ${langBar}
+    <div class="egs-about-head">
+      <div class="egs-about-budget${over ? ' is-over' : ''}">
+        <span class="egs-about-budget-label">Characters</span>
+        <span class="ias-char-count${over ? ' is-over' : ''}" id="egs-about-budget">${
+          used.toLocaleString()} / ${EGS_ABOUT_TOTAL_CHARS.toLocaleString()}</span>
+      </div>
+      <div class="egs-about-blockcount">${blocks.length} of ${EGS_ABOUT_MAX_BLOCKS} blocks</div>
+    </div>
+    <div class="form-hint egs-about-rule">Epic takes up to ${EGS_ABOUT_MAX_BLOCKS} blocks of
+      text and images, sharing ${EGS_ABOUT_TOTAL_CHARS.toLocaleString()} characters between
+      them. At least one block of text is required.</div>
+    ${over ? `<div class="egs-about-overnote">That is ${(used - EGS_ABOUT_TOTAL_CHARS).toLocaleString()}
+      characters more than Epic takes. Shorten a block or remove one.</div>` : ''}
+    ${isPrimary ? '' : (typeof _achLangNoteHTML === 'function' ? _achLangNoteHTML('egs') : '')}`;
+
+  const moveBtns = (b, i) => `
+    <button type="button" class="egs-about-move" title="Move up" aria-label="Move up"
+            ${i === 0 ? 'disabled' : ''}
+            onclick="event.stopPropagation(); moveEgsAboutBlock('${b.id}','up')">&#9650;</button>
+    <button type="button" class="egs-about-move" title="Move down" aria-label="Move down"
+            ${i === blocks.length - 1 ? 'disabled' : ''}
+            onclick="event.stopPropagation(); moveEgsAboutBlock('${b.id}','down')">&#9660;</button>`;
+
+  /* THE ✕ ON THE LAST TEXT BLOCK IS DISABLED, NOT HIDDEN. Hiding it would
+     make the row look like a different kind of row; disabled with a reason
+     says which rule is in the way. Epic's: "You must include at least one
+     text block." */
+  const removeBtn = (b) => {
+    const last = b.kind === 'text' && textCount <= 1;
+    return `<button type="button" class="egs-about-x" ${last ? 'disabled' : ''}
+            title="${last ? 'Epic requires at least one block of text' : 'Remove this block'}"
+            aria-label="Remove this block"
+            onclick="event.stopPropagation(); removeEgsAboutBlock('${b.id}')">&#10005;</button>`;
+  };
+
+  const imageWell = (b) => {
+    const img = b.image || null;
+    const id  = `egs-about-img-${b.id}`;
+    return `
+      <div class="egs-about-field">
+        <label class="egs-about-label" for="${id}">Image</label>
+        <div class="egs-ach-icon-well${img && img.dataUrl ? ' has-file' : ''}${
+             img && img.error ? ' is-bad' : ''}">
+          ${img && img.dataUrl
+            ? `<img class="egs-about-thumb" src="${escHtml(img.dataUrl)}" alt="">`
+            : `<span class="egs-ach-icon-slot"></span>`}
+          <div class="egs-ach-icon-text">
+            <label class="egs-ach-icon-browse" for="${id}">${img && img.dataUrl
+              ? escHtml(img.name || 'Replace') : 'Drag file(s) here or <u>browse</u>'}</label>
+            <div class="egs-ach-icon-note">${escHtml(EGS_ABOUT_IMAGE.note)}</div>
+            ${img && img.error ? `<div class="egs-ach-icon-err">${escHtml(img.error)}</div>` : ''}
+            ${img && img.warn  ? `<div class="egs-ach-icon-warn">${escHtml(img.warn)}</div>` : ''}
+          </div>
+          ${img ? `<button type="button" class="egs-ach-icon-x" title="Remove"
+                          onclick="event.stopPropagation(); removeEgsAboutImage('${b.id}')">&times;</button>` : ''}
+          <input class="egs-ach-icon-input" id="${id}" type="file"
+                 accept="${escHtml(EGS_ABOUT_IMAGE.accept)}"
+                 onchange="handleEgsAboutImage(event, '${b.id}')">
+        </div>
+      </div>`;
+  };
+
+  const textEditor = (b) => {
+    const v = egsAboutFieldValue(b, lang);
+    const headLeft = EGS_ABOUT_HEADLINE_MAX - v.headline.length;
+    return `
+      <div class="egs-about-field">
+        <label class="egs-about-label" for="egs-about-head-${b.id}">Headline
+          <span class="form-hint-inline">(optional)</span></label>
+        <input class="form-input${headLeft < 0 ? ' is-over-limit' : ''}" type="text"
+               id="egs-about-head-${b.id}" value="${escHtml(v.headline)}"
+               placeholder="A heading for the text below it"${ro}
+               oninput="setEgsAboutField('${b.id}','headline', this.value); updateIapCharCounter(this, ${EGS_ABOUT_HEADLINE_MAX})">
+        <div class="ias-char-counter-row">
+          <span class="ias-char-error">${headLeft < 0
+            ? `Must be less than ${EGS_ABOUT_HEADLINE_MAX} characters.` : ''}</span>
+          <span class="ias-char-count${headLeft < 0 ? ' is-over' : ''}">${headLeft}</span>
+        </div>
+      </div>
+      <div class="egs-about-field">
+        <label class="egs-about-label" for="egs-about-body-${b.id}">Text</label>
+        <textarea class="form-input egs-about-body" id="egs-about-body-${b.id}" rows="6"
+                  placeholder="What this part of the page says"${ro}
+                  oninput="setEgsAboutField('${b.id}','body', this.value)">${escHtml(v.body)}</textarea>
+      </div>`;
+  };
+
+  /* The collapsed row says the three things you need to pick a block out of
+     twelve: what kind it is, what it starts with, and what it is spending. */
+  const summary = (b) => {
+    if (b.kind === 'image') {
+      const img = b.image || {};
+      return img.dataUrl
+        ? escHtml(img.name || 'Image')
+        : '<span class="egs-about-placeholder">No image chosen</span>';
+    }
+    const v = egsAboutFieldValue(b, lang);
+    const line = (v.headline || v.body || '').trim().replace(/\s+/g, ' ');
+    return line
+      ? escHtml(line.length > 72 ? line.slice(0, 72) + '…' : line)
+      : '<span class="egs-about-placeholder">Empty block</span>';
+  };
+
+  const rows = blocks.map((b, i) => {
+    const open = state.egsAboutOpenId === b.id;
+    return `
+    <div class="egs-about-row${open ? ' is-open' : ''}" data-block-id="${b.id}"
+         onclick="toggleEgsAboutBlock('${b.id}')">
+      <div class="egs-about-rowhead">
+        <span class="egs-about-kind">${b.kind === 'image' ? 'Image' : 'Text'}</span>
+        <span class="egs-about-rowtext">${summary(b)}</span>
+        <span class="egs-about-cost">${egsAboutBlockCost(b, lang).toLocaleString()}</span>
+        <span class="egs-about-rowbtns">${moveBtns(b, i)}${removeBtn(b)}</span>
+      </div>
+      ${open ? `<div class="egs-about-editor" onclick="event.stopPropagation();">${
+        b.kind === 'image' ? imageWell(b) : textEditor(b)}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const add = `
+    <div class="egs-about-add">
+      <button type="button" class="btn btn-ghost btn-sm" ${full ? 'disabled' : ''}
+              title="${full ? `Epic takes ${EGS_ABOUT_MAX_BLOCKS} blocks at most` : ''}"
+              onclick="addEgsAboutBlock('text')">+ Add text block</button>
+      <button type="button" class="btn btn-ghost btn-sm" ${full ? 'disabled' : ''}
+              title="${full ? `Epic takes ${EGS_ABOUT_MAX_BLOCKS} blocks at most` : ''}"
+              onclick="addEgsAboutBlock('image')">+ Add image block</button>
+    </div>`;
+
+  return `<div class="egs-about-root">${head}
+    <div class="egs-about-list">${rows}</div>${add}</div>`;
+}
+
 function buildEgsProductDetailsSection() {
   const a  = state.egsSubmitAnswers;
   /* No `fd` here any more (v8.48), and no `ws` since v8.59: short
@@ -20845,20 +21041,18 @@ function buildEgsLocalizationsSection() {
       fieldKey: 'egsLocReviewField', modeKey: 'egsLocReviewMode',
       settingsOpenKey: 'egsReviewSettingsOpen',
       autoCfgKey: 'steamAutoTranslateFields',
-      autoCfgDefault: { description: true, headline: true, aboutGame: true },
+      autoCfgDefault: { description: true },
       fields: EGS_LOC_REVIEW_FIELDS,
       limits: EGS_LOC_FIELD_CHAR_LIMITS,
-      /* Epic's two long ones. The App Store's default list names its own
-         "what's new", which Epic's page has not got. */
-      longFields: ['description', 'aboutGame'],
+      /* Only the short description is long enough to want the wide card now
+         that the body has moved to the About tab. */
+      longFields: ['description'],
       /* Product Name is the App Store's own value wherever it appears, so
          its switch reads and writes iasAutoTranslateFields — the same
          override Mac App Store's Title uses, for the same reason. */
       settingsRows: [
         ['title', 'Product Name', LOC_SHARED_AUTO_OVERRIDE],
         ['description', 'Short Description'],
-        ['headline', 'Headline'],
-        ['aboutGame', 'Description'],
       ],
       fieldHasOverLimitLang: _egsLocFieldHasOverLimitLang,
       fieldValue: _steamFieldValue,
@@ -20872,6 +21066,46 @@ function buildEgsLocalizationsSection() {
       toggleReviewModeFn: 'toggleEgsLocReviewMode',
       fieldSetterFn: 'setEgsLocReviewField',
       toggleAutoTranslateFieldFn: '_steamToggleAutoTranslateField',
+    },
+    /* ── THE ABOUT TAB (v9.45) ─────────────────────────────────────────
+       The same item-view shape the achievements tab uses, because it is the
+       same kind of object: a list of records, each with a headline and a
+       body to translate. Driven by EGS_ABOUT_LOC, the factory's third
+       caller (app.js). */
+    about: {
+      savedKey: 'egsAboutBlocks',
+      isSaved: egsAboutLocIsSaved,
+      /* A block has no name of its own, so the picker names it by where it
+         is and what it starts with — "1 · Welcome to the Underworld" — which
+         is how a developer picks one out of twelve. */
+      itemLabel: b => {
+        const list = (state.egsAboutBlocks || []).filter(egsAboutLocIsSaved);
+        const n = list.indexOf(b) + 1;
+        const line = ((b.headline || '') || (b.body || '')).trim().replace(/\s+/g, ' ');
+        return `${n}\u2009\u00b7\u2009${line.length > 40 ? line.slice(0, 40) + '\u2026' : line}`;
+      },
+      emptyText: 'No text blocks yet \u2014 add one from About.',
+      fields: EGS_ABOUT_LOC_FIELDS,
+      limits: EGS_ABOUT_LOC_FIELD_LIMITS,
+      settingsRows: EGS_ABOUT_LOC_FIELDS.map(f => [f.value, f.label]),
+      autoCfgDefault: EGS_ABOUT_LOC_AUTOCFG_DEFAULT,
+      fieldKey: 'egsAboutLocField', modeKey: 'egsAboutLocMode',
+      settingsOpenKey: 'egsAboutLocSettingsOpen',
+      autoCfgKey: 'egsAboutLocAutoTranslateFields',
+      effectiveItemId: () => EGS_ABOUT_LOC.effectiveAchId(),
+      fieldHasOverLimitLang: (id, f, langs) => EGS_ABOUT_LOC.fieldHasOverLimitLang(id, f, langs),
+      fieldValue: (id, f, lang) => EGS_ABOUT_LOC.fieldValue(id, f, lang),
+      backTranslationValue: (id, f, lang) => EGS_ABOUT_LOC.backTranslationValue(id, f, lang),
+      fieldTranslatePending: (id, f, lang) => EGS_ABOUT_LOC.fieldTranslatePending(id, f, lang),
+      sourceBadge: (id, f, lang) => EGS_ABOUT_LOC.sourceBadge(id, f, lang),
+      undoState: (kind, id, f, lang) => EGS_ABOUT_LOC.undoState(kind, id, f, lang),
+      undoFn: 'egsAboutLocUndo', redoFn: 'egsAboutLocRedo',
+      inlineEditFn: 'startEgsAboutLocInlineEdit',
+      backEditFn: 'startEgsAboutLocBackTranslationEdit',
+      toggleReviewModeFn: 'toggleEgsAboutLocReviewMode',
+      fieldSetterFn: 'setEgsAboutLocField',
+      itemSetterFn: 'setEgsAboutLocReviewId',
+      toggleAutoTranslateFieldFn: '_egsAboutLocToggleAutoTranslateField',
     },
     achievements: {
       savedKey: 'egsAchievements',
@@ -21405,8 +21639,12 @@ function buildEgsStorePreviewSection() {
   /* Steam's cached blurb stands in until somebody types their own, resolved
      by egsShortDesc so the page and the status bar cannot disagree. */
   const desc      = locVal('description', egsShortDesc());
-  const headline  = locVal('headline', (a.headline || '').trim());
-  const aboutText = locVal('aboutGame', egsBodyText());
+  /* THE ABOUT SECTION READS ITS OWN BLOCKS NOW (v9.45), each one carrying
+     its own translations, so there is no single `headline`/`aboutGame` pair
+     for locVal to resolve here any more — see the About block further down
+     this function. `aboutText` survives only as the fallback that function
+     uses when the block model is not loaded. */
+  const aboutText = egsBodyText(previewLang);
   const developer = (ws.developer || '').trim();
   const publisher = (ws.publisher || developer || '').trim();
 
@@ -21787,20 +22025,57 @@ function buildEgsStorePreviewSection() {
      either side of the short description stopped matching. The Localizations
      button rides along inside the block for the same reason: it is Shipmate's
      chrome and must not buy a 48px gap with it. */
-  const bodyLimit = egsBodyLimit(headline.length);
+  /* ── THE ABOUT SECTION IS A DOOR NOW (v9.45) ──────────────────────────
+     It used to be two boxes typed straight onto the page — a headline and a
+     body — which was one of Epic's twelve blocks wearing the whole section's
+     name. The section has its own step (Epic Games Store - About); this
+     draws what that step holds, the way Epic draws it, and opens it when
+     pressed.
+
+     WHY NOT KEEP INLINE EDITING FOR THE TEXT. Because there is no longer a
+     "the" text: with twelve blocks the page would need add, remove and
+     reorder controls drawn among the prose it is previewing, and a budget
+     meter with nowhere to sit. Every other block on this page that holds
+     more than it can show already works this way — the rating card, the
+     System Requirements chip, Social Media — so this is the page's own
+     idiom rather than a new one.
+
+     IMAGE BLOCKS DRAW AS IMAGES, between the prose, which is what the store
+     does with them. An image block with no file yet draws its empty frame
+     rather than nothing, so the page shows the shape the developer has
+     built even before they have filled it. */
+  const aboutBlocks = (typeof egsAboutBlocks === 'function') ? egsAboutBlocks() : [];
+  const aboutFilled = (typeof egsAboutComplete === 'function') ? egsAboutComplete() : !!aboutText;
+  const aboutBody = aboutBlocks.map(b => {
+    if (b.kind === 'image') {
+      const img = b.image || {};
+      return img.dataUrl
+        ? `<img class="egs-sp-about-img" src="${escHtml(img.dataUrl)}" alt="">`
+        : `<div class="egs-sp-about-imgempty">Image block</div>`;
+    }
+    const v = (typeof egsAboutFieldValue === 'function')
+      ? egsAboutFieldValue(b, previewLang) : { headline: b.headline || '', body: b.body || '' };
+    const h = (v.headline || '').trim();
+    const t = (v.body || '').trim();
+    if (!h && !t) return '';
+    /* EACH BLOCK IS ONE CHILD, which is what keeps a headline next to its
+       own text. Emitted as two siblings they both took the section's own
+       gap, so the distance from a heading to the words under it was the
+       same as the distance to the next block entirely — and the page read
+       as a list of headings rather than as blocks. */
+    return `<div class="egs-sp-about-block">${
+      h ? `<h2 class="egs-sp-headline">${escHtml(h)}</h2>` : ''}${
+      t ? `<div class="egs-sp-body">${escHtml(t).replace(/\n/g, '<br>')}</div>` : ''}</div>`;
+  }).join('');
+
   const aboutHtml = `
     <div class="egs-sp-long">
       ${locBtnHtml ? `<div class="egs-sp-locrow">${locBtnHtml}</div>` : ''}
-      <div class="egs-sp-headline-wrap">
-        ${egsPageField({ id: 'egs-sp-headline', cls: 'egs-sp-headline', value: headline,
-            limit: EGS_PAGE_LIMITS.headline, placeholder: 'Headline',
-            onInput: `updateEgsHeadlineCounter(this)`,
-            onChange: locSet('headline', `setEgsPageField('headline', this.value)`) })}
+      <div class="egs-sp-about ${egsHitCls(aboutFilled)}" data-spp-el="description"
+           title="Edit the About section"
+           onclick="openStepModal('egs','about')">
+        ${aboutBody || `<div class="egs-spp-placeholder">Your About section appears here</div>`}
       </div>
-      ${egsPageField({ spp: 'description', id: 'egs-sp-body', cls: 'egs-sp-body', value: aboutText, multiline: true, rows: 5,
-          limit: bodyLimit, placeholder: 'Long Description',
-          onInput: `updateEgsBodyCounter(this)`,
-          onChange: locSet('aboutGame', `setWebSiteField('aboutGame', this.value); _egsProductRepaint()`) })}
     </div>`;
 
   /* ── THE FOOT OF THE PAGE, which on Epic is where everything the developer
