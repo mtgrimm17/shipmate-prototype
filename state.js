@@ -4047,15 +4047,58 @@ function isEgsSectionComplete(sectionId) {
        Product Details. Only this one of the five: Epic marks Text required
        and leaves Audio, Login Accounts Required, the legal footer and the
        privacy link optional, so the other four have nothing to carry. */
-    const ws = state.webSite || {};
-    return platformSectionComplete('egs', 'contentRating')
+    /* ── THE PAGE'S OWN TEST, PLUS WHAT IT DOES NOT ASK (v9.44) ───────
+       This arm and the checklist drawn down the side of the very same page
+       (sppRequiredElements('egs'), render.js) were two hand-kept lists of
+       "is the store page done", and they had drifted apart in both
+       directions. The dangerous direction was this one: the arm never
+       mentioned the title, the short description, the long description or
+       the price, so a product with NO TITLE AT ALL showed a green Store
+       Page Preview on the Epic card while the bar on the page itself said
+       incomplete. A tick that says a listing is ready when it has no name
+       is worse than no tick.
+
+       Fixed the way the App Store's own arm was fixed when it had the same
+       problem (see _sppStepComplete above, and the note over it): stop
+       restating the list. The page enumerates its own required elements and
+       both the bar and this predicate read that enumeration, so the two
+       cannot disagree about anything the checklist covers — which is now
+       the title, media, content rating, business, short description, long
+       description and specifications.
+
+       THREE TERMS SURVIVE HERE because the checklist has no row for them.
+       Genres, Features and Text languages moved onto this page in v8.59 and
+       v8.72 and are printed and edited on it, but they live inside the tag
+       columns and the foot chip rather than being sections of their own, so
+       nothing in the nine rows asks for them. Dropping them to make the two
+       lists identical would quietly make three required fields optional —
+       the trap v8.57's own note names. They make this predicate STRICTER
+       than the bar, never looser, which is the safe direction: a green bar
+       over a grey step means "nearly there", where the bug being fixed here
+       meant "ready to ship" over an empty listing.
+
+       The fourth is the content rating's VISIT gate, which is
+       platformSectionComplete's and not isEgsSectionComplete's. The
+       checklist's own content row asks only that the questionnaire is
+       answered; this asks that someone looked at it, as the removed
+       Content Rating row used to.
+
+       TWO THINGS GOT LOOSER, both deliberately, because in each case the
+       page's own rule is the considered one and this arm was carrying a
+       second, hidden rule that contradicted it:
+         - MEDIA. This asked for a screenshot; the checklist asks for a
+           screenshot OR a trailer, because v8.72 stopped the carousel
+           drawing key art and the rule is "done when everything it PRINTS
+           is done". A trailer-only carousel is a carousel with something
+           in it.
+         - PUBLISHER. This asked for one; the checklist accepts the
+           developer standing in, because that is literally what the page
+           prints in the publisher's slot until one is set. */
+    return _sppStepComplete('egs')
+        && platformSectionComplete('egs', 'contentRating')
         && a.textLanguages.length > 0
-        && isEgsSectionComplete('specifications')
-        && isEgsSectionComplete('screenshots')
         && a.genres.length > 0
-        && a.features.length > 0
-        && !!(ws.developer || '').trim()
-        && !!(ws.publisher || '').trim();
+        && a.features.length > 0;
   }
   return false;
 }
