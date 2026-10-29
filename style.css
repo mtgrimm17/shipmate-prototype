@@ -31062,6 +31062,25 @@ textarea.egs-sp-body {
   background: var(--bg);
   border-color: var(--epic-well-line-todo);
 }
+/* ── AND THE ABOUT SECTION, WHICH FELL OUT OF THAT LIST (v9.46) ──────────
+   The note above names "headline, body" among the boxes that took Mac's
+   well. Both of them were .egs-sp-edit fields then. v9.45 turned the About
+   section into a rendered block that opens its own step, so it became an
+   .egs-sp-hit instead — and .egs-sp-hit still carries the #18181c fill that
+   this rule exists to replace. The result was the one thing the change
+   above was made to stop: a block sitting on the page as a raised card,
+   lighter than the page behind it, beside a short description that is not.
+
+   A HIT WEARS ITS LINE AS AN INSET SHADOW rather than a border, so the line
+   has to be named separately — border-color above would do nothing here. */
+.egs-sp .egs-sp-about.egs-sp-hit {
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--epic-well-line-todo);
+}
+.egs-sp .egs-sp-about.egs-sp-hit:hover {
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--epic-well-line-hover);
+}
 .egs-sp .egs-sp-edit:hover, .egs-sp .egs-sp-edit:focus,
 .egs-sp .egs-sp-edit.egs-sp-edit-empty:hover, .egs-sp .egs-sp-edit.egs-sp-edit-empty:focus,
 .egs-sp .egs-tagbox:hover, .egs-sp .egs-tagbox:focus-within,

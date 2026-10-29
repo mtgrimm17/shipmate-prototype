@@ -1256,17 +1256,6 @@ const PLATFORMS = {
          order means a developer working from their docs is never asked for
          something two screens ahead of where they are. */
       { id: 'productDetails',    label: 'Product Details'                              },
-      /* ABOUT IS ITS OWN STEP (v9.45). It was two fields typed directly onto
-         the Store Page Preview — one headline, one body — which is one of
-         Epic's twelve blocks. Twelve blocks with a shared character budget,
-         an order you can change and images among them do not fit on a
-         preview page beside the thing they are previewing: add, remove and
-         reorder controls would have to be drawn on the rendered page, and
-         the budget meter has nowhere to live there at all. So it gets the
-         room its own step gives it, and the preview keeps the job a preview
-         is good at — showing the result and opening the editor when pressed
-         (buildEgsStorePreviewSection's About block). */
-      { id: 'about',             label: 'About'                                        },
       /* NO 'specifications', 'socialMedia' OR 'contentRating' ROW (v8.57) —
          removed as Submission steps per request, now that the Store Page
          Preview carries a door to each of them: the System Requirements block
@@ -1711,6 +1700,20 @@ const PLATFORM_OFF_CARD_STEPS = {
        took in v8.57, and for the same reason: a step whose whole subject is
        visible on the preview does not also need a row on the card. */
     { id: 'logo',           label: 'Logo'                                },
+    /* ABOUT IS ITS OWN STEP (v9.45) AND OFF THE CARD (v9.46). It was two
+       fields typed onto the Store Page Preview — one headline, one body —
+       which is one of Epic's twelve blocks; twelve blocks with a shared
+       budget, an order you can change and images among them need a step's
+       room. It sits here with its four neighbours for the reason they are
+       here: the preview prints the About section and opens this step when
+       pressed, and a step whose whole subject is visible on the preview does
+       not also need a row on the card.
+
+       IT IS STILL A STEP. buildEgsAboutSection, its own tick
+       (isEgsSectionComplete('about')) and its Localizations tab are
+       untouched; it is simply no longer one of the rows platformStepCount
+       walks. */
+    { id: 'about',          label: 'About'                               },
   ],
 };
 
@@ -3757,9 +3760,12 @@ const EGS_ACH_LOC_AUTOCFG_DEFAULT = EGS_ACH_LOC_FIELD_KEYS.reduce(
    the Localizations picker — and because the factory filters the list with
    this, an About section that is all images simply has no About tab, which
    is the truth rather than an empty one. */
+/* The two names Epic's own About block has: an optional Headline over a
+   Body. "Text" was this file's word for the second one at v9.45 and nobody
+   else's — the step says Body, so the Localizations picker says Body. */
 const EGS_ABOUT_LOC_FIELDS = [
   { value: 'headline', label: 'Headline' },
-  { value: 'body',     label: 'Text' },
+  { value: 'body',     label: 'Body' },
 ];
 const EGS_ABOUT_LOC_FIELD_KEYS = EGS_ABOUT_LOC_FIELDS.map(f => f.value);
 /* The headline keeps Epic's own 140; the text has no limit of its own
@@ -3769,7 +3775,7 @@ const EGS_ABOUT_LOC_FIELD_KEYS = EGS_ABOUT_LOC_FIELDS.map(f => f.value);
 const EGS_ABOUT_LOC_FIELD_LIMITS = { headline: EGS_ABOUT_HEADLINE_MAX };
 const EGS_ABOUT_LOC_FIELD_LABELS = {
   headline: 'about section headline',
-  body:     'about section text',
+  body:     'about section body',
 };
 const EGS_ABOUT_LOC_AUTOCFG_DEFAULT = { headline: true, body: true };
 

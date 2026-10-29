@@ -10445,7 +10445,15 @@ function sppRequiredElements(pid, lang) {
       { id: 'content',      label: 'Content',           required: true,  done: cq.total > 0 && cq.answered === cq.total },
       { id: 'business',     label: 'Business',          required: true,  done: !!(a.price && dev && pub) },
       { id: 'subtitle',     label: 'Short Description', required: true,  done: !!(typeof egsShortDesc === 'function' && (egsShortDesc() || '').trim()) },
-      { id: 'description',  label: 'Description',       required: true,  done: !!(typeof egsBodyText === 'function' && (egsBodyText() || '').trim()) },
+      /* "About", NOT "Description" (v9.46). The row has always pointed at
+         the block this page prints below the tags, and Epic calls that the
+         About section — on the page, in the portal's own panel and in its
+         documentation. "Description" was this page's word for it back when
+         it was one body field; the step it opens is called About, and a row
+         that opens a step should say where it goes. The id stays
+         `description`: it is what data-spp-el on the block says, and
+         renaming it would be renaming a wire to match a label. */
+      { id: 'description',  label: 'About',             required: true,  done: !!(typeof egsBodyText === 'function' && (egsBodyText() || '').trim()) },
       /* Two more of Epic's own sections, as rows (v8.70). Jaco: "añade Social
          Media y System Requirements como pasos de Shippy." Each row's tick is
          its step's own (isEgsSectionComplete): Social Media is optional and
@@ -20591,7 +20599,7 @@ function buildEgsAboutSection() {
         </div>
       </div>
       <div class="egs-about-field">
-        <label class="egs-about-label" for="egs-about-body-${b.id}">Text</label>
+        <label class="egs-about-label" for="egs-about-body-${b.id}">Body</label>
         <textarea class="form-input egs-about-body" id="egs-about-body-${b.id}" rows="6"
                   placeholder="What this part of the page says"${ro}
                   oninput="setEgsAboutField('${b.id}','body', this.value)">${escHtml(v.body)}</textarea>

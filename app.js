@@ -10196,6 +10196,7 @@ function _fillDescriptionField(text, source) {
   _wsPropagateAboutGame(text || '');
   _macFullPropagateDescription(text || '');
   _applePropagateDescription(text || '');
+  _egsPropagateAboutBody(text || '');
   const descEl = document.getElementById('ob-desc');
   if (descEl) {
     descEl.value = text || '';
@@ -25415,11 +25416,43 @@ function setEgsAboutField(id, field, value) {
   if (!b || b.kind !== 'text') return;
   if (field !== 'headline' && field !== 'body') return;
   b[field] = value;
-  /* No re-render: this is an oninput on a live field, and repainting under
-     the caret is how an editor loses a keystroke. The budget meter is
-     patched in place by _egsAboutPaintBudget instead. */
+  /* ── NO RE-RENDER FROM HERE (fixed v9.46) ──────────────────────────────
+     This is an oninput on a live field, and repainting under the caret is
+     how an editor loses a keystroke. v9.45 said so and then called
+     _egsProductRepaint() on the next line, which calls reRenderStepModal()
+     — so the About step rebuilt its own body after every character, the
+     browser threw away the input the caret was in, and the field appeared
+     to deselect itself the moment you typed. The note was right; the call
+     contradicted it.
+
+     Nothing on screen needs a full render anyway. The three things that do
+     change as you type are patched in place below, and the Store Page
+     Preview is behind this modal: it rebuilds from the blocks when it next
+     opens. */
+  _egsAboutPaintLive(b, field);
+}
+
+/* The parts of the About step that move as you type, patched rather than
+   re-rendered: the section's budget, this block's own cost, and the summary
+   line on its row — which sits above the editor you are typing in, so a
+   stale one is visible. */
+function _egsAboutPaintLive(b, field) {
   if (typeof _egsAboutPaintBudget === 'function') _egsAboutPaintBudget();
-  if (typeof _egsProductRepaint === 'function') _egsProductRepaint();
+  const row = document.querySelector(`.egs-about-row[data-block-id="${b.id}"]`);
+  if (!row) return;
+  const lang = (typeof _egsEffectivePreviewLang === 'function')
+    ? _egsEffectivePreviewLang() : ((state.formData || {}).primaryLanguage || 'en');
+  const cost = row.querySelector('.egs-about-cost');
+  if (cost) cost.textContent = egsAboutBlockCost(b, lang).toLocaleString();
+  const text = row.querySelector('.egs-about-rowtext');
+  if (text) {
+    const line = ((b.headline || '') || (b.body || '')).trim().replace(/\s+/g, ' ');
+    if (line) {
+      text.textContent = line.length > 72 ? line.slice(0, 72) + '\u2026' : line;
+    } else {
+      text.innerHTML = '<span class="egs-about-placeholder">Empty block</span>';
+    }
+  }
 }
 
 /* EPIC'S OWN FILE RULES (Storefront Media Guide > About Section): at least
@@ -27144,6 +27177,34 @@ function _wsPropagateAboutGame(value) {
 function _macFullPropagateDescription(value) {
   if (!state.macFullAppStoreListing) return;
   state.macFullAppStoreListing.description = value || '';
+}
+
+/* ── AND EPIC'S FIRST ABOUT BLOCK (v9.46, by request) ───────────────────
+   "When Shipmate scrapes from Steam, use description to populate the body of
+   the first text block in Epic Games Store - About. Overwrite any text that
+   may have already been in that field."
+
+   OVERWRITING IS THE PART WORTH BEING EXPLICIT ABOUT, because it discards
+   work — the same note _applePropagateDescription carries, for the same
+   reason. A developer who has rewritten that block and then re-scrapes gets
+   Steam's words back. Only the FIRST text block is touched: blocks two to
+   twelve are the developer's own and a scrape has nothing to say about them.
+
+   IT GOES THROUGH THIS DOOR, which is every source rather than Steam alone
+   (_fillDescriptionField's own note: Steam when there is a linked page, IGDB
+   when there is not). That matches what the three propagations above it do
+   with the same text, and it is the behaviour to narrow if a scrape from
+   IGDB should leave the About section alone.
+
+   AND IT SEEDS FIRST. Until somebody edits, egsAboutBlocks() has been
+   showing a block that is not in state — writing to that object would write
+   to a value thrown away on the next render. */
+function _egsPropagateAboutBody(value) {
+  if (typeof seedEgsAboutBlocks !== 'function') return;
+  seedEgsAboutBlocks();
+  const first = (state.egsAboutBlocks || []).find(b => b && b.kind === 'text');
+  if (!first) return;
+  first.body = value || '';
 }
 
 /* ONE WAY, AND IT OVERWRITES (by request). Game Details' Description fills both
