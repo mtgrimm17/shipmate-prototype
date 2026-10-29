@@ -10455,12 +10455,26 @@ function sppRequiredElements(pid, lang) {
         done: typeof isEgsSectionComplete === 'function' && isEgsSectionComplete('socialMedia') },
       { id: 'specifications', label: 'System Requirements', required: true,
         done: typeof isEgsSectionComplete === 'function' && isEgsSectionComplete('specifications') },
-      /* LAST, AS IT IS LAST ON THE PAGE (v8.73). Jaco: "pon Product Details
-         como último paso del checklist." Login Accounts, Languages and Legal
-         sit at the foot of the System Requirements chip; the tick is the
-         Product Details step's own. */
-      { id: 'productDetails', label: 'Product Details',   required: true,
-        done: typeof isEgsSectionComplete === 'function' && isEgsSectionComplete('productDetails') },
+      /* NO PRODUCT DETAILS ROW (v9.43, by request). It was added in v8.73 —
+         "pon Product Details como último paso del checklist" — pointing at
+         the Login Accounts, Languages and Legal parts at the foot of the
+         System Requirements chip, which ARE Product Details fields that moved
+         onto this page in v8.72. But its tick was the whole STEP's
+         (isEgsSectionComplete('productDetails')), and the four things that
+         actually decide that tick — Seller name, one of the two support
+         contacts, and the NFT and promotional-content questions — are not on
+         this page and cannot be opened from it. So the row scrolled you to
+         three fields, you filled all three, and nothing went green: a
+         checklist item you could neither satisfy nor leave.
+
+         The step is untouched and still carries its own tick on the Epic card
+         (PLATFORMS.egs.steps, state.js), which is where it is reached and
+         where it can be finished. Nothing stops being tracked; it stops being
+         counted twice, once in a place with no door.
+
+         The three chip parts keep their data-spp-el="productDetails" — they
+         are still that step's fields and the attribute still names where they
+         belong — but with no row naming that id, nothing reads them now. */
     ];
   }
   /* STEAM'S PAGE ANSWERS FOR ITSELF TOO (v9.07). Jaco: "Adam has submitted a
