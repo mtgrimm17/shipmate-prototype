@@ -3780,11 +3780,18 @@ const EGS_ACH_LOC_FIELDS = [
 const EGS_ACH_LOC_FIELD_KEYS = EGS_ACH_LOC_FIELDS.map(f => f.value);
 const EGS_ACH_FIELD_LIMITS = EGS_ACH_LOC_FIELD_KEYS.reduce(
   (o, k) => (o[k] = EGS_ACH_CHAR_MAX, o), {});
+/* WHAT THE TRANSLATION PROMPT CALLS EACH ONE — and only that; nothing else
+   reads these. Locked and unlocked are the same two words to a translator,
+   and since v9.54 they say exactly what Steam's say (STEAM_ACH_LOC_FIELD_LABELS),
+   because an identical prompt is one request (_claudeTranslatePieceCache):
+   the Steam import puts the same name and description in all four of Epic's
+   fields and both of Steam's, and measured on Hades that was six requests
+   per achievement per language where two will do. */
 const EGS_ACH_LOC_FIELD_LABELS = {
-  unlockedDisplayName: 'unlocked achievement name',
-  unlockedDescription: 'unlocked achievement description',
-  lockedDisplayName:   'locked achievement name',
-  lockedDescription:   'locked achievement description',
+  unlockedDisplayName: 'achievement name',
+  unlockedDescription: 'achievement description',
+  lockedDisplayName:   'achievement name',
+  lockedDescription:   'achievement description',
 };
 /* Every one of them translates by default: unlike a store listing, where a
    studio name is deliberately left alone, all four of these are sentences a

@@ -2032,6 +2032,7 @@ function toggleOnboardingPlatform(pid) {
     // Same one-time seed for Mac App Store Full's own independent listing.
     if (pid === 'macos_full') seedMacFullAppStoreListing();
     if (pid === 'egs') _egsAboutCatchUpTranslations();
+    _locCatchUpPlatform(pid);
   }
   // Re-render just the platform tiles section in-place (platform is now in Game Details tab)
   const gridWrap = document.getElementById('ob-plat-grid-wrap');
@@ -4621,7 +4622,13 @@ function _steamRepropagateAchievements() {
 // burst, so the main thread is never asked to drain hundreds of them back to
 // back — background translation keeps making progress exactly as before,
 // it's just spread out over time instead of piled up in one moment.
-const TRANSLATE_CONCURRENCY = 4;
+/* SIX, NOT FOUR (v9.53 → v9.54), measured against the live API: adding
+   three languages to Hades queued 660 translations behind four slots, at
+   about 0.9s each — three minutes of spinners — and in 745 translation
+   requests at four-wide not one was rate-limited (every 429 that run was a
+   back-translation, which is now queued too; see below). Retries with
+   backoff (_claudeFetchRetry) absorb a stricter key's limit. */
+const TRANSLATE_CONCURRENCY = 6;
 const _translateQueue = [];
 let _translateActiveCount = 0;
 
@@ -4634,7 +4641,63 @@ function _pumpTranslateQueue() {
       err     => { _translateActiveCount--; reject(err);    _pumpTranslateQueue(); }
     );
   }
+  _pumpBackTranslateQueue();
 }
+
+/* ── BACK-TRANSLATIONS WAIT THEIR TURN (v9.54) ───────────────────────────
+   Every translation that lands asks for a back-translation in each language
+   (the "Review" side of its card), and those requests went straight to the
+   network with no queue at all. Measured on the live prototype: adding
+   three languages to Hades fired 1,742 back-translations in about thirty
+   seconds — the browser ran out of connections ("Failed to fetch", 126 of
+   them) and the API rate-limited 65 more — while the translations a
+   developer was actually waiting for queued behind four slots.
+
+   They now have a queue of their own, three wide, that yields to
+   translations: while any translation is waiting, back-translations hold —
+   UNLESS a Review side is on screen, in which case they go first, because
+   then the developer is looking at the thing being fetched. */
+const BACK_TRANSLATE_CONCURRENCY = 3;
+const _backTranslateQueue = [];
+let _backTranslateActiveCount = 0;
+
+/* Is any Localizations surface showing its Review side right now? Coarse on
+   purpose: a back-translation does not know which card will show it (the
+   App Store's Title is shown on four stores' pages), and "someone is
+   reviewing" is what decides whether waiting would be felt. */
+function _locAnyReviewOnScreen() {
+  if (typeof LOC_SURFACE !== 'object') return false;
+  return Object.keys(LOC_SURFACE).some(pid => {
+    const views = LOC_SURFACE[pid].views || {};
+    return Object.keys(views).some(v => views[v].modeKey && state[views[v].modeKey] === 'review'
+      && _locTranslateVisible(pid, v, null, null));
+  });
+}
+
+function _pumpBackTranslateQueue() {
+  while (_backTranslateActiveCount < BACK_TRANSLATE_CONCURRENCY && _backTranslateQueue.length) {
+    const urgent = _locAnyReviewOnScreen();
+    if (!urgent && _translateQueue.length) return;          // translations first
+    const { taskFn, resolve, reject } = _backTranslateQueue.shift();
+    _backTranslateActiveCount++;
+    Promise.resolve().then(taskFn).then(
+      result => { _backTranslateActiveCount--; resolve(result); _pumpBackTranslateQueue(); },
+      err     => { _backTranslateActiveCount--; reject(err);    _pumpBackTranslateQueue(); }
+    );
+  }
+}
+
+function _enqueueBackTranslateTask(taskFn) {
+  return new Promise((resolve, reject) => {
+    const job = { taskFn, resolve, reject };
+    if (_locAnyReviewOnScreen()) _backTranslateQueue.unshift(job); else _backTranslateQueue.push(job);
+    _pumpBackTranslateQueue();
+  });
+}
+/* A queued back-translation must not sit forever once the translation
+   queue has drained and nothing else pumps; this is the heartbeat that
+   guarantees it. Cheap: it does nothing when there is nothing waiting. */
+setInterval(() => { if (_backTranslateQueue.length) _pumpBackTranslateQueue(); }, 1000);
 
 function _enqueueTranslateTask(taskFn) {
   return new Promise((resolve, reject) => {
@@ -4731,6 +4794,31 @@ async function _claudeFetchRetry(url, init, attempts = CLAUDE_RETRY_ATTEMPTS) {
    only when none did. */
 const CLAUDE_TRANSLATE_MAX_TOKENS = 8192;
 
+/* THE SAME REQUEST IS MADE ONCE (v9.54). Epic's and Steam's achievement
+   lists are both filled from the same Steam import, so every achievement
+   text was translated twice, once for each store — measured on Hades, 49
+   achievements × their fields, twice. A piece's prompt is the whole
+   request, so an identical prompt shares the first one's answer, in flight
+   or done. A failed one is forgotten, so it is asked again next time. */
+const _claudeTranslatePieceCache = new Map();
+
+/* A REPLY THAT IS ALMOST JSON (v9.54). Measured on the live API: now and
+   then a translation comes back with an unescaped " inside the translated
+   text ("Expected ',' or '}' after property value"), and the whole field
+   failed. Asking again usually gets a clean reply; if it does not, a reply
+   for ONE language can still be read — everything between that language's
+   opening quote and the closing quote before the final braces is its text.
+   For several languages there is no safe boundary, so those are split
+   instead (see runPiece). */
+function _lenientTranslation(cleaned, lang) {
+  const re = new RegExp('"' + lang.replace(/[-]/g, '\\-') + '"\\s*:\\s*"([\\s\\S]*)"\\s*}\\s*}?\\s*$');
+  const m = cleaned.match(re);
+  if (!m) return null;
+  const inner = m[1];
+  try { return JSON.parse('"' + inner.replace(/\\?"/g, '\\"') + '"'); }
+  catch (e) { return inner.replace(/\\n/g, '\n').replace(/\\"/g, '"'); }
+}
+
 function _claudeTranslateTokensPerLang(text, floor) {
   return Math.max(floor || 0, Math.ceil((text || '').length / 2) + 60);
 }
@@ -4761,22 +4849,51 @@ async function _claudeTranslateLangs({ prompt, langList, langs, text, perLangBud
   const merged = {};
   let anyOk = false, lastErr = null;
 
-  const runPiece = async (piece, perLang = per) => {
+  const runPiece = async (piece, perLang = per, tries = 0) => {
     const list = piece.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
     const p = prompt.replace(langList, () => list);
     const maxTokens = Math.min(CLAUDE_TRANSLATE_MAX_TOKENS, 300 + piece.length * perLang);
+    if (tries === 0 && _claudeTranslatePieceCache.has(p)) {
+      try { Object.assign(merged, await _claudeTranslatePieceCache.get(p)); anyOk = true; return; }
+      catch (e) { /* the shared one failed; fall through and ask ourselves */ }
+    }
+    let settle;
+    const shared = new Promise((res, rej) => { settle = { res, rej }; });
+    shared.catch(() => {});
+    if (tries === 0) {
+      _claudeTranslatePieceCache.set(p, shared);
+      if (_claudeTranslatePieceCache.size > 4000) _claudeTranslatePieceCache.delete(_claudeTranslatePieceCache.keys().next().value);
+    }
+    const fail = (e) => { lastErr = e; if (tries === 0) { _claudeTranslatePieceCache.delete(p); settle.rej(e); } };
     let data;
     try {
       data = await _enqueueTranslateTask(() => _claudeTranslateCall(p, maxTokens));
-    } catch (e) { lastErr = e; return; }
+    } catch (e) { fail(e); return; }
+    /* No reply object at all must still settle the shared request, or every
+       identical request after it would wait on it forever. */
+    if (!data || typeof data !== 'object') { fail(new Error('Translation request returned nothing')); return; }
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
     let parsed = null;
-    try { parsed = JSON.parse(cleaned); } catch (e) { /* split below */ }
+    try { parsed = JSON.parse(cleaned); } catch (e) { /* retried or split below */ }
     const cut = data.stop_reason === 'max_tokens';
+    /* Not cut off, just not JSON: ask the same thing again, twice. */
+    if (!parsed && !cut && tries < 2) {
+      if (tries === 0) _claudeTranslatePieceCache.delete(p);
+      const before = Object.keys(merged).length;
+      await runPiece(piece, perLang, tries + 1);
+      if (tries === 0) { if (Object.keys(merged).length > before) settle.res(merged); else settle.rej(lastErr); }
+      return;
+    }
+    if (!parsed && !cut && piece.length === 1) {
+      const t = _lenientTranslation(cleaned, piece[0]);
+      if (typeof t === 'string' && t.trim()) parsed = { translations: { [piece[0]]: t } };
+    }
     if ((!parsed || cut) && piece.length > 1) {
+      if (tries === 0) _claudeTranslatePieceCache.delete(p);
       const mid = Math.ceil(piece.length / 2);
       await Promise.all([runPiece(piece.slice(0, mid), perLang), runPiece(piece.slice(mid), perLang)]);
+      if (tries === 0) settle.res(merged);
       return;
     }
     /* One language that still did not fit: the estimate was low for this
@@ -4784,15 +4901,18 @@ async function _claudeTranslateLangs({ prompt, langList, langs, text, perLangBud
        the room, up to the cap. */
     const roomier = Math.min(CLAUDE_TRANSLATE_MAX_TOKENS - 300, perLang * 2);
     if (cut && roomier > perLang) {       // strictly more each time, so it ends
-      await runPiece(piece, roomier);
+      if (tries === 0) _claudeTranslatePieceCache.delete(p);
+      await runPiece(piece, roomier, tries + 1);
+      if (tries === 0) settle.res(merged);
       return;
     }
     if (!parsed) {
-      lastErr = new Error(cut ? 'Translation was cut off at max_tokens' : 'Translation reply was not valid JSON');
+      fail(new Error(cut ? 'Translation was cut off at max_tokens' : 'Translation reply was not valid JSON'));
       return;
     }
     Object.assign(merged, parsed.translations || {});
     anyOk = true;
+    if (tries === 0) settle.res(parsed.translations || {});
   };
 
   const pieces = [];
@@ -7679,6 +7799,7 @@ function activatePlatform(platformId) {
   if (platformId === 'macos') seedMacAppStoreListing();
   if (platformId === 'macos_full') seedMacFullAppStoreListing();
   if (platformId === 'egs') _egsAboutCatchUpTranslations();
+  _locCatchUpPlatform(platformId);
   /* And the build state, on the same reasoning: a platform added here never
      went through onboarding, so nothing had guaranteed the objects its card
      reads. It only fills in what is missing, so calling it per activation is
@@ -14960,10 +15081,28 @@ function startLocReviewInlineEdit(field, lang, el, ev) {
    key) or the call failed — callers treat null as an error state, not as
    "translated to nothing" (that's what an empty source string returns:
    '', synchronously, no API call needed). */
-async function _iasTranslateSingle(text, sourceLang, targetLang) {
+/* ONE BACK-TRANSLATION PER (text, from, to), QUEUED (v9.54). Every surface's
+   Review side comes through here. The Steam import puts the same achievement
+   text on Epic, Steam and three Apple lists, so the same sentence was
+   back-translated up to five times; now the first request is shared by the
+   rest, in flight or done (a failure is forgotten so it can be asked again).
+   And it waits in _enqueueBackTranslateTask's queue rather than going
+   straight to the network — see that queue's note for what that cost. */
+const _backTranslateCache = new Map();
+function _iasTranslateSingle(text, sourceLang, targetLang) {
   const trimmed = (text || '').trim();
-  if (!trimmed) return '';
-  if (!CLAUDE_API_KEY) return null;
+  if (!trimmed) return Promise.resolve('');
+  if (!CLAUDE_API_KEY) return Promise.resolve(null);
+  const key = sourceLang + '\u0000' + targetLang + '\u0000' + trimmed;
+  if (_backTranslateCache.has(key)) return _backTranslateCache.get(key);
+  const p = _enqueueBackTranslateTask(() => _iasTranslateSingleNow(trimmed, sourceLang, targetLang))
+    .then(r => { if (r === null) _backTranslateCache.delete(key); return r; });
+  _backTranslateCache.set(key, p);
+  if (_backTranslateCache.size > 4000) _backTranslateCache.delete(_backTranslateCache.keys().next().value);
+  return p;
+}
+
+async function _iasTranslateSingleNow(trimmed, sourceLang, targetLang, tries = 0) {
 
   const sourceName = OB_LANG_NAMES[sourceLang] || sourceLang;
   const targetName = OB_LANG_NAMES[targetLang] || targetLang;
@@ -15003,7 +15142,17 @@ Rules:
     const data    = await res.json();
     const resText = (data.content?.[0]?.text || '').trim();
     const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed  = JSON.parse(cleaned);
+    let parsed = null;
+    try { parsed = JSON.parse(cleaned); } catch (e) { /* below */ }
+    if (!parsed) {
+      /* Measured on the live API ("ja -> en Expected ',' or '}'…"): an
+         unescaped quote now and then. Ask again once, then read it leniently
+         — a single "translation" value has a safe boundary. */
+      if (tries < 1) return _iasTranslateSingleNow(trimmed, sourceLang, targetLang, tries + 1);
+      const loose = _lenientTranslation(cleaned.replace(/^\{\s*"translation"/, '{"translations": {"x"') + '}', 'x');
+      if (typeof loose === 'string' && loose.trim()) return loose;
+      throw new Error('Back-translation reply was not valid JSON');
+    }
     return typeof parsed.translation === 'string' ? parsed.translation : null;
   } catch (e) {
     console.warn('[Localization Review Translate]', sourceLang, '->', targetLang, e.message);
@@ -20207,6 +20356,12 @@ const EGS_ACH_LOC = makeAchLocFamily({
   labels:         EGS_ACH_LOC_FIELD_LABELS,
   translatable:   EGS_ACH_LOC_FIELD_KEYS,
   settingsWrapId: 'egs-locs-achievements-settings-wrap',
+  /* What the translation prompt calls this text (v9.54): "video game", so
+     with the label it reads "video game achievement name". It said "Game
+     Center achievement" for want of one — and the two stores now say the
+     same thing on purpose, so the same achievement text from the same
+     Steam import is one request rather than two (_claudeTranslatePieceCache). */
+  promptSubject:  'video game',
 });
 
 /* PUBLISHED UNDER THE NAMES THE ROWS CALL (v9.26). The cards' onclick
@@ -20315,6 +20470,12 @@ const STEAM_ACH_LOC = makeAchLocFamily({
   labels:         STEAM_ACH_LOC_FIELD_LABELS,
   translatable:   STEAM_ACH_LOC_FIELD_KEYS,
   settingsWrapId: 'steam-locs-achievements-settings-wrap',
+  /* What the translation prompt calls this text (v9.54): "video game", so
+     with the label it reads "video game achievement name". It said "Game
+     Center achievement" for want of one — and the two stores now say the
+     same thing on purpose, so the same achievement text from the same
+     Steam import is one request rather than two (_claudeTranslatePieceCache). */
+  promptSubject:  'video game',
 });
 
 function startSteamAchLocInlineEdit(achId, field, lang, el, ev) {
@@ -20452,6 +20613,12 @@ function _masAchLocFieldAutoTranslateEnabled(field) {
 }
 
 async function _masAchLocTriggerAutoTranslate(achId, field, primaryValue) {
+  /* Not for a platform that is off (v9.54). The Steam import fills every
+     Apple achievement list whether or not that store is on, and on Hades
+     that was ~60% of all translation requests for a language added — for
+     pages nobody was making. _locCatchUpPlatform translates them when the
+     platform is turned on. */
+  if (!state.activePlatforms || !state.activePlatforms.has('macos')) return;
   if (!_masAchLocFieldAutoTranslateEnabled(field)) return;
   const a = (state.macGameCenterAchievements || []).find(x => x.id === achId);
   if (!a) return;
@@ -21185,6 +21352,12 @@ function _iasAchLocFieldAutoTranslateEnabled(field) {
 }
 
 async function _iasAchLocTriggerAutoTranslate(achId, field, primaryValue) {
+  /* Not for a platform that is off (v9.54). The Steam import fills every
+     Apple achievement list whether or not that store is on, and on Hades
+     that was ~60% of all translation requests for a language added — for
+     pages nobody was making. _locCatchUpPlatform translates them when the
+     platform is turned on. */
+  if (!state.activePlatforms || !state.activePlatforms.has('ios')) return;
   if (!_iasAchLocFieldAutoTranslateEnabled(field)) return;
   const a = (state.iosGameCenterAchievements || []).find(x => x.id === achId);
   if (!a) return;
@@ -21803,6 +21976,12 @@ function _macFullAchLocFieldAutoTranslateEnabled(field) {
 }
 
 async function _macFullAchLocTriggerAutoTranslate(achId, field, primaryValue) {
+  /* Not for a platform that is off (v9.54). The Steam import fills every
+     Apple achievement list whether or not that store is on, and on Hades
+     that was ~60% of all translation requests for a language added — for
+     pages nobody was making. _locCatchUpPlatform translates them when the
+     platform is turned on. */
+  if (!state.activePlatforms || !state.activePlatforms.has('macos_full')) return;
   if (!_macFullAchLocFieldAutoTranslateEnabled(field)) return;
   const a = (state.macFullGameCenterAchievements || []).find(x => x.id === achId);
   if (!a) return;
@@ -27474,6 +27653,16 @@ function _egsAboutTranslateFirstBody() {
   const first = (state.egsAboutBlocks || []).find(b => b && b.kind === 'text');
   if (!first) return;
   EGS_ABOUT_LOC.triggerAutoTranslate(first.id, 'body', first.body || '');
+}
+
+/* A PLATFORM TURNED ON CATCHES UP (v9.54): its achievement lists stopped
+   translating while it was off (see _masAchLocTriggerAutoTranslate), so
+   turning it on asks for what they now need. Cheap when nothing is owed —
+   each family skips a language whose translation is already current. */
+function _locCatchUpPlatform(pid) {
+  if (pid === 'ios'        && typeof _iasAchLocPropagateAllFields     === 'function') _iasAchLocPropagateAllFields();
+  if (pid === 'macos'      && typeof _masAchLocPropagateAllFields     === 'function') _masAchLocPropagateAllFields();
+  if (pid === 'macos_full' && typeof _macFullAchLocPropagateAllFields === 'function') _macFullAchLocPropagateAllFields();
 }
 
 /* Epic turned on: whatever its About blocks already say (the body the
