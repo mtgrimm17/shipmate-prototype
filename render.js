@@ -20845,91 +20845,26 @@ function buildEgsProductDetailsSection() {
         'Epic notifies players when an offer carries promotional content. A choice is required either way.')}`;
 }
 
-/* ══ SPECIFICATIONS, AS THE PORTAL DRAWS IT (v8.88) ═════════════════
-   Rebuilt against dev.epicgames.com's own form, read field by field on a
-   real product rather than described from memory. What that reading
-   changed, in the order a developer meets it:
+/* ══ SPECIFICATIONS, IN STEAM'S SHAPE (v9.40; header rewritten v9.52) ═══
+   Epic's questions, asked in Steam's form. v8.88 built this to mirror
+   dev.epicgames.com's own form — a tab strip with an underline, a 40×20
+   switch that greyed the form out, the counter on the label row. v9.40
+   rebuilt it in Steam's shape by request (Jaco: "¿puedes hacer que el
+   formato y estilo sea igual que el de Steam?"), and v9.52 removed what
+   the old form left behind: its builder, its counter function and its
+   style block, none of which anything drew any more.
 
-     - A TAB STRIP, not two stacked blocks. Windows and Mac, each with a
-       monitor glyph, the open one underlined in Epic's blue and carrying
-       a green check once its required boxes are filled. The old stacked
-       version was a deliberate choice — "this card has no tab idiom" —
-       and the portal's form is the thing this section exists to mirror.
-     - THE SWITCH IS A SWITCH. The portal's is a 40×20 pill, off by
-       default, and the form stays VISIBLE AND DISABLED underneath it
-       rather than disappearing. A developer can see what they will be
-       asked for before committing to the OS, which the old
-       reveal-on-answer could not show.
-     - BOTH COLUMNS CARRY THE ASTERISK on OS version, CPU, Memory and GPU;
-       DirectX, Storage and Sound card carry none. Epic's asterisk is
-       yellow (measured rgb(247,216,43)), not this app's usual red.
-     - THE COUNTER SITS ON THE LABEL ROW, right-aligned opposite "Minimum"
-       or "Recommended", and counts characters LEFT — 12px at 65% white,
-       the same as the label it shares the row with.
-     - NO PLACEHOLDERS. Not one box in the portal has any; a greyed-out
-       "8 GB RAM" reads as an answer already given.
-     - INPUT DEVICES AND NOTES ARE PER TAB, named windows_additionalNotes
-       and macos_additionalNotes in the portal's own markup.
-
-   The intro paragraph that used to head this section is gone, by request
-   and because the portal has none: the form says what it wants. */
+   WHAT IS STILL EPIC'S, because it is what Epic asks rather than how a
+   page looks: the requirements and their order; the asterisk on OS
+   version, CPU, Memory and GPU, in Epic's yellow (rgb(247,216,43)); 140
+   characters a box and 260 for Notes; no placeholders; DirectX on Windows
+   only; and input devices and notes per OS. The data and the handlers
+   (setEgsSpecField, setEgsSpecSupported, setEgsSpecNotes…) are v8.88's,
+   unchanged. */
 function buildEgsSpecificationsSection() {
   const specs = _egsSpecs();
   const tab   = EGS_SPEC_OS.find(o => o.id === state.egsSpecTab) || EGS_SPEC_OS[0];
   const sp    = specs[tab.id];
-  const off   = !sp.supported;
-
-  const monitor = `<svg class="egs-spec-tab-icon" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
-      aria-hidden="true"><rect x="2.5" y="4" width="19" height="13" rx="1.5"/>
-      <path d="M9 20h6M12 17v3"/></svg>`;
-  const check = `<svg class="egs-spec-tab-check" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
-      aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>`;
-
-  const tabsHtml = EGS_SPEC_OS.map(o => {
-    const on   = o.id === tab.id;
-    const done = specs[o.id].supported && egsSpecOsFilled(o.id);
-    return `<button type="button" role="tab" aria-selected="${on}"
-              class="egs-spec-tab${on ? ' is-current' : ''}"
-              onclick="setEgsSpecTab('${o.id}')">${monitor}<span>${escHtml(o.label)}</span>${
-              done ? check : ''}</button>`;
-  }).join('');
-
-  /* One box. `rowId`/`which` name the answer; everything else is the
-     portal's chrome around it. */
-  const cell = (r, which) => {
-    const val = sp[r.id][which] || '';
-    const lab = which === 'min' ? 'Minimum' : 'Recommended';
-    const star = r.required ? ' <span class="egs-spec-req" aria-hidden="true">*</span>' : '';
-    if (r.options) {
-      /* DirectX is the portal's one closed row — a picker, not a box — so
-         it has no counter to show and nothing to count. */
-      return `
-        <div class="egs-spec-cell">
-          <div class="egs-spec-cell-head"><span class="egs-spec-label">${lab}${star}</span></div>
-          <div class="egs-spec-pills">${r.options.map(v => `
-            <button type="button" class="egs-spec-pill${val === v ? ' is-on' : ''}"
-                    ${off ? 'disabled' : ''}
-                    onclick="setEgsSpecField('${tab.id}','${r.id}','${which}','${egsJsStr(v)}')"
-            >${escHtml(v)}</button>`).join('')}</div>
-        </div>`;
-    }
-    return `
-      <div class="egs-spec-cell">
-        <div class="egs-spec-cell-head">
-          <span class="egs-spec-label">${lab}${star}</span>
-          <span class="egs-spec-count">${EGS_SPEC_MAX - val.length}</span>
-        </div>
-        <div class="egs-spec-box${off ? ' is-off' : ''}">
-          <input type="text" class="egs-spec-input" maxlength="${EGS_SPEC_MAX}"
-                 value="${escHtml(val)}" ${off ? 'disabled' : ''}
-                 aria-label="${escHtml(tab.label + ' ' + r.label + ' ' + lab)}"
-                 oninput="egsSpecCount(this, ${EGS_SPEC_MAX})"
-                 onchange="setEgsSpecField('${tab.id}','${r.id}','${which}', this.value)">
-        </div>
-      </div>`;
-  };
 
   /* STEAM'S FORM, FIELD FOR FIELD (v9.40). Jaco: "¿puedes hacer que el
      formato y estilo sea igual que el de Steam? Separación vertical, etc."

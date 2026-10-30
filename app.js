@@ -25119,25 +25119,19 @@ function setEgsSpecNotes(osId, value) {
   _egsProductRepaint();
 }
 
-/* The counter is on the LABEL row, not below the box, so it cannot be
-   found as the input's next sibling the way updateIapCharCounter finds
-   its own. Same job, one hop further up. */
-function egsSpecCount(inputEl, max) {
-  const cell = inputEl.closest('.egs-spec-cell');
-  const out  = cell && cell.querySelector('.egs-spec-count');
-  if (out) out.textContent = String(max - inputEl.value.length);
-}
-
 /* One spec box: OS version / CPU / Memory / GPU / DirectX / Storage / Sound
    card, minimum or recommended, for one operating system. */
 function setEgsSpecField(osId, rowId, which, value) {
   const sp = _egsSpecs()[osId];
   if (!sp || !sp[rowId]) return;
   const v = (value || '').trim();
-  /* DirectX is a closed list of pills, so pressing the chosen one again
-     clears it — the press-twice-to-clear every pill on this card has. The
-     free-text boxes cannot behave that way: typing the same thing twice is
-     not a request to erase it. */
+  /* DirectX re-chosen clears it: v8.88's press-twice-to-clear, from when
+     the row was pills. The dropdown it has been since v9.40 never sends
+     the same value twice (`change` only fires on a change) and clears with
+     its own "Select…", so this arm is now only reachable by a direct call
+     — kept because it is harmless and a direct caller may rely on it. The
+     free-text boxes never behaved that way: typing the same thing twice
+     is not a request to erase it. */
   sp[rowId][which] = (rowId === 'directx' && sp[rowId][which] === v) ? '' : v;
   _egsProductRepaint();
 }

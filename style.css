@@ -31408,105 +31408,10 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   cursor: pointer;
 }
 
-/* ══ EPIC'S SPECIFICATIONS FORM (v8.88) ══════════════════════════════════
-   Every value below was read off dev.epicgames.com's own Specifications
-   form with getComputedStyle, not eyeballed from a screenshot: the tab
-   strip's 32px gap and 2px blue underline, the 40px field at 5% white
-   inside a 35% border at radius 8, the 12px/65% label row the counter
-   shares, the yellow asterisk, and the 40×20 switch. */
-.egs-spec-tabs {
-  display: flex; gap: 32px; margin: 0 0 24px;
-}
-.egs-spec-tab {
-  display: flex; align-items: center; gap: 8px;
-  height: 40px; padding: 0; position: relative;
-  background: none; border: 0; cursor: pointer;
-  font-size: 14px; font-weight: 400; letter-spacing: .28px; line-height: 19.6px;
-  color: rgba(255,255,255,.65);
-}
-.egs-spec-tab:hover { color: rgba(255,255,255,.85); }
-.egs-spec-tab.is-current { color: rgba(255,255,255,.95); }
-/* The portal draws the underline as the tab's own ::before, full width,
-   2px, in its blue. */
-.egs-spec-tab.is-current::before {
-  content: ''; position: absolute; left: 0; right: 0; bottom: 0;
-  height: 2px; background: rgb(51,191,255);
-}
-.egs-spec-tab-icon   { width: 20px; height: 20px; flex: none; }
-.egs-spec-tab-check  { width: 16px; height: 16px; flex: none; color: rgb(95,227,103); }
-
-.egs-spec-switchrow {
-  display: flex; align-items: center; gap: 12px;
-  margin: 0 0 32px; cursor: pointer;
-  font-size: 14px; color: rgba(255,255,255,.95);
-}
-.egs-spec-switch {
-  width: 40px; height: 20px; flex: none; padding: 0; cursor: pointer;
-  border: 0; border-radius: 9999px; position: relative;
-  background: rgba(255,255,255,.05);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
-  transition: background .15s ease;
-}
-.egs-spec-switch::after {
-  content: ''; position: absolute; top: 2px; left: 2px;
-  width: 16px; height: 16px; border-radius: 50%;
-  background: rgba(255,255,255,.65);
-  transition: transform .15s ease, background .15s ease;
-}
-.egs-spec-switch.is-on { background: rgb(51,191,255); box-shadow: none; }
-.egs-spec-switch.is-on::after { transform: translateX(20px); background: #fff; }
-
-.egs-spec-group { margin: 0 0 24px; }
-.egs-spec-head {
-  margin: 0 0 12px; font-size: 16px; font-weight: 700;
-  letter-spacing: -.08px; line-height: 19.2px; color: rgba(255,255,255,.95);
-}
-.egs-spec-cell { margin: 0 0 12px; }
-/* Label left, characters-left right, on one row above the box — where the
-   portal puts them, and the reason this section does not use
-   egsPortalField's counter, which sits underneath. */
-.egs-spec-cell-head {
-  display: flex; align-items: baseline; justify-content: space-between;
-  gap: 12px; margin: 0 0 4px;
-}
-.egs-spec-label, .egs-spec-count {
-  font-size: 12px; font-weight: 400; letter-spacing: .36px; line-height: 15.6px;
-  color: rgba(255,255,255,.65);
-}
-.egs-spec-count { font-variant-numeric: tabular-nums; }
-.egs-spec-req { color: rgb(247,216,43); }
-
-.egs-spec-box {
-  height: 40px; border-radius: 8px;
-  background: rgba(255,255,255,.05);
-  border: 1px solid rgba(255,255,255,.35);
-}
-.egs-spec-box:focus-within { border-color: rgb(51,191,255); }
-.egs-spec-box.is-off { opacity: .45; }
-.egs-spec-input {
-  width: 100%; height: 100%; padding: 0 16px;
-  background: none; border: 0; outline: none;
-  font: inherit; font-size: 14px; letter-spacing: .28px;
-  color: rgba(255,255,255,.95);
-}
-.egs-spec-input:disabled { cursor: not-allowed; }
-
-.egs-spec-pills { display: flex; flex-wrap: wrap; gap: 8px; }
-.egs-spec-pill {
-  height: 32px; padding: 0 14px; border-radius: 8px; cursor: pointer;
-  background: rgba(255,255,255,.05);
-  border: 1px solid rgba(255,255,255,.35);
-  font-size: 13px; color: rgba(255,255,255,.65);
-}
-.egs-spec-pill:hover:not(:disabled) { color: rgba(255,255,255,.95); }
-.egs-spec-pill.is-on {
-  background: rgb(51,191,255); border-color: rgb(51,191,255); color: #121216;
-}
-.egs-spec-pill:disabled { opacity: .45; cursor: not-allowed; }
-
-/* The portal leaves a switched-off tab's form on screen and greys it, so
-   a developer can see what they are agreeing to before they agree. */
-.egs-spec-dim { opacity: .45; }
+/* EPIC'S SPECIFICATIONS FORM (v8.88) drew its own tabs, switch, boxes and
+   pills here. v9.40 rebuilt the section in Steam's shape and v9.52 removed
+   the block; its one surviving rule, the yellow asterisk, is with the
+   v9.40 form's own rules (.egs-sysreq-steamform, below). */
 
 /* ══ STEAM'S PREVIEW SAYS WHAT IS INTERACTIVE, THE WAY EPIC'S DOES (v8.89)
    Ported from .egs-sp-edit / .egs-sp-hit above, by request. The two marks
@@ -32808,11 +32713,6 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   font-family: var(--mono); font-size: 12px; line-height: 16px; letter-spacing: normal;
   font-weight: 400; text-transform: none; color: var(--pill-ai-color);
 }
-
-/* Epic Specifications (v9.40): each requirement's Minimum and Recommended
-   side by side, as Steam's form and both store pages print them. */
-.egs-spec-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; align-items: start; }
-.egs-spec-pair > .egs-spec-cell { min-width: 0; margin-top: 0; }
 
 /* Epic Specifications in Steam's form (v9.40): the two wide rows span both
    columns; the counter, shown only while editing, sits under its box. */
