@@ -228,7 +228,7 @@ function buildAboutTab() {
             <textarea class="form-input" id="ob-desc" rows="5" required
                       placeholder="${t('ob.field.desc.placeholder') || 'Tell players what makes your game worth their time...'}"
                       oninput="syncField('description', this.value); charCount('ob-desc-count', this.value, 4000)"
-                      onblur="_iasTriggerAutoTranslate('description', this.value)"></textarea>
+                      onblur="_iasTriggerAutoTranslate('description', this.value); _egsAboutTranslateFirstBody()"></textarea>
             ${_giDescWaitHtml()}
           </div>
         </div>

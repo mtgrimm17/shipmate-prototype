@@ -2031,6 +2031,7 @@ function toggleOnboardingPlatform(pid) {
     if (pid === 'macos') seedMacAppStoreListing();
     // Same one-time seed for Mac App Store Full's own independent listing.
     if (pid === 'macos_full') seedMacFullAppStoreListing();
+    if (pid === 'egs') _egsAboutCatchUpTranslations();
   }
   // Re-render just the platform tiles section in-place (platform is now in Game Details tab)
   const gridWrap = document.getElementById('ob-plat-grid-wrap');
@@ -7517,6 +7518,7 @@ function activatePlatform(platformId) {
   // "add a platform" entry point needs the same one-time seed.
   if (platformId === 'macos') seedMacAppStoreListing();
   if (platformId === 'macos_full') seedMacFullAppStoreListing();
+  if (platformId === 'egs') _egsAboutCatchUpTranslations();
   /* And the build state, on the same reasoning: a platform added here never
      went through onboarding, so nothing had guaranteed the objects its card
      reads. It only fills in what is missing, so calling it per activation is
@@ -9025,6 +9027,7 @@ function confirmGameImport() {
   state.formData.description = ls.description;
   _wsPropagateAboutGame(ls.description);
   _egsPropagateAboutBody(ls.description);
+  _egsAboutTranslateFirstBody();
   _macFullPropagateDescription(ls.description);
   _applePropagateDescription(ls.description);
   const descEl = document.getElementById('ob-desc');
@@ -10216,6 +10219,7 @@ function _fillDescriptionField(text, source) {
   _macFullPropagateDescription(text || '');
   _applePropagateDescription(text || '');
   _egsPropagateAboutBody(text || '');
+  _egsAboutTranslateFirstBody();
   const descEl = document.getElementById('ob-desc');
   if (descEl) {
     descEl.value = text || '';
@@ -12374,6 +12378,7 @@ function _applyFieldValue(field, value) {
     const el = document.getElementById('ob-desc');
     if (el) { el.value = value; charCount('ob-desc-count', value, 4000); }
     _iasTriggerAutoTranslate('description', value);
+    _egsAboutTranslateFirstBody();
   } else if (field === 'subtitle') {
     state.formData.subtitle = value;
     const el = document.getElementById('ob-subtitle');
@@ -27342,6 +27347,40 @@ function _egsPropagateAboutBody(value) {
   const first = (state.egsAboutBlocks || []).find(b => b && b.kind === 'text');
   if (!first) return;
   first.body = value || '';
+}
+
+/* AND ITS TRANSLATIONS, ONCE THE TEXT HAS SETTLED (v9.51, by request).
+   _egsPropagateAboutBody runs on every keystroke in Game Details'
+   Description, and a translation per keystroke is an API call per
+   character — so it writes the body and stops there. This asks for the
+   translations, and is called where the text is final: the Description
+   box's blur (beside the App Store's own _iasTriggerAutoTranslate, which has
+   always waited for the same moment), and straight after each one-shot fill
+   — a scrape, a game import, an accepted fix — which are final the moment
+   they land.
+
+   ONLY FOR A PROJECT WITH EPIC ON IT. Every other propagation here is a
+   free local write; this one spends API calls, and a project with no Epic
+   page has nobody to read the French. Adding Epic later catches up through
+   _egsAboutCatchUpTranslations, so nothing is lost by waiting.
+
+   Repeats are free: the family skips any language whose translation is
+   already of this exact text, so a blur with no change asks for nothing. */
+function _egsAboutTranslateFirstBody() {
+  if (!state.activePlatforms || !state.activePlatforms.has('egs')) return;
+  if (typeof EGS_ABOUT_LOC !== 'object') return;
+  const first = (state.egsAboutBlocks || []).find(b => b && b.kind === 'text');
+  if (!first) return;
+  EGS_ABOUT_LOC.triggerAutoTranslate(first.id, 'body', first.body || '');
+}
+
+/* Epic turned on: whatever its About blocks already say (the body the
+   Description has been filling all along, included) gets its translations
+   now, as a new language gets them. */
+function _egsAboutCatchUpTranslations() {
+  if (typeof EGS_ABOUT_LOC !== 'object' || typeof seedEgsAboutBlocks !== 'function') return;
+  seedEgsAboutBlocks();
+  EGS_ABOUT_LOC.propagateAllFields();
 }
 
 /* ONE WAY, AND IT OVERWRITES (by request). Game Details' Description fills both
