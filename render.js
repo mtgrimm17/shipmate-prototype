@@ -18498,10 +18498,15 @@ function _buildUnifiedLocalizationsSection(p) {
     itemId = ic.effectiveItemId();
     const item = items.find(x => x.id === itemId);
     if (!emptyState && !item) emptyState = achEmpty;
-    // Game Center's three, or whatever this store's achievements are made of.
-    const achFields = ic.fields || ACHIEVEMENT_LOC_FIELDS;
+    // Game Center's three, or whatever this store's achievements are made of
+    // — or, for a store whose records differ (Epic's About text and image
+    // blocks, v9.50), whatever THIS record is made of.
+    const achFields = (ic.fieldsFor && item) ? ic.fieldsFor(item) : (ic.fields || ACHIEVEMENT_LOC_FIELDS);
     field = state[ic.fieldKey] || achFields[0].value;
-    if (!achFields.some(f => f.value === field)) field = achFields[0].value;
+    if (!achFields.some(f => f.value === field)) {
+      field = (ic.defaultField && achFields.some(f => f.value === ic.defaultField))
+        ? ic.defaultField : achFields[0].value;
+    }
     // Shared with the cards' pending test below, same as the Store Page branch.
     const achAutoCfg = state[ic.autoCfgKey]
       || ic.autoCfgDefault
@@ -20580,7 +20585,10 @@ function buildEgsAboutSection() {
   const imageWell = (b) => {
     const img = b.image || null;
     const id  = `egs-about-img-${b.id}`;
-    const cap = b.caption || '';
+    /* The caption in the language being shown (v9.50), read-only off the
+       primary like the text block's two — translations are written in
+       Localizations. */
+    const cap = egsAboutFieldValue(b, lang).caption || '';
     const capLeft = EGS_ABOUT_CAPTION_MAX - cap.length;
     const link = b.link || '';
     const linkBad = !egsAboutLinkValid(link);
@@ -20595,7 +20603,8 @@ function buildEgsAboutSection() {
         <input class="form-input${capLeft < 0 ? ' is-over-limit' : ''}" type="text"
                id="egs-about-cap-${b.id}" value="${escHtml(cap)}"
                placeholder="A line shown with the image"${ro}
-               oninput="setEgsAboutField('${b.id}','caption', this.value); updateIapCharCounter(this, ${EGS_ABOUT_CAPTION_MAX})">
+               oninput="setEgsAboutField('${b.id}','caption', this.value); updateIapCharCounter(this, ${EGS_ABOUT_CAPTION_MAX})"
+               onchange="commitEgsAboutField('${b.id}','caption', this.value)">
         <div class="ias-char-counter-row">
           <span class="ias-char-error">${capLeft < 0
             ? `Must be less than ${EGS_ABOUT_CAPTION_MAX} characters.` : ''}</span>
@@ -20646,7 +20655,8 @@ function buildEgsAboutSection() {
         <input class="form-input${headLeft < 0 ? ' is-over-limit' : ''}" type="text"
                id="egs-about-head-${b.id}" value="${escHtml(v.headline)}"
                placeholder="A heading for the text below it"${ro}
-               oninput="setEgsAboutField('${b.id}','headline', this.value); updateIapCharCounter(this, ${EGS_ABOUT_HEADLINE_MAX})">
+               oninput="setEgsAboutField('${b.id}','headline', this.value); updateIapCharCounter(this, ${EGS_ABOUT_HEADLINE_MAX})"
+               onchange="commitEgsAboutField('${b.id}','headline', this.value)">
         <div class="ias-char-counter-row">
           <span class="ias-char-error">${headLeft < 0
             ? `Must be less than ${EGS_ABOUT_HEADLINE_MAX} characters.` : ''}</span>
@@ -20657,7 +20667,8 @@ function buildEgsAboutSection() {
         <label class="egs-about-label" for="egs-about-body-${b.id}">Body${EGS_REQ_STAR}</label>
         <textarea class="form-input egs-about-body" id="egs-about-body-${b.id}" rows="6"
                   placeholder="What this part of the page says"${ro}
-                  oninput="setEgsAboutField('${b.id}','body', this.value)">${escHtml(v.body)}</textarea>
+                  oninput="setEgsAboutField('${b.id}','body', this.value)"
+                  onchange="commitEgsAboutField('${b.id}','body', this.value)">${escHtml(v.body)}</textarea>
       </div>`;
   };
 
@@ -20666,7 +20677,7 @@ function buildEgsAboutSection() {
   const summary = (b) => {
     if (b.kind === 'image') {
       const img = b.image || {};
-      const cap = (b.caption || '').trim();
+      const cap = (egsAboutFieldValue(b, lang).caption || '').trim();
       if (!img.dataUrl) return '<span class="egs-about-placeholder">No image chosen</span>';
       const line = cap || img.name || 'Image';
       return escHtml(line.length > 72 ? line.slice(0, 72) + '…' : line);
@@ -21159,11 +21170,18 @@ function buildEgsLocalizationsSection() {
       itemLabel: b => {
         const list = (state.egsAboutBlocks || []).filter(egsAboutLocIsSaved);
         const n = list.indexOf(b) + 1;
-        const line = ((b.headline || '') || (b.body || '')).trim().replace(/\s+/g, ' ');
-        return `${n}\u2009\u00b7\u2009${line.length > 40 ? line.slice(0, 40) + '\u2026' : line}`;
+        /* An image is named by its caption, and says it is an image, since
+           a caption on its own reads like a short text block (v9.50). */
+        const raw = b.kind === 'image' ? (b.caption || '') : ((b.headline || '') || (b.body || ''));
+        const line = raw.trim().replace(/\s+/g, ' ');
+        const cut = line.length > 40 ? line.slice(0, 40) + '\u2026' : line;
+        return `${n}\u2009\u00b7\u2009${b.kind === 'image' ? 'Image: ' : ''}${cut}`;
       },
-      emptyText: 'No text blocks yet \u2014 add one from About.',
+      emptyText: 'Nothing to translate yet \u2014 add text, or an image caption, from About.',
       fields: EGS_ABOUT_LOC_FIELDS,
+      /* A text block offers Headline and Body; an image, its Caption. */
+      fieldsFor: egsAboutLocFieldsFor,
+      defaultField: 'body',
       limits: EGS_ABOUT_LOC_FIELD_LIMITS,
       settingsRows: EGS_ABOUT_LOC_FIELDS.map(f => [f.value, f.label]),
       autoCfgDefault: EGS_ABOUT_LOC_AUTOCFG_DEFAULT,
@@ -22127,7 +22145,11 @@ function buildEgsStorePreviewSection() {
   const aboutBody = aboutBlocks.map(b => {
     if (b.kind === 'image') {
       const img = b.image || {};
-      const cap = (b.caption || '').trim();
+      /* In the preview's language (v9.50): a French page shows the French
+         caption, and an untranslated one shows none — a missing translation
+         is missing, not a copy of the English, as with the prose. */
+      const cap = ((typeof egsAboutFieldValue === 'function')
+        ? (egsAboutFieldValue(b, previewLang).caption || '') : (b.caption || '')).trim();
       /* The caption sits under its image, as the store sets it (v9.49). The
          link is not followed here: this whole section is a door to the
          About step, and a second click target inside it would fight it. */

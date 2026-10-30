@@ -3631,11 +3631,11 @@ function egsAboutTextBlocks() {
    which is the portal's own arithmetic (see the notes above
    EGS_ABOUT_TOTAL_CHARS); the link is not counted. The one is charged
    whether or not a file has been chosen yet — the block is the commitment.
-   Captions are not localized here yet, so every language counts the
-   primary's. */
+   A caption is counted in the language being counted (v9.50), the same as
+   a headline: a French page spends its French caption. */
 function egsAboutBlockCost(b, lang) {
   if (!b) return 0;
-  if (b.kind === 'image') return EGS_ABOUT_IMAGE_COST + (b.caption || '').length;
+  if (b.kind === 'image') return EGS_ABOUT_IMAGE_COST + (egsAboutFieldValue(b, lang).caption || '').length;
   const v = egsAboutFieldValue(b, lang);
   return (v.headline || '').length + (v.body || '').length;
 }
@@ -3645,6 +3645,12 @@ function egsAboutBlockCost(b, lang) {
    missing translation is missing, not a copy of the English. */
 function egsAboutFieldValue(b, lang) {
   const primary = (state.formData || {}).primaryLanguage || 'en';
+  /* An image block's one word-bearing field, by the same rule (v9.50). */
+  if (b && b.kind === 'image') {
+    if (!lang || lang === primary) return { headline: '', body: '', caption: b.caption || '' };
+    const e = (b.locs && b.locs[lang]) || {};
+    return { headline: '', body: '', caption: e.caption || '' };
+  }
   if (!b || b.kind !== 'text') return { headline: '', body: '' };
   if (!lang || lang === primary) return { headline: b.headline || '', body: b.body || '' };
   const e = (b.locs && b.locs[lang]) || {};
@@ -3791,32 +3797,54 @@ const EGS_ACH_LOC_AUTOCFG_DEFAULT = EGS_ACH_LOC_FIELD_KEYS.reduce(
    pressed, blank. The unlocked display name is what its own editor marks
    required, so it is the honest test for "this is an achievement, not an
    empty row", and it keeps a half-typed row out of the picker. */
-/* ── WHICH ABOUT BLOCKS CAN BE TRANSLATED (v9.45) ───────────────────────
-   The text ones. An image block has no words in it, so it is not a row in
-   the Localizations picker — and because the factory filters the list with
-   this, an About section that is all images simply has no About tab, which
-   is the truth rather than an empty one. */
-/* The two names Epic's own About block has: an optional Headline over a
-   Body. "Text" was this file's word for the second one at v9.45 and nobody
-   else's — the step says Body, so the Localizations picker says Body. */
+/* ── WHICH ABOUT BLOCKS CAN BE TRANSLATED (v9.45, captions v9.50) ──────
+   Any block with words in it. A text block's words are its Headline and
+   Body; an image block's, since v9.49, are its caption. An image with no
+   caption still has nothing to translate, so it is still not a row in the
+   Localizations picker — the factory filters the list with this, and a row
+   with nothing on it would be a row to skip. */
+/* The names Epic's own About blocks have: an optional Headline over a Body
+   on a text block, and an optional caption on an image (Epic's `alt`,
+   opened by "Show info"). "Text" was this file's word for the Body at
+   v9.45 and nobody else's — the step says Body, so the picker says Body.
+
+   ALL THREE ARE ONE FAMILY'S FIELDS, because the auto-translate settings,
+   the limits and the per-language store (b.locs[lang][field]) are one
+   family's. WHICH of them a given block offers is egsAboutLocFieldsFor: a
+   text block is never asked for a caption, nor an image for a body. */
 const EGS_ABOUT_LOC_FIELDS = [
   { value: 'headline', label: 'Headline' },
   { value: 'body',     label: 'Body' },
+  { value: 'caption',  label: 'Caption' },
 ];
 const EGS_ABOUT_LOC_FIELD_KEYS = EGS_ABOUT_LOC_FIELDS.map(f => f.value);
+function egsAboutLocFieldsFor(b) {
+  const keys = (b && b.kind === 'image') ? ['caption'] : ['headline', 'body'];
+  return EGS_ABOUT_LOC_FIELDS.filter(f => keys.indexOf(f.value) >= 0);
+}
 /* The headline keeps Epic's own 140; the text has no limit of its own
    because the 10,000 it draws on is the whole section's, and a per-field
    number would be a different number every time another block changed.
    An absent limit is handled by _locsCardsHtml's own `limit == null` arm. */
-const EGS_ABOUT_LOC_FIELD_LIMITS = { headline: EGS_ABOUT_HEADLINE_MAX };
-const EGS_ABOUT_LOC_FIELD_LABELS = {
-  headline: 'about section headline',
-  body:     'about section body',
+const EGS_ABOUT_LOC_FIELD_LIMITS = {
+  headline: EGS_ABOUT_HEADLINE_MAX,
+  caption:  EGS_ABOUT_CAPTION_MAX,
 };
-const EGS_ABOUT_LOC_AUTOCFG_DEFAULT = { headline: true, body: true };
+/* What the translation prompt calls each one, after its subject ("Epic Games
+   Store About section", the family's promptSubject in app.js). */
+const EGS_ABOUT_LOC_FIELD_LABELS = {
+  headline: 'headline',
+  body:     'body',
+  caption:  'image caption',
+};
+/* A caption is copy the page shows, the same as the prose around it, so it
+   translates by default like the other two. */
+const EGS_ABOUT_LOC_AUTOCFG_DEFAULT = { headline: true, body: true, caption: true };
 
 function egsAboutLocIsSaved(b) {
-  return !!b && b.kind === 'text' && !!((b.headline || '').trim() || (b.body || '').trim());
+  if (!b) return false;
+  if (b.kind === 'image') return !!(b.caption || '').trim();
+  return b.kind === 'text' && !!((b.headline || '').trim() || (b.body || '').trim());
 }
 
 function egsAchLocIsSaved(a) {

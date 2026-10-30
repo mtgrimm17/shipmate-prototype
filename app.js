@@ -4172,6 +4172,10 @@ const LOC_SURFACE = {
          draws the blocks (buildEgsStorePreviewSection's About block) and a
          translation landing while it is open should show up there. */
       about:        { fieldKey: 'egsAboutLocField', modeKey: 'egsAboutLocMode', defaultField: 'body',
+                      /* The field the tab is DRAWING, which on an image
+                         block is its caption whatever the stored pick says
+                         (v9.50) — the render falls back the same way. */
+                      fieldFn: () => _egsAboutLocEffectiveField(),
                       itemFn: () => EGS_ABOUT_LOC.effectiveAchId(),
                       screens: [{ stepId: 'storePreview', flip: null }] },
     },
@@ -4226,7 +4230,8 @@ function _locTranslateVisible(platformId, view, field, itemId) {
   if (!onScreen) return false;
 
   if (field != null) {
-    if ((state[vcfg.fieldKey] || vcfg.defaultField) !== field) return false;
+    const shown = vcfg.fieldFn ? vcfg.fieldFn() : (state[vcfg.fieldKey] || vcfg.defaultField);
+    if (shown !== field) return false;
   }
   // Store-page fields have no per-item selector; IAPs and achievements show
   // one saved item at a time.
@@ -8634,6 +8639,7 @@ function _propagateAllLocalizationFeatures() {
   _macFullAchLocPropagateAllFields(); // no-op until Mac App Store Full has saved achievements
   EGS_ACH_LOC.propagateAllFields();   // no-op until Epic has a named achievement
   STEAM_ACH_LOC.propagateAllFields(); // no-op until Steam has one
+  EGS_ABOUT_LOC.propagateAllFields(); // Epic's About blocks, captions included (v9.50)
 }
 
 function setObLangPreset(preset) {
@@ -19488,6 +19494,22 @@ function makeAchLocFamily(ACFG) {
      a null. The equivalence test below caught it; the odd name is what
      keeps it caught. */
   const P = ACFG.keyPrefix;
+  /* THREE OPTIONAL KNOBS (v9.50), all for a caller whose records are not
+     achievements — Epic's About blocks — and all defaulting to exactly what
+     the achievement callers had before:
+       locView     — the Localizations view its repaints name. Hard-coded
+                     'achievements' meant a translation landing on the About
+                     tab asked whether the Achievements tab was on screen, and
+                     so never repainted the tab it landed on.
+       steamDomain — which Steam scrape may still be about to supply a
+                     language. null for a record Steam never localizes, so a
+                     pending achievement scrape does not hold About copy back.
+       fieldsFor   — which of the family's fields one record has. An About
+                     image has a caption and nothing else; propagating a text
+                     block's Body onto it would only write blanks.
+     promptSubject names the thing in the translation prompt. */
+  const V = ACFG.locView || 'achievements';
+  const fieldsOf = a => (ACFG.fieldsFor ? ACFG.fieldsFor(a) : ACFG.translatable);
 
 function FSavedAchievements() {
     return (state[ACFG.listKey] || []).filter(a => ACFG.isSaved(a));
@@ -19569,7 +19591,7 @@ function FSavedAchievements() {
   // finds a genuine Steam localization for the same language/field.
   function FPropagateAllFields() {
     FSavedAchievements().forEach(a => {
-      ACFG.translatable.forEach(field => FTriggerAutoTranslate(a.id, field, a[field] || ''));
+      fieldsOf(a).forEach(field => FTriggerAutoTranslate(a.id, field, a[field] || ''));
     });
   }
 
@@ -19605,7 +19627,7 @@ function FSavedAchievements() {
       // Steam first — see _steamAlreadySupplied/_steamMayStillSupply. Achievements are scraped by their
       // own separately-timed call, hence the 'achievements' domain.
       if (_steamAlreadySupplied(entry, field, text)) return false;
-      if (_steamMayStillSupply(lang, 'achievements')) return false;
+      if (ACFG.steamDomain !== null && _steamMayStillSupply(lang, ACFG.steamDomain || 'achievements')) return false;
       return true;
     });
     if (!eligible.length) return;
@@ -19619,7 +19641,7 @@ function FSavedAchievements() {
         const backEntry = FBackTranslationEntry(achId, field, lang);
         if (backEntry.syncedTopText !== '') FRefreshBackTranslation(achId, field, lang, '');
       });
-      _locDeferredRerender(ACFG.pid, 'achievements', field, achId);
+      _locDeferredRerender(ACFG.pid, V, field, achId);
       return;
     }
 
@@ -19635,14 +19657,14 @@ function FSavedAchievements() {
       if (!a.locs[lang]) a.locs[lang] = _achLocBlankLocalizedText();
       a.locs[lang][inFlightKey] = text;
     });
-    _locDeferredRerender(ACFG.pid, 'achievements', field, achId);
+    _locDeferredRerender(ACFG.pid, V, field, achId);
 
     const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
     const fieldLabel    = ACFG.labels[field] || field;
     const perLangBudget = field === 'displayName' ? 80 : 200;
     const maxTokens     = Math.min(8192, 300 + eligible.length * perLangBudget);
 
-    const prompt = `Translate the following Game Center achievement ${fieldLabel} text for a mobile/video game into each of the listed languages.
+    const prompt = `Translate the following ${ACFG.promptSubject || 'Game Center achievement'} ${fieldLabel} text for a mobile/video game into each of the listed languages.
 
   Source text:
   """
@@ -19723,7 +19745,7 @@ function FSavedAchievements() {
       });
     }
     state[P + 'TranslatePendingLangs'][achId][field] = [];
-    _locDeferredRerender(ACFG.pid, 'achievements', field, achId);
+    _locDeferredRerender(ACFG.pid, V, field, achId);
   }
 
   function FFieldTranslatePending(achId, field, lang) {
@@ -19736,7 +19758,8 @@ function FSavedAchievements() {
     state[P + 'AutoTranslateFields'] = state[P + 'AutoTranslateFields'] || {};
     state[P + 'AutoTranslateFields'][field] = !state[P + 'AutoTranslateFields'][field];
     if (state[P + 'AutoTranslateFields'][field]) {
-      FSavedAchievements().forEach(a => FTriggerAutoTranslate(a.id, field, a[field] || ''));
+      FSavedAchievements().filter(a => fieldsOf(a).indexOf(field) >= 0)
+        .forEach(a => FTriggerAutoTranslate(a.id, field, a[field] || ''));
     }
     reRenderStepModal();
   }
@@ -19808,7 +19831,9 @@ function FSavedAchievements() {
   function FSyncBackTranslations(achId) {
     if (!achId) return Promise.resolve();
     const fd = state.formData;
-    const field = state[P + 'Field'] || 'displayName';
+    /* The field on screen, which for a caller with per-record fields is not
+       always the stored pick (v9.50, ACFG.effectiveField). */
+    const field = ACFG.effectiveField ? ACFG.effectiveField() : (state[P + 'Field'] || 'displayName');
     const supportedLangs = fd.localizations || [];
 
     const jobs = [];
@@ -19828,12 +19853,12 @@ function FSavedAchievements() {
       entry.text = '';
       entry.syncedTopText = topText;
       entry.status = null;
-      _locDeferredRerenderBack(ACFG.pid, 'achievements', field, achId);
+      _locDeferredRerenderBack(ACFG.pid, V, field, achId);
       return;
     }
 
     entry.status = 'loading';
-    _locDeferredRerenderBack(ACFG.pid, 'achievements', field, achId);
+    _locDeferredRerenderBack(ACFG.pid, V, field, achId);
 
     const fd = state.formData;
     const primary = fd.primaryLanguage || 'en';
@@ -19850,7 +19875,7 @@ function FSavedAchievements() {
       freshEntry.syncedTopText = topText;
       freshEntry.status = null;
     }
-    _locDeferredRerenderBack(ACFG.pid, 'achievements', field, achId);
+    _locDeferredRerenderBack(ACFG.pid, V, field, achId);
   }
 
   async function FCommitPrimaryEdit(achId, field, lang, value) {
@@ -20117,7 +20142,27 @@ const EGS_ABOUT_LOC = makeAchLocFamily({
   labels:         EGS_ABOUT_LOC_FIELD_LABELS,
   translatable:   EGS_ABOUT_LOC_FIELD_KEYS,
   settingsWrapId: 'egs-locs-about-settings-wrap',
+  /* v9.50: its own view, no Steam source, and a field list per block — a
+     text block's Headline and Body, an image's caption. */
+  locView:        'about',
+  steamDomain:    null,
+  fieldsFor:      b => egsAboutLocFieldsFor(b).map(f => f.value),
+  effectiveField: () => _egsAboutLocEffectiveField(),
+  promptSubject:  'Epic Games Store About section',
 });
+
+/* WHICH FIELD THE ABOUT TAB IS SHOWING. The stored pick when the current
+   block has it; otherwise Body if the block has one, else the block's first
+   — so an image block, which has only a caption, shows its caption. The
+   same rule _buildUnifiedLocalizationsSection draws by. */
+function _egsAboutLocEffectiveField() {
+  const id = EGS_ABOUT_LOC.effectiveAchId();
+  const b = (state.egsAboutBlocks || []).find(x => x && x.id === id);
+  const keys = egsAboutLocFieldsFor(b).map(f => f.value);
+  const pick = state.egsAboutLocField;
+  if (keys.indexOf(pick) >= 0) return pick;
+  return keys.indexOf('body') >= 0 ? 'body' : keys[0];
+}
 
 function startEgsAboutLocInlineEdit(id, field, lang, el, ev) {
   return EGS_ABOUT_LOC.startInlineEdit(id, field, lang, el, ev);
@@ -25478,6 +25523,19 @@ function setEgsAboutField(id, field, value) {
      Preview is behind this modal: it rebuilds from the blocks when it next
      opens. */
   _egsAboutPaintLive(b, field);
+}
+
+/* AND THE OTHER LANGUAGES FOLLOW, on commit rather than per keystroke
+   (v9.50). The About family has had translators since v9.45 and nothing
+   called them, which is v9.28's Epic achievements bug again: every
+   supporting language's card sat blank however much was typed here. Same
+   answer as commitEgsAchField — `change`, which fires once, when the field
+   is left with something new in it. */
+function commitEgsAboutField(id, field, value) {
+  setEgsAboutField(id, field, value);
+  const b = _egsAboutBlock(id);
+  if (!b || egsAboutLocFieldsFor(b).every(f => f.value !== field)) return;
+  EGS_ABOUT_LOC.triggerAutoTranslate(id, field, b[field] || '');
 }
 
 /* The parts of the About step that move as you type, patched rather than
