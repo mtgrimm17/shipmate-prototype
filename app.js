@@ -520,6 +520,9 @@ async function toggleStepSection(pid, stepId) {
      tab is remembered between visits — so the adoption cannot live only in
      setEgsPreviewTab. No-op once there is a list. */
   if (pid === 'egs' && typeof _egsEnsureAchievements === 'function') _egsEnsureAchievements();
+  if (pid === 'egs' && stepId === 'about' && typeof _egsEnsureAboutBlock === 'function') {
+    _egsEnsureAboutBlock();
+  }
   if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
     seedOnboardingToIOS(pid);
     if (pid === 'macos')      seedMacAppStoreListing();
@@ -3296,6 +3299,11 @@ async function openStepModal(pid, stepId) {
     state.storePreviewFocus[pid] = null;
     /* Same reason as the inline pane's own copy above. */
     if (pid === 'egs' && typeof _egsEnsureAchievements === 'function') _egsEnsureAchievements();
+  }
+  /* OUTSIDE THAT BRANCH, because the branch above only runs for
+     'storePreview' and this is about the About step (v9.47). */
+  if (pid === 'egs' && stepId === 'about' && typeof _egsEnsureAboutBlock === 'function') {
+    _egsEnsureAboutBlock();
   }
 
   if (pid === 'web') {
@@ -8198,7 +8206,11 @@ function syncField(field, value) {
     state.androidSubmitAnswers.privacyPolicyUrl = value;
   }
   if (field === 'title') _syncProjectBarTitle(value);
-  if (field === 'description') { _wsPropagateAboutGame(value); _macFullPropagateDescription(value); _applePropagateDescription(value); }
+  /* _egsPropagateAboutBody joined these three at v9.47, by request: typing
+     in Game Details' Description overwrites Epic's first About block the
+     same way a Steam scrape does. It was the odd one out — every other
+     preview showing this text was already kept in step from here. */
+  if (field === 'description') { _wsPropagateAboutGame(value); _macFullPropagateDescription(value); _applePropagateDescription(value); _egsPropagateAboutBody(value); }
   // Force-sync into the Web platform's own independent trailer slot — same
   // whole-value overwrite treatment as the trailer FILE gets in
   // handleTrailerFiles/removeTrailer (see the state.js comment above
@@ -9006,6 +9018,7 @@ function confirmGameImport() {
   // Pre-populate the description field
   state.formData.description = ls.description;
   _wsPropagateAboutGame(ls.description);
+  _egsPropagateAboutBody(ls.description);
   _macFullPropagateDescription(ls.description);
   _applePropagateDescription(ls.description);
   const descEl = document.getElementById('ob-desc');
@@ -12348,6 +12361,10 @@ function _applyFieldValue(field, value) {
     _wsPropagateAboutGame(value);
     _macFullPropagateDescription(value);
     _applePropagateDescription(value);
+    /* AND EPIC'S FIRST ABOUT BLOCK (v9.47, by request). It was the odd one
+       out: every other preview that shows this text was already kept in
+       step from here, and only a Steam scrape reached Epic's blocks. */
+    _egsPropagateAboutBody(value);
     const el = document.getElementById('ob-desc');
     if (el) { el.value = value; charCount('ob-desc-count', value, 4000); }
     _iasTriggerAutoTranslate('description', value);
@@ -25352,6 +25369,30 @@ function _egsEnsureAchievements() {
 
 function _egsAboutBlock(id) {
   return (state.egsAboutBlocks || []).find(b => b && b.id === id) || null;
+}
+
+/* ── AT LEAST ONE BLOCK, AND IT IS OPEN (v9.47, by request) ─────────────
+   Epic requires a text block, so this step should never open on an empty
+   list under an "+ Add text block" button: the first thing it would ask for
+   is the one thing it cannot do without. Seeding turns whatever
+   egsAboutBlocks() has been showing — Game Details' Description, usually —
+   into real state, and opening it means the step opens on the box you came
+   to type in rather than on a row you have to press first.
+
+   THE FIRST TEXT BLOCK, not blocks[0], so a project whose first block is an
+   image still lands on something to type in.
+
+   WHENEVER NOTHING IS OPEN, not only on the first visit. A block the
+   developer left open is left open — that is the remembered choice worth
+   keeping — but a step showing twelve collapsed rows asks you to press
+   something before you can write, and writing is what the step is for. */
+function _egsEnsureAboutBlock() {
+  if (typeof seedEgsAboutBlocks !== 'function') return;
+  seedEgsAboutBlocks();
+  const list = state.egsAboutBlocks || [];
+  if (state.egsAboutOpenId && list.some(b => b && b.id === state.egsAboutOpenId)) return;
+  const first = list.find(b => b && b.kind === 'text') || list[0];
+  if (first) state.egsAboutOpenId = first.id;
 }
 
 /* ADD IS REFUSED AT TWELVE rather than silently capped, because the button

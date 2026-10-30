@@ -20554,30 +20554,38 @@ function buildEgsAboutSection() {
             onclick="event.stopPropagation(); removeEgsAboutBlock('${b.id}')">&#10005;</button>`;
   };
 
+  /* ── THE WELL IS THIS STEP'S OWN (v9.47) ─────────────────────────────
+     v9.45 borrowed Epic's achievement icon well by class name, and every
+     one of those rules is scoped to `.egs-sp` — the Store Page Preview.
+     This step is not inside it, so none of them applied: the well was a
+     bare file input with "Choose File / No file chosen" beside it, and the
+     two lines of guidance were set in body copy. The classes are this
+     step's own now, and the guidance is a .form-hint, which is what every
+     other instructional line in the app is. */
   const imageWell = (b) => {
     const img = b.image || null;
     const id  = `egs-about-img-${b.id}`;
     return `
       <div class="egs-about-field">
         <label class="egs-about-label" for="${id}">Image</label>
-        <div class="egs-ach-icon-well${img && img.dataUrl ? ' has-file' : ''}${
-             img && img.error ? ' is-bad' : ''}">
+        <label class="egs-about-well${img && img.dataUrl ? ' has-file' : ''}${
+               img && img.error ? ' is-bad' : ''}" for="${id}">
           ${img && img.dataUrl
             ? `<img class="egs-about-thumb" src="${escHtml(img.dataUrl)}" alt="">`
-            : `<span class="egs-ach-icon-slot"></span>`}
-          <div class="egs-ach-icon-text">
-            <label class="egs-ach-icon-browse" for="${id}">${img && img.dataUrl
-              ? escHtml(img.name || 'Replace') : 'Drag file(s) here or <u>browse</u>'}</label>
-            <div class="egs-ach-icon-note">${escHtml(EGS_ABOUT_IMAGE.note)}</div>
-            ${img && img.error ? `<div class="egs-ach-icon-err">${escHtml(img.error)}</div>` : ''}
-            ${img && img.warn  ? `<div class="egs-ach-icon-warn">${escHtml(img.warn)}</div>` : ''}
-          </div>
-          ${img ? `<button type="button" class="egs-ach-icon-x" title="Remove"
-                          onclick="event.stopPropagation(); removeEgsAboutImage('${b.id}')">&times;</button>` : ''}
-          <input class="egs-ach-icon-input" id="${id}" type="file"
+            : `<span class="egs-about-slot" aria-hidden="true"></span>`}
+          <span class="egs-about-welltext">
+            <span class="egs-about-browse">${img && img.dataUrl
+              ? escHtml(img.name || 'Replace') : 'Drag a file here or <u>browse</u>'}</span>
+            <span class="form-hint egs-about-note">${escHtml(EGS_ABOUT_IMAGE.note)}</span>
+            ${img && img.error ? `<span class="egs-about-err">${escHtml(img.error)}</span>` : ''}
+            ${img && img.warn  ? `<span class="egs-about-warn">${escHtml(img.warn)}</span>` : ''}
+          </span>
+          ${img ? `<button type="button" class="egs-about-wellx" title="Remove"
+                          onclick="event.preventDefault(); event.stopPropagation(); removeEgsAboutImage('${b.id}')">&times;</button>` : ''}
+          <input class="egs-about-file" id="${id}" type="file"
                  accept="${escHtml(EGS_ABOUT_IMAGE.accept)}"
                  onchange="handleEgsAboutImage(event, '${b.id}')">
-        </div>
+        </label>
       </div>`;
   };
 

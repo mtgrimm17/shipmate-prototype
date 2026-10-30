@@ -31139,6 +31139,34 @@ textarea.egs-sp-body {
 }
 .egs-sp .egs-sp-chip-part.egs-sp-hit[data-spp-el="specifications"].is-spp-hover { box-shadow: inset 0 0 0 1px var(--purple); }
 
+/* ── AND EVERY OTHER DOOR ON THE PAGE (v9.47) ────────────────────────────
+   The eight rules above are an inventory: each names one block, and a block
+   added later gets no purple line until somebody remembers to add a ninth.
+   Two had already fallen through — the About section, which was a FIELD
+   until v9.45 and so was covered by the .egs-sp-edit rule at the top of
+   this group, and Social Media, which stopped being an .egs-sp-foot and
+   became a chip. Pressing either row in Shippy dimmed the page, scrolled to
+   the block and then lit nothing.
+
+   So the inventory gets a floor. Every .egs-sp-hit wears its line as an
+   inset ring, which is the one thing they all have in common, so one rule
+   can turn all of them purple — and the next door is covered by
+   construction rather than by memory.
+
+   THE TWO EXCEPTIONS ARE EXCLUDED BY NAME because they do not draw their
+   line that way: the rating card wears a border (and has its own rule
+   above), and the carousel's ring belongs to the OUTER box while Shippy
+   marks the stage inside it (the :has rule above).
+
+   !important FOR THE SAME REASON THE FIELD RULE AT THE TOP OF THIS GROUP
+   CARRIES IT: a block's resting ring is set by several rules that vary with
+   its state (.is-todo, :hover, and About's own well), and Shippy's line has
+   to win over whichever of them happens to apply. */
+.egs-sp .egs-sp-hit.is-spp-hover:not(.egs-sp-rating):not(.egs-sp-car),
+.egs-sp .egs-sp-hit.is-spp-focus:not(.egs-sp-rating):not(.egs-sp-car) {
+  box-shadow: inset 0 0 0 1px var(--purple) !important;
+}
+
 /* SHIPPY'S DOOR SEQUENCE (v8.73, _smDoorGo in app.js). While a row is
    pointing at the block it is about to open, everything not on the way to
    that block dims — by structure: at each level that contains the target,
@@ -32860,6 +32888,45 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .egs-about-thumb {
   width: 64px; height: 36px; object-fit: cover;
   border-radius: 6px; border: 1px solid var(--border); flex-shrink: 0;
+}
+/* The image block's own well. Epic's achievement well is the shape being
+   borrowed, but its rules are scoped to the Store Page Preview, so these
+   are the step's. The whole well is a <label> for the file input, which is
+   what makes the box clickable without a handler and lets the input itself
+   be taken off screen rather than left as a browser file control. */
+.egs-about-well {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: 8px;
+  border: 1px dashed var(--border-hover);
+  background: var(--panel); cursor: pointer;
+  transition: border-color .12s ease, background-color .12s ease;
+}
+.egs-about-well:hover { border-color: var(--text-faint); background: var(--panel-2); }
+.egs-about-well.has-file { border-style: solid; }
+.egs-about-well.is-bad { border-color: var(--magenta); }
+.egs-about-slot {
+  width: 64px; height: 36px; border-radius: 6px; flex-shrink: 0;
+  border: 1px solid var(--border); background: var(--panel-2);
+}
+.egs-about-welltext { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.egs-about-browse { font-size: 13px; color: var(--text); }
+.egs-about-browse u { text-underline-offset: 2px; }
+/* The guidance is a .form-hint like every other instructional line in the
+   app; this only takes its bottom margin off, because inside the well the
+   gap is the flex gap's business. */
+.egs-about-note { margin-bottom: 0; }
+.egs-about-err  { font-size: 12px; line-height: 1.5; color: var(--magenta); }
+.egs-about-warn { font-size: 12px; line-height: 1.5; color: var(--orange); }
+.egs-about-wellx {
+  flex: 0 0 auto; background: none; border: 0; color: var(--text-faint);
+  cursor: pointer; font-size: 15px; line-height: 1; padding: 4px 6px; border-radius: 4px;
+}
+.egs-about-wellx:hover { color: var(--magenta); background: var(--panel-3); }
+/* Off screen, not display:none — a hidden input cannot be opened by its
+   own label in some browsers, and the label IS the control here. */
+.egs-about-file {
+  position: absolute; width: 1px; height: 1px;
+  opacity: 0; pointer-events: none;
 }
 .egs-about-add { display: flex; gap: 8px; margin-top: 12px; }
 /* A read-only block off the primary language, same as every other editor
