@@ -32787,6 +32787,8 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   display: flex; flex-direction: column; gap: 12px;
 }
 .egs-about-field { display: flex; flex-direction: column; gap: 6px; }
+/* The counter sits bottom-right, like every other field's (v9.53). */
+.egs-about-field > .dp-counter-row { justify-content: flex-end; margin-top: -2px; }
 .egs-about-label { font-size: 12px; color: var(--text-dim); }
 .egs-about-body { resize: vertical; min-height: 120px; line-height: 1.5; }
 .egs-about-thumb {

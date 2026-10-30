@@ -20621,19 +20621,15 @@ function buildEgsAboutSection() {
        counts down like the headline does; the link does not count, but the
        portal will not save one that is not a URL, so it says so here. */
     const extras = `
-      <div class="egs-about-field">
+      <div class="egs-about-field dp-counted${capLeft < 0 ? ' is-over' : ''}">
         <label class="egs-about-label" for="egs-about-cap-${b.id}">Caption
           <span class="form-hint-inline">(optional)</span></label>
         <input class="form-input${capLeft < 0 ? ' is-over-limit' : ''}" type="text"
                id="egs-about-cap-${b.id}" value="${escHtml(cap)}"
                placeholder="A line shown with the image"${ro}
-               oninput="setEgsAboutField('${b.id}','caption', this.value); updateIapCharCounter(this, ${EGS_ABOUT_CAPTION_MAX})"
+               oninput="setEgsAboutField('${b.id}','caption', this.value); _dpCount(this, ${EGS_ABOUT_CAPTION_MAX})"
                onchange="commitEgsAboutField('${b.id}','caption', this.value)">
-        <div class="ias-char-counter-row">
-          <span class="ias-char-error">${capLeft < 0
-            ? `Must be less than ${EGS_ABOUT_CAPTION_MAX} characters.` : ''}</span>
-          <span class="ias-char-count${capLeft < 0 ? ' is-over' : ''}">${capLeft}</span>
-        </div>
+        ${_dpCounterRow(cap, EGS_ABOUT_CAPTION_MAX)}
       </div>
       <div class="egs-about-field">
         <label class="egs-about-label" for="egs-about-link-${b.id}">Link to
@@ -20673,27 +20669,32 @@ function buildEgsAboutSection() {
     const v = egsAboutFieldValue(b, lang);
     const headLeft = EGS_ABOUT_HEADLINE_MAX - v.headline.length;
     return `
-      <div class="egs-about-field">
+      <div class="egs-about-field dp-counted${headLeft < 0 ? ' is-over' : ''}">
         <label class="egs-about-label" for="egs-about-head-${b.id}">Headline
           <span class="form-hint-inline">(optional)</span></label>
         <input class="form-input${headLeft < 0 ? ' is-over-limit' : ''}" type="text"
                id="egs-about-head-${b.id}" value="${escHtml(v.headline)}"
                placeholder="A heading for the text below it"${ro}
-               oninput="setEgsAboutField('${b.id}','headline', this.value); updateIapCharCounter(this, ${EGS_ABOUT_HEADLINE_MAX})"
+               oninput="setEgsAboutField('${b.id}','headline', this.value); _dpCount(this, ${EGS_ABOUT_HEADLINE_MAX})"
                onchange="commitEgsAboutField('${b.id}','headline', this.value)">
-        <div class="ias-char-counter-row">
-          <span class="ias-char-error">${headLeft < 0
-            ? `Must be less than ${EGS_ABOUT_HEADLINE_MAX} characters.` : ''}</span>
-          <span class="ias-char-count${headLeft < 0 ? ' is-over' : ''}">${headLeft}</span>
-        </div>
+        ${_dpCounterRow(v.headline, EGS_ABOUT_HEADLINE_MAX)}
       </div>
-      <div class="egs-about-field">
+      ${(() => {
+        /* The body has no limit of its own (v9.53): what it spends is the
+           page's 10,000, so that is what its counter reads — the same
+           number as the budget at the top, kept live by _egsAboutPaintBudget. */
+        const used = egsAboutUsed(lang), over = used > EGS_ABOUT_TOTAL_CHARS;
+        return `
+      <div class="egs-about-field dp-counted egs-about-bodycount${over ? ' is-over' : ''}">
         <label class="egs-about-label" for="egs-about-body-${b.id}">Body${EGS_REQ_STAR}</label>
-        <textarea class="form-input egs-about-body" id="egs-about-body-${b.id}" rows="6"
+        <textarea class="form-input egs-about-body${over ? ' is-over-limit' : ''}" id="egs-about-body-${b.id}" rows="6"
                   placeholder="What this part of the page says"${ro}
                   oninput="setEgsAboutField('${b.id}','body', this.value)"
                   onchange="commitEgsAboutField('${b.id}','body', this.value)">${escHtml(v.body)}</textarea>
+        <div class="ias-char-counter-row dp-counter-row"><span class="ias-char-count${over ? ' is-over' : ''}">${
+          used.toLocaleString()}/${EGS_ABOUT_TOTAL_CHARS.toLocaleString()}</span></div>
       </div>`;
+      })()}`;
   };
 
   /* The collapsed row says the three things you need to pick a block out of

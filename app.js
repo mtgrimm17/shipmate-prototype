@@ -26435,6 +26435,15 @@ function _egsAboutPaintBudget() {
   el.classList.toggle('is-over', used > EGS_ABOUT_TOTAL_CHARS);
   const wrap = el.closest('.egs-about-budget');
   if (wrap) wrap.classList.toggle('is-over', used > EGS_ABOUT_TOTAL_CHARS);
+  /* And the open body's own counter, which reads the same page total (v9.53). */
+  const over = used > EGS_ABOUT_TOTAL_CHARS;
+  document.querySelectorAll('.egs-about-bodycount').forEach(f => {
+    f.classList.toggle('is-over', over);
+    const ta = f.querySelector('textarea');
+    if (ta) ta.classList.toggle('is-over-limit', over);
+    const c = f.querySelector('.dp-counter-row .ias-char-count');
+    if (c) { c.textContent = `${used.toLocaleString()}/${EGS_ABOUT_TOTAL_CHARS.toLocaleString()}`; c.classList.toggle('is-over', over); }
+  });
 }
 
 function addEgsAchievement() {
