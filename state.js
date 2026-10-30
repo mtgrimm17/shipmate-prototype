@@ -4193,6 +4193,14 @@ function isEgsSectionComplete(sectionId) {
            one". A developer with a support site and no support inbox is
            finished, and asking for both would be inventing a requirement. */
         && !!a.sellerName.trim()
+        /* EARLY ACCESS JOINED THE OTHER TWO AT v9.48, by request: Epic marks
+           all three switches required and the form now says so with an
+           asterisk apiece. It had been the one of the three nothing waited
+           for, which made this section claim to be finished with a required
+           question unanswered — and would have made its new asterisk a mark
+           that meant nothing. 'no' is an answer here, as it is for the other
+           two: Epic requires a choice, not a yes. */
+        && a.earlyAccess !== null
         && a.nftBlockchain !== null
         && a.promotionalContent !== null;
   }

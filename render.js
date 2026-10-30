@@ -20238,10 +20238,15 @@ function egsJsStr(v) {
    here would have been a div nobody could see. `maxlength` makes over-limit
    impossible rather than merely flagged, and the limit is stated beside the
    label so it is knowable before you hit it. */
+/* The red star Epic's own form puts beside a required field. One constant
+   because three yes/no rows carry it too (v9.48) and a second spelling of
+   the same markup is a second thing to keep in step. */
+const EGS_REQ_STAR = ' <span style="color:#e0555a;">*</span>';
+
 function egsPortalField(o) {
   const val   = o.value || '';
   const id    = 'egs-pc-' + o.id;
-  const req   = o.required ? ' <span style="color:#e0555a;">*</span>' : '';
+  const req   = o.required ? EGS_REQ_STAR : '';
   /* `quietLimit` suppresses the note on a run of boxes that all share one
      limit — the fourteen Specifications boxes are all 140, and saying so
      fourteen times is noise the section description can carry once. */
@@ -20755,17 +20760,30 @@ function buildEgsProductDetailsSection() {
         onChange: `setEgsProductText('supportEmail', this.value)` })}
 
     <div class="ios-q-divider"></div>
-    ${ynRow('Early access product',
+    ${/* ── ALL THREE CARRY EPIC'S ASTERISK (v9.48, by request) ─────────
+         Epic marks these required and Shipmate was not saying so. The mark
+         is egsPortalField's own — the same red star Seller name wears — and
+         like that one it STAYS once answered: it says Epic requires an
+         answer here, which is still true after you have given one. (The
+         User support heading's asterisk disappears instead, because it is
+         doing a different job: "provide at least one of these two", a
+         condition that really is satisfied.)
+
+         ANSWERING THEM IS NOW PART OF BEING DONE. Two of the three already
+         were (isEgsSectionComplete, state.js); Early access was not, and an
+         asterisk on a question nothing waits for is a mark that means
+         nothing. It joined the predicate in the same change. */''}
+    ${ynRow('Early access product' + EGS_REQ_STAR,
         a.earlyAccess,
         `answerEgsProductField('earlyAccess','yes')`,
         `answerEgsProductField('earlyAccess','no')`,
         'Epic requires an FAQ page for an early access product, and says so on the switch itself.')}
-    ${ynRow('Contains NFT or blockchain content',
+    ${ynRow('Contains NFT or blockchain content' + EGS_REQ_STAR,
         a.nftBlockchain,
         `answerEgsProductField('nftBlockchain','yes')`,
         `answerEgsProductField('nftBlockchain','no')`,
         'Yes obliges an FAQ page and the Epic Games Blockchain agreement. Epic requires a choice either way, which is why No is an answer here rather than a default.')}
-    ${ynRow('Contains promotional content',
+    ${ynRow('Contains promotional content' + EGS_REQ_STAR,
         a.promotionalContent,
         `answerEgsProductField('promotionalContent','yes')`,
         `answerEgsProductField('promotionalContent','no')`,
