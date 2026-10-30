@@ -3502,18 +3502,31 @@ function egsShortDesc() {
    per-field limit. A developer who had spent 9,000 characters could not see
    that their next block had 1,000 left, because there was no next block.
 
-   TWO NUMBERS EPIC'S OWN DOCS DISAGREE ABOUT. "Up to 12 blocks" and "10,000
-   characters or 30 images" cannot both be true of images: thirty image
-   blocks do not fit in twelve. The block cap is what the portal's editor
-   enforces, so it is the cap here, and thirty images is unreachable by
-   construction rather than by a second rule. The per-image cost is the one
-   number neither page states outright — it is DERIVED from Epic's own
-   sentence, 10,000 over 30, and it is the value to re-check against the
-   portal before trusting the meter to the character. */
-const EGS_ABOUT_MAX_BLOCKS   = 12;
+   THE PORTAL, NOT THE DOCS (v9.49). The two pages above disagree — "up to
+   12 blocks" against "30 images" — and v9.45 took the 12 and DERIVED a
+   per-image cost of 333 from "10,000 characters or 30 images". Both were
+   wrong. Read off the portal's own About editor and the validation it
+   ships (Pages > Product home > About):
+
+     · there is NO block cap. "Add text" is disabled only when the page is
+       out of characters, "Add image" only at 30 images. The Product Home
+       Page Guide says the same: "Add as many further text and images as
+       you want."
+     · the counter is every headline, every body and every image caption,
+       PLUS ONE PER IMAGE. "Content limit 2168 / 10000" on a page with a
+       28-character headline and a 2,140-character body. An image is one
+       character, not 333.
+     · every image may carry a caption (Epic's field is `alt`, opened by
+       "Show info", at most 260 characters, counted in the 10,000) and a
+       "Link to" URL (validated as a URL, not counted).
+     · every TEXT block needs a body — `description` is required per block,
+       not once per page. The headline stays optional, 140 at most.
+     · at least one text block, and the last one cannot be deleted. */
 const EGS_ABOUT_TOTAL_CHARS  = 10000;
-const EGS_ABOUT_IMAGE_COST   = Math.floor(EGS_ABOUT_TOTAL_CHARS / 30);   // 333
+const EGS_ABOUT_MAX_IMAGES   = 30;
+const EGS_ABOUT_IMAGE_COST   = 1;
 const EGS_ABOUT_HEADLINE_MAX = 140;
+const EGS_ABOUT_CAPTION_MAX  = 260;
 const EGS_ABOUT_IMAGE = {
   minWidth: 700,
   bytes:    4 * 1024 * 1024,
@@ -3526,7 +3539,7 @@ function makeBlankEgsAboutTextBlock() {
   return { id: generateId('abt'), kind: 'text', headline: '', body: '', locs: {} };
 }
 function makeBlankEgsAboutImageBlock() {
-  return { id: generateId('abi'), kind: 'image', image: null, locs: {} };
+  return { id: generateId('abi'), kind: 'image', image: null, caption: '', link: '', locs: {} };
 }
 
 /* THE IMPLICIT FIRST BLOCK. Epic requires one text block and Shipmate has
@@ -3614,14 +3627,15 @@ function egsAboutTextBlocks() {
 }
 
 /* WHAT ONE BLOCK SPENDS, in the language being counted. A text block spends
-   its headline and its body — they shared the 10,000 when they were the only
-   two fields and they still do. An image spends EGS_ABOUT_IMAGE_COST whether
-   or not a file has been chosen yet: the block is the commitment, and a
-   meter that only charged for uploaded files would let a developer lay out
-   twelve image blocks and then discover the budget as they filled them. */
+   its headline and its body. An image spends one character plus its caption,
+   which is the portal's own arithmetic (see the notes above
+   EGS_ABOUT_TOTAL_CHARS); the link is not counted. The one is charged
+   whether or not a file has been chosen yet — the block is the commitment.
+   Captions are not localized here yet, so every language counts the
+   primary's. */
 function egsAboutBlockCost(b, lang) {
   if (!b) return 0;
-  if (b.kind === 'image') return EGS_ABOUT_IMAGE_COST;
+  if (b.kind === 'image') return EGS_ABOUT_IMAGE_COST + (b.caption || '').length;
   const v = egsAboutFieldValue(b, lang);
   return (v.headline || '').length + (v.body || '').length;
 }
@@ -3647,17 +3661,39 @@ function egsAboutOverBudget(lang) {
   return egsAboutUsed(lang) > EGS_ABOUT_TOTAL_CHARS;
 }
 
-/* EPIC'S OWN REQUIREMENT, AND NOTHING MORE: at least one text block with
-   words in it, every image block carrying a file, and the page inside its
-   budget. The headline is optional on every block — it is a heading for the
-   prose under it, and prose with no heading is still prose. */
+function egsAboutImageCount() {
+  return egsAboutBlocks().filter(b => b.kind === 'image').length;
+}
+
+/* A LINK IS OPTIONAL, BUT ONE THAT IS THERE MUST BE A URL — the portal
+   validates "Link to" as a URL and will not save the section otherwise.
+   http and https only, with a dotted host: what a store page can link to. */
+function egsAboutLinkValid(link) {
+  const v = (link || '').trim();
+  if (!v) return true;
+  try {
+    const u = new URL(v);
+    return (u.protocol === 'https:' || u.protocol === 'http:') && /\./.test(u.hostname);
+  } catch (e) { return false; }
+}
+
+/* EPIC'S OWN REQUIREMENT, AND NOTHING MORE (re-read off the portal, v9.49):
+   at least one text block, and EVERY text block with a body; every image
+   block carrying a file, a caption inside 260 and a link that is a URL if
+   it has one; no more than thirty images; the page inside its budget. The
+   headline is optional on every block. */
 function egsAboutComplete() {
   const blocks = egsAboutBlocks();
-  if (!blocks.length) return false;
-  if (blocks.length > EGS_ABOUT_MAX_BLOCKS) return false;
-  if (egsAboutOverBudget()) return false;
-  if (blocks.some(b => b.kind === 'image' && !((b.image || {}).dataUrl))) return false;
-  return blocks.some(b => b.kind === 'text' && (b.body || '').trim());
+  const texts = blocks.filter(b => b.kind === 'text');
+  if (!texts.length) return false;
+  if (texts.some(b => !(b.body || '').trim())) return false;
+  if (texts.some(b => (b.headline || '').length > EGS_ABOUT_HEADLINE_MAX)) return false;
+  const images = blocks.filter(b => b.kind === 'image');
+  if (images.length > EGS_ABOUT_MAX_IMAGES) return false;
+  if (images.some(b => !((b.image || {}).dataUrl))) return false;
+  if (images.some(b => (b.caption || '').length > EGS_ABOUT_CAPTION_MAX)) return false;
+  if (images.some(b => !egsAboutLinkValid(b.link))) return false;
+  return !egsAboutOverBudget();
 }
 
 /* THE SECTION AS ONE RUN OF TEXT, for everything that wants prose rather

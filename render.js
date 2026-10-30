@@ -13646,7 +13646,7 @@ const STEAM_LOC_REVIEW_FIELDS = [
 /* ── TWO FIELDS, NOT FOUR (v9.45) ────────────────────────────────────────
    Headline and Description left this list when the About section stopped
    being one headline and one body. They were not deleted: they became the
-   About tab, where each of Epic's twelve blocks carries its own pair
+   About tab, where each of Epic's text blocks carries its own pair
    (EGS_ABOUT_LOC_FIELDS, state.js). A single "Headline" row here would now
    mean the first block's, which is a question nobody asked. */
 const EGS_LOC_REVIEW_FIELDS = [
@@ -18127,7 +18127,7 @@ const LOC_VIEW_OPTIONS = [
   { value: 'storePage',    label: 'Store Page' },
   { value: 'iaps',         label: 'IAPs' },
   /* ABOUT JOINED IN v9.45, and it is an ITEM VIEW like Achievements rather
-     than a field of the Store Page: Epic's About section is up to twelve
+     than a field of the Store Page: Epic's About section is any number of
      blocks, each with its own headline and text, so "which block" is a
      question this page has to ask before "which field". */
   { value: 'about',        label: 'About' },
@@ -20504,7 +20504,11 @@ function egsTagBox(o) {
    "which block is eating it" is answerable without opening them.
 
    IMAGES COST THE SAME WHETHER OR NOT ONE IS CHOSEN. See egsAboutBlockCost:
-   the block is the commitment. */
+   the block is the commitment.
+
+   NO BLOCK COUNT (v9.49). The header used to read "N of 12 blocks", a cap
+   Epic's portal does not have. What the portal does cap is images — thirty
+   — so that is the count the header keeps. */
 function buildEgsAboutSection() {
   const blocks  = egsAboutBlocks();
   const lang    = (typeof _egsEffectivePreviewLang === 'function')
@@ -20514,8 +20518,13 @@ function buildEgsAboutSection() {
   const ro      = isPrimary ? '' : ' readonly';
   const used    = egsAboutUsed(lang);
   const over    = used > EGS_ABOUT_TOTAL_CHARS;
-  const full    = blocks.length >= EGS_ABOUT_MAX_BLOCKS;
   const textCount = blocks.filter(b => b.kind === 'text').length;
+  const imgCount  = blocks.length - textCount;
+  /* The portal's two add buttons, and the two reasons each one closes:
+     text when the page is out of characters, images at thirty (and when an
+     image's one character would not fit either). */
+  const outOfChars = egsAboutUsed() >= EGS_ABOUT_TOTAL_CHARS;   // the primary's, as the handlers count it
+  const imagesFull = imgCount >= EGS_ABOUT_MAX_IMAGES;
 
   const langBar = (typeof _sppLangBarHTML === 'function')
     ? _sppLangBarHTML('egs-about-lang', lang, 'setEgsPreviewLang') : '';
@@ -20530,11 +20539,12 @@ function buildEgsAboutSection() {
         <span class="ias-char-count${over ? ' is-over' : ''}" id="egs-about-budget">${
           used.toLocaleString()} / ${EGS_ABOUT_TOTAL_CHARS.toLocaleString()}</span>
       </div>
-      <div class="egs-about-blockcount">${blocks.length} of ${EGS_ABOUT_MAX_BLOCKS} blocks</div>
+      <div class="egs-about-blockcount">${imgCount} of ${EGS_ABOUT_MAX_IMAGES} images</div>
     </div>
-    <div class="form-hint egs-about-rule">Epic takes up to ${EGS_ABOUT_MAX_BLOCKS} blocks of
-      text and images, sharing ${EGS_ABOUT_TOTAL_CHARS.toLocaleString()} characters between
-      them. At least one block of text is required.</div>
+    <div class="form-hint egs-about-rule">Text and images share
+      ${EGS_ABOUT_TOTAL_CHARS.toLocaleString()} characters. Each image counts as one
+      character plus its caption, up to ${EGS_ABOUT_MAX_IMAGES} images. At least one block
+      of text is required, and every block of text needs a body.</div>
     ${over ? `<div class="egs-about-overnote">That is ${(used - EGS_ABOUT_TOTAL_CHARS).toLocaleString()}
       characters more than Epic takes. Shorten a block or remove one.</div>` : ''}
     ${isPrimary ? '' : (typeof _achLangNoteHTML === 'function' ? _achLangNoteHTML('egs') : '')}`;
@@ -20570,6 +20580,38 @@ function buildEgsAboutSection() {
   const imageWell = (b) => {
     const img = b.image || null;
     const id  = `egs-about-img-${b.id}`;
+    const cap = b.caption || '';
+    const capLeft = EGS_ABOUT_CAPTION_MAX - cap.length;
+    const link = b.link || '';
+    const linkBad = !egsAboutLinkValid(link);
+    /* CAPTION AND LINK, the two optional fields Epic's image block carries
+       (v9.49). The caption counts toward the section's characters, so it
+       counts down like the headline does; the link does not count, but the
+       portal will not save one that is not a URL, so it says so here. */
+    const extras = `
+      <div class="egs-about-field">
+        <label class="egs-about-label" for="egs-about-cap-${b.id}">Caption
+          <span class="form-hint-inline">(optional)</span></label>
+        <input class="form-input${capLeft < 0 ? ' is-over-limit' : ''}" type="text"
+               id="egs-about-cap-${b.id}" value="${escHtml(cap)}"
+               placeholder="A line shown with the image"${ro}
+               oninput="setEgsAboutField('${b.id}','caption', this.value); updateIapCharCounter(this, ${EGS_ABOUT_CAPTION_MAX})">
+        <div class="ias-char-counter-row">
+          <span class="ias-char-error">${capLeft < 0
+            ? `Must be less than ${EGS_ABOUT_CAPTION_MAX} characters.` : ''}</span>
+          <span class="ias-char-count${capLeft < 0 ? ' is-over' : ''}">${capLeft}</span>
+        </div>
+      </div>
+      <div class="egs-about-field">
+        <label class="egs-about-label" for="egs-about-link-${b.id}">Link to
+          <span class="form-hint-inline">(optional)</span></label>
+        <input class="form-input${linkBad ? ' is-over-limit' : ''}" type="url"
+               id="egs-about-link-${b.id}" value="${escHtml(link)}"
+               placeholder="https://"${ro}
+               oninput="setEgsAboutField('${b.id}','link', this.value)">
+        <div class="egs-about-linkerr" id="egs-about-linkerr-${b.id}">${linkBad
+          ? 'Enter a full web address, starting with https://' : ''}</div>
+      </div>`;
     return `
       <div class="egs-about-field">
         <label class="egs-about-label" for="${id}">Image</label>
@@ -20591,7 +20633,7 @@ function buildEgsAboutSection() {
                  accept="${escHtml(EGS_ABOUT_IMAGE.accept)}"
                  onchange="handleEgsAboutImage(event, '${b.id}')">
         </label>
-      </div>`;
+      </div>${extras}`;
   };
 
   const textEditor = (b) => {
@@ -20612,7 +20654,7 @@ function buildEgsAboutSection() {
         </div>
       </div>
       <div class="egs-about-field">
-        <label class="egs-about-label" for="egs-about-body-${b.id}">Body</label>
+        <label class="egs-about-label" for="egs-about-body-${b.id}">Body${EGS_REQ_STAR}</label>
         <textarea class="form-input egs-about-body" id="egs-about-body-${b.id}" rows="6"
                   placeholder="What this part of the page says"${ro}
                   oninput="setEgsAboutField('${b.id}','body', this.value)">${escHtml(v.body)}</textarea>
@@ -20620,13 +20662,14 @@ function buildEgsAboutSection() {
   };
 
   /* The collapsed row says the three things you need to pick a block out of
-     twelve: what kind it is, what it starts with, and what it is spending. */
+     many: what kind it is, what it starts with, and what it is spending. */
   const summary = (b) => {
     if (b.kind === 'image') {
       const img = b.image || {};
-      return img.dataUrl
-        ? escHtml(img.name || 'Image')
-        : '<span class="egs-about-placeholder">No image chosen</span>';
+      const cap = (b.caption || '').trim();
+      if (!img.dataUrl) return '<span class="egs-about-placeholder">No image chosen</span>';
+      const line = cap || img.name || 'Image';
+      return escHtml(line.length > 72 ? line.slice(0, 72) + '…' : line);
     }
     const v = egsAboutFieldValue(b, lang);
     const line = (v.headline || v.body || '').trim().replace(/\s+/g, ' ');
@@ -20653,11 +20696,12 @@ function buildEgsAboutSection() {
 
   const add = `
     <div class="egs-about-add">
-      <button type="button" class="btn btn-ghost btn-sm" ${full ? 'disabled' : ''}
-              title="${full ? `Epic takes ${EGS_ABOUT_MAX_BLOCKS} blocks at most` : ''}"
+      <button type="button" class="btn btn-ghost btn-sm" ${outOfChars ? 'disabled' : ''}
+              title="${outOfChars ? 'Out of characters. Shorten a block to add another.' : ''}"
               onclick="addEgsAboutBlock('text')">+ Add text block</button>
-      <button type="button" class="btn btn-ghost btn-sm" ${full ? 'disabled' : ''}
-              title="${full ? `Epic takes ${EGS_ABOUT_MAX_BLOCKS} blocks at most` : ''}"
+      <button type="button" class="btn btn-ghost btn-sm" ${imagesFull || outOfChars ? 'disabled' : ''}
+              title="${imagesFull ? `Epic takes ${EGS_ABOUT_MAX_IMAGES} images at most`
+                     : outOfChars ? 'Out of characters. Shorten a block to add another.' : ''}"
               onclick="addEgsAboutBlock('image')">+ Add image block</button>
     </div>`;
 
@@ -21111,7 +21155,7 @@ function buildEgsLocalizationsSection() {
       isSaved: egsAboutLocIsSaved,
       /* A block has no name of its own, so the picker names it by where it
          is and what it starts with — "1 · Welcome to the Underworld" — which
-         is how a developer picks one out of twelve. */
+         is how a developer picks one out of many. */
       itemLabel: b => {
         const list = (state.egsAboutBlocks || []).filter(egsAboutLocIsSaved);
         const n = list.indexOf(b) + 1;
@@ -22061,13 +22105,13 @@ function buildEgsStorePreviewSection() {
      chrome and must not buy a 48px gap with it. */
   /* ── THE ABOUT SECTION IS A DOOR NOW (v9.45) ──────────────────────────
      It used to be two boxes typed straight onto the page — a headline and a
-     body — which was one of Epic's twelve blocks wearing the whole section's
+     body — which was one of Epic's blocks wearing the whole section's
      name. The section has its own step (Epic Games Store - About); this
      draws what that step holds, the way Epic draws it, and opens it when
      pressed.
 
      WHY NOT KEEP INLINE EDITING FOR THE TEXT. Because there is no longer a
-     "the" text: with twelve blocks the page would need add, remove and
+     "the" text: with any number of blocks the page would need add, remove and
      reorder controls drawn among the prose it is previewing, and a budget
      meter with nowhere to sit. Every other block on this page that holds
      more than it can show already works this way — the rating card, the
@@ -22083,9 +22127,14 @@ function buildEgsStorePreviewSection() {
   const aboutBody = aboutBlocks.map(b => {
     if (b.kind === 'image') {
       const img = b.image || {};
-      return img.dataUrl
-        ? `<img class="egs-sp-about-img" src="${escHtml(img.dataUrl)}" alt="">`
-        : `<div class="egs-sp-about-imgempty">Image block</div>`;
+      const cap = (b.caption || '').trim();
+      /* The caption sits under its image, as the store sets it (v9.49). The
+         link is not followed here: this whole section is a door to the
+         About step, and a second click target inside it would fight it. */
+      return `<figure class="egs-sp-about-fig">${img.dataUrl
+        ? `<img class="egs-sp-about-img" src="${escHtml(img.dataUrl)}" alt="${escHtml(cap)}">`
+        : `<div class="egs-sp-about-imgempty">Image block</div>`}${
+        cap ? `<figcaption class="egs-sp-about-cap">${escHtml(cap)}</figcaption>` : ''}</figure>`;
     }
     const v = (typeof egsAboutFieldValue === 'function')
       ? egsAboutFieldValue(b, previewLang) : { headline: b.headline || '', body: b.body || '' };

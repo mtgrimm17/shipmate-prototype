@@ -25361,7 +25361,7 @@ function _egsEnsureAchievements() {
 }
 
 /* ══ EPIC'S ABOUT SECTION — THE HANDLERS (v9.45) ═════════════════════════
-   The model is in state.js, above egsBodyText; these are the twelve-block
+   The model is in state.js, above egsBodyText; these are the block
    editor's own verbs. Every one of them seeds first, because until somebody
    edits, egsAboutBlocks() has been showing a block that is not in state yet
    (see _egsAboutSeedBlock) and an edit with nowhere to land would vanish on
@@ -25384,7 +25384,7 @@ function _egsAboutBlock(id) {
 
    WHENEVER NOTHING IS OPEN, not only on the first visit. A block the
    developer left open is left open — that is the remembered choice worth
-   keeping — but a step showing twelve collapsed rows asks you to press
+   keeping — but a step showing a dozen collapsed rows asks you to press
    something before you can write, and writing is what the step is for. */
 function _egsEnsureAboutBlock() {
   if (typeof seedEgsAboutBlocks !== 'function') return;
@@ -25395,11 +25395,14 @@ function _egsEnsureAboutBlock() {
   if (first) state.egsAboutOpenId = first.id;
 }
 
-/* ADD IS REFUSED AT TWELVE rather than silently capped, because the button
-   is disabled at twelve and a direct call should do what the button does. */
+/* ADD IS REFUSED WHERE THE PORTAL REFUSES IT (v9.49), and a direct call does
+   what the disabled button does: no new block of either kind once the page
+   is out of characters, and no thirty-first image. There is no block cap —
+   v9.45's twelve came from a docs page the portal does not follow. */
 function addEgsAboutBlock(kind) {
   seedEgsAboutBlocks();
-  if (state.egsAboutBlocks.length >= EGS_ABOUT_MAX_BLOCKS) return;
+  if (egsAboutUsed() >= EGS_ABOUT_TOTAL_CHARS) return;
+  if (kind === 'image' && egsAboutImageCount() >= EGS_ABOUT_MAX_IMAGES) return;
   const b = (kind === 'image') ? makeBlankEgsAboutImageBlock() : makeBlankEgsAboutTextBlock();
   state.egsAboutBlocks.push(b);
   state.egsAboutOpenId = b.id;
@@ -25408,6 +25411,7 @@ function addEgsAboutBlock(kind) {
     const el = document.getElementById('egs-about-body-' + b.id);
     if (el) { try { el.focus(); } catch (e) {} }
   }, 0);
+  _egsAboutPaintAdds();
 }
 
 /* THE LAST TEXT BLOCK CANNOT GO. Epic's own rule — "You must include at
@@ -25454,8 +25458,11 @@ function toggleEgsAboutBlock(id) {
 function setEgsAboutField(id, field, value) {
   seedEgsAboutBlocks();
   const b = _egsAboutBlock(id);
-  if (!b || b.kind !== 'text') return;
-  if (field !== 'headline' && field !== 'body') return;
+  if (!b) return;
+  /* An image block's two optional fields since v9.49: the caption, counted
+     in the budget, and the link, which is not. */
+  const allowed = b.kind === 'image' ? ['caption', 'link'] : ['headline', 'body'];
+  if (allowed.indexOf(field) < 0) return;
   b[field] = value;
   /* ── NO RE-RENDER FROM HERE (fixed v9.46) ──────────────────────────────
      This is an oninput on a live field, and repainting under the caret is
@@ -25485,6 +25492,23 @@ function _egsAboutPaintLive(b, field) {
     ? _egsEffectivePreviewLang() : ((state.formData || {}).primaryLanguage || 'en');
   const cost = row.querySelector('.egs-about-cost');
   if (cost) cost.textContent = egsAboutBlockCost(b, lang).toLocaleString();
+  _egsAboutPaintAdds();
+  if (b.kind === 'image') {
+    if (field === 'link') {
+      const bad = !egsAboutLinkValid(b.link);
+      const err = document.getElementById('egs-about-linkerr-' + b.id);
+      if (err) err.textContent = bad ? 'Enter a full web address, starting with https://' : '';
+      const inp = document.getElementById('egs-about-link-' + b.id);
+      if (inp) inp.classList.toggle('is-over-limit', bad);
+    }
+    const text = row.querySelector('.egs-about-rowtext');
+    const img = b.image || {};
+    if (text && img.dataUrl) {
+      const line = ((b.caption || '').trim() || img.name || 'Image');
+      text.textContent = line.length > 72 ? line.slice(0, 72) + '\u2026' : line;
+    }
+    return;
+  }
   const text = row.querySelector('.egs-about-rowtext');
   if (text) {
     const line = ((b.headline || '') || (b.body || '')).trim().replace(/\s+/g, ' ');
@@ -25544,6 +25568,20 @@ function removeEgsAboutImage(id) {
 /* The budget meter, patched rather than re-rendered — see setEgsAboutField.
    Reads the same functions the full render reads, so the live number and the
    painted one cannot drift. */
+/* The two add buttons close as the budget fills and open as it empties,
+   patched in place for the same reason the budget is: typing must not
+   re-render the step under the caret. */
+function _egsAboutPaintAdds() {
+  const btns = document.querySelectorAll('.egs-about-add button');
+  if (btns.length < 2) return;
+  const out  = egsAboutUsed() >= EGS_ABOUT_TOTAL_CHARS;
+  const full = egsAboutImageCount() >= EGS_ABOUT_MAX_IMAGES;
+  const msg  = 'Out of characters. Shorten a block to add another.';
+  btns[0].disabled = out;  btns[0].title = out ? msg : '';
+  btns[1].disabled = out || full;
+  btns[1].title = full ? `Epic takes ${EGS_ABOUT_MAX_IMAGES} images at most` : (out ? msg : '');
+}
+
 function _egsAboutPaintBudget() {
   const el = document.getElementById('egs-about-budget');
   if (!el) return;

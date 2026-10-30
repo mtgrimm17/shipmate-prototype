@@ -32838,6 +32838,10 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 }
 .egs-about-budget .ias-char-count { font-size: 15px; font-weight: 600; }
 .egs-about-blockcount { font-size: 12px; color: var(--text-dim); }
+/* The link's one complaint, in the same colour and size the counters use for
+   theirs (.ias-char-error), and the same 4px under its field. */
+.egs-about-linkerr { margin-top: 4px; font-size: 11px; color: var(--magenta); min-height: 0; }
+.egs-about-linkerr:empty { display: none; }
 .egs-about-rule { margin: 0 0 14px; }
 /* Over budget is a sentence, not just a red number: the number says how far,
    the sentence says what to do about it. */
@@ -32948,6 +32952,13 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .egs-sp-about-block { display: flex; flex-direction: column; }
 .egs-sp-about-img {
   width: 100%; height: auto; display: block; border-radius: 8px;
+}
+/* An image block is a figure since v9.49: the image, then its caption under
+   it in Epic's secondary copy (--epic-fg-2, the page's own 65% white). No
+   margin of its own — the block gap is the section's. */
+.egs-sp-about-fig { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.egs-sp .egs-sp-about-cap {
+  font-size: 14px; line-height: 20px; color: var(--epic-fg-2);
 }
 /* An image block with no file still shows its place in the layout — the
    page the developer is building, not the page they have finished. */
