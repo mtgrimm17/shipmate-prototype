@@ -4643,6 +4643,166 @@ function _enqueueTranslateTask(taskFn) {
   });
 }
 
+/* ══ A TRANSLATION REQUEST THAT ALWAYS ENDS, AND RARELY FAILS (v9.53) ═══
+   Measured against a stand-in for the API that behaves as the real one
+   does, three ways a Localizations card went wrong — reported as "sometimes
+   translations do not occur" and "sometimes they get stuck on loading":
+
+   1. NO DEADLINE. A request that never answered held its queue slot for
+      good. Four of them and the queue stopped: every card behind them sat on
+      its spinner with nothing in flight. The queue is shared by every
+      platform, so a hung Mac App Store request stalled Epic and Steam too.
+   2. NO SECOND TRY. One 429 (rate limit) or 529 (overloaded) — routine when
+      adding a language fans out into hundreds of requests — failed the
+      field for good: status 'error', a blank card, and nothing ever asked
+      again until its text or the languages changed.
+   3. A REPLY SIZED BY FIELD NAME, NOT BY TEXT. See _claudeTranslateLangs.
+
+   _claudeFetchRetry answers the first two for every translation call. It
+   is fetch's own signature, so a call site changes one word. The deadline
+   scales with the reply asked for — a long reply takes longer to write —
+   and a request that misses it is aborted and retried like any other
+   transient failure. Retried: 408, 409, 429, 5xx, 529, a network error, a
+   timeout. Not retried: anything that will fail the same way again (a bad
+   key, a bad request). Backoff honours retry-after, else 1s, 2s, 4s… with
+   jitter so a fan-out does not come back in lockstep. */
+const CLAUDE_RETRY_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
+const CLAUDE_RETRY_ATTEMPTS = 4;
+
+function _claudeTimeoutFor(init) {
+  /* A test can shorten the deadline to see a hung request end without
+     waiting a minute for it; nothing in the app sets this. */
+  if (typeof window !== 'undefined' && window.__claudeTimeoutMs > 0) return window.__claudeTimeoutMs;
+  let maxTokens = 1024;
+  try { maxTokens = JSON.parse(init.body).max_tokens || maxTokens; } catch (e) {}
+  return 30000 + maxTokens * 12;            // 8,192 tokens ≈ 128s
+}
+
+async function _claudeFetchRetry(url, init, attempts = CLAUDE_RETRY_ATTEMPTS) {
+  const timeoutMs = _claudeTimeoutFor(init || {});
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
+    let retryAfterMs = null;
+    try {
+      const res = await fetch(url, { ...init, signal: ctl.signal });
+      clearTimeout(timer);
+      if (res.ok || !CLAUDE_RETRY_STATUSES.has(res.status) || i === attempts - 1) return res;
+      const ra = parseFloat(res.headers.get('retry-after'));
+      if (isFinite(ra) && ra >= 0) retryAfterMs = Math.min(ra * 1000, 30000);
+      lastErr = new Error('Claude API ' + res.status);
+    } catch (e) {
+      clearTimeout(timer);
+      lastErr = (e && e.name === 'AbortError')
+        ? new Error('Translation request timed out after ' + Math.round(timeoutMs / 1000) + 's')
+        : e;
+      if (i === attempts - 1) throw lastErr;
+    }
+    const backoff = retryAfterMs != null ? retryAfterMs : Math.min(1000 * 2 ** i, 16000);
+    await new Promise(r => setTimeout(r, backoff + Math.random() * 400));
+  }
+  throw lastErr || new Error('Translation request failed');
+}
+
+/* 3. THE REPLY IS SIZED BY THE TEXT. Each translator asked for a fixed
+   allowance per language by FIELD NAME — 200 tokens for any About block or
+   achievement text, 1,200 for About This Game — with 8,192 as a hard cap
+   on the whole reply. A 2,000-character About body into three languages
+   needs about 2,000 tokens; it was given 900. The JSON came back cut off,
+   did not parse, and every language in the request failed together. More
+   languages or a longer description did the same to Steam's About This
+   Game once the cap was reached.
+
+   Now the allowance per language is the larger of the old one and an
+   estimate from the text (half a token per character, generous because
+   CJK, Cyrillic and Greek cost more per character than English, plus room
+   for the JSON), and the languages are SPLIT into as many requests as it
+   takes for each to fit. A reply that still comes back cut off
+   (stop_reason "max_tokens") or unparseable is split in half and asked
+   again, down to one language a request, and a single language that is
+   still cut off is asked again with twice the room. Each piece takes its own queue
+   slot, so a long text into many languages also runs several at once
+   rather than one long request.
+
+   A caller passes the prompt it already builds and the `langList` it put
+   in it; each piece gets the same prompt with its own languages in that
+   place. Returns { lang: text } for every language that came back; throws
+   only when none did. */
+const CLAUDE_TRANSLATE_MAX_TOKENS = 8192;
+
+function _claudeTranslateTokensPerLang(text, floor) {
+  return Math.max(floor || 0, Math.ceil((text || '').length / 2) + 60);
+}
+
+async function _claudeTranslateCall(prompt, maxTokens) {
+  const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'x-api-key':                                 CLAUDE_API_KEY,
+      'anthropic-version':                         '2023-06-01',
+      'content-type':                              'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model:      CLAUDE_MODEL,
+      max_tokens: maxTokens,
+      messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+    }),
+  });
+  if (!res.ok) throw await smClaudeHttpError(res);
+  return res.json();
+}
+
+async function _claudeTranslateLangs({ prompt, langList, langs, text, perLangBudget }) {
+  const per   = _claudeTranslateTokensPerLang(text, perLangBudget);
+  const room  = CLAUDE_TRANSLATE_MAX_TOKENS - 300;
+  const size  = Math.max(1, Math.floor(room / per));
+  const merged = {};
+  let anyOk = false, lastErr = null;
+
+  const runPiece = async (piece, perLang = per) => {
+    const list = piece.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
+    const p = prompt.replace(langList, () => list);
+    const maxTokens = Math.min(CLAUDE_TRANSLATE_MAX_TOKENS, 300 + piece.length * perLang);
+    let data;
+    try {
+      data = await _enqueueTranslateTask(() => _claudeTranslateCall(p, maxTokens));
+    } catch (e) { lastErr = e; return; }
+    const resText = (data.content?.[0]?.text || '').trim();
+    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    let parsed = null;
+    try { parsed = JSON.parse(cleaned); } catch (e) { /* split below */ }
+    const cut = data.stop_reason === 'max_tokens';
+    if ((!parsed || cut) && piece.length > 1) {
+      const mid = Math.ceil(piece.length / 2);
+      await Promise.all([runPiece(piece.slice(0, mid), perLang), runPiece(piece.slice(mid), perLang)]);
+      return;
+    }
+    /* One language that still did not fit: the estimate was low for this
+       language (some cost several tokens a character). Ask again with twice
+       the room, up to the cap. */
+    const roomier = Math.min(CLAUDE_TRANSLATE_MAX_TOKENS - 300, perLang * 2);
+    if (cut && roomier > perLang) {       // strictly more each time, so it ends
+      await runPiece(piece, roomier);
+      return;
+    }
+    if (!parsed) {
+      lastErr = new Error(cut ? 'Translation was cut off at max_tokens' : 'Translation reply was not valid JSON');
+      return;
+    }
+    Object.assign(merged, parsed.translations || {});
+    anyOk = true;
+  };
+
+  const pieces = [];
+  for (let i = 0; i < langs.length; i += size) pieces.push(langs.slice(i, i + size));
+  await Promise.all(pieces.map(piece => runPiece(piece)));
+  if (!anyOk && lastErr) throw lastErr;
+  if (lastErr) console.warn('[Translate] some languages did not come back:', lastErr.message);
+  return merged;
+}
+
 /* ── Global fixed-position tooltip ───────────────────── */
 // Single delegated handler on document — avoids overflow/z-index clipping
 // from scrolling containers. Tooltip text lives in data-tip on the anchor.
@@ -12697,7 +12857,6 @@ async function _iasTriggerAutoTranslate(field, primaryValue) {
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
   const perLangBudget  = (field === 'subtitle' || field === 'title') ? 120 : (field === 'releaseNotes' ? 600 : 1200);
-  const maxTokens      = Math.min(8192, 300 + eligible.length * perLangBudget);
 
   const prompt = `Translate the following app store ${fieldLabel} text for a mobile/video game into each of the listed languages.
 
@@ -12724,28 +12883,9 @@ Rules:
     // (above, this file) for why: this call is one of potentially hundreds
     // fired at once by a single language-add, and only a handful are ever
     // allowed to actually be in flight to Claude at a time.
-    await _enqueueTranslateTask(async () => {
-    const res = await fetch(CLAUDE_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'x-api-key':                                 CLAUDE_API_KEY,
-        'anthropic-version':                         '2023-06-01',
-        'content-type':                              'application/json',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model:      CLAUDE_MODEL,
-        max_tokens: maxTokens,
-        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
-      }),
-    });
-
-    if (!res.ok) throw await smClaudeHttpError(res);
-    const data    = await res.json();
-    const resText = (data.content?.[0]?.text || '').trim();
-    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed  = JSON.parse(cleaned);
-    const results = parsed.translations || {};
+    /* One request per language group, sized by the text, each in its own
+       queue slot, retried and time-limited (v9.53, _claudeTranslateLangs). */
+    const results = await _claudeTranslateLangs({ prompt, langList, langs: eligible, text, perLangBudget });
 
     if (!fd.localizedStoreText) fd.localizedStoreText = {};
     eligible.forEach(lang => {
@@ -12804,7 +12944,6 @@ Rules:
     });
 
     state.iasTranslateStatus[field] = 'complete';
-    });
   } catch (e) {
     console.warn('[Store Preview Translate]', field, e.message);
     state.iasTranslateStatus[field] = 'error';
@@ -13133,7 +13272,7 @@ Rules:
   try {
     // Queued — see _enqueueTranslateTask's own comment (above, this file).
     await _enqueueTranslateTask(async () => {
-    const res = await fetch(CLAUDE_ENDPOINT, {
+    const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
         'x-api-key':                                 CLAUDE_API_KEY,
@@ -14262,7 +14401,6 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = STEAM_FIELD_LABELS[field] || field;
   const perLangBudget = field === 'aboutGame' ? 1200 : (field === 'description' ? 400 : 120);
-  const maxTokens     = Math.min(8192, 300 + eligible.length * perLangBudget);
 
   const prompt = `Translate the following Steam store page ${fieldLabel} text for a video game into each of the listed languages.
 
@@ -14286,28 +14424,9 @@ Rules:
 
   try {
     // Queued — see _enqueueTranslateTask's own comment (above, this file).
-    await _enqueueTranslateTask(async () => {
-    const res = await fetch(CLAUDE_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'x-api-key':                                 CLAUDE_API_KEY,
-        'anthropic-version':                         '2023-06-01',
-        'content-type':                              'application/json',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model:      CLAUDE_MODEL,
-        max_tokens: maxTokens,
-        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
-      }),
-    });
-
-    if (!res.ok) throw await smClaudeHttpError(res);
-    const data    = await res.json();
-    const resText = (data.content?.[0]?.text || '').trim();
-    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed  = JSON.parse(cleaned);
-    const results = parsed.translations || {};
+    /* One request per language group, sized by the text, each in its own
+       queue slot, retried and time-limited (v9.53, _claudeTranslateLangs). */
+    const results = await _claudeTranslateLangs({ prompt, langList, langs: eligible, text, perLangBudget });
 
 
     eligible.forEach(lang => {
@@ -14338,7 +14457,6 @@ Rules:
     });
 
     state.steamTranslateStatus[field] = 'complete';
-    });
   } catch (e) {
     console.warn('[Steam Store Preview Translate]', field, e.message);
     state.steamTranslateStatus[field] = 'error';
@@ -14865,7 +14983,7 @@ Rules:
 - Write a natural, idiomatic translation for a native speaker of ${targetName} — not literal word-for-word.`;
 
   try {
-    const res = await fetch(CLAUDE_ENDPOINT, {
+    const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
         'x-api-key':                                 CLAUDE_API_KEY,
@@ -14875,7 +14993,9 @@ Rules:
       },
       body: JSON.stringify({
         model:      CLAUDE_MODEL,
-        max_tokens: 1200,
+        /* Sized by the text (v9.53): 1,200 flat cut a long About body's
+           back-translation off mid-reply, and the Review side showed nothing. */
+        max_tokens: Math.min(CLAUDE_TRANSLATE_MAX_TOKENS, Math.max(1200, _claudeTranslateTokensPerLang(trimmed, 0) + 200)),
         messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
       }),
     });
@@ -15723,7 +15843,7 @@ Rules:
   try {
     // Queued — see _enqueueTranslateTask's own comment (above, this file).
     await _enqueueTranslateTask(async () => {
-    const res = await fetch(CLAUDE_ENDPOINT, {
+    const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
         'x-api-key':                                 CLAUDE_API_KEY,
@@ -16271,7 +16391,7 @@ Rules:
   try {
     // Queued — see _enqueueTranslateTask's own comment (above, this file).
     await _enqueueTranslateTask(async () => {
-    const res = await fetch(CLAUDE_ENDPOINT, {
+    const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
         'x-api-key':                                 CLAUDE_API_KEY,
@@ -19253,6 +19373,15 @@ function closeAllDropdowns() {
   state.macFullReviewSettingsOpen = false;
   state.macFullIapLocSettingsOpen = false;
   state.macFullAchLocSettingsOpen = false;
+  /* AND EVERY OTHER ONE, BY NAME PATTERN (v9.53). This list was an
+     inventory, and it went stale again: Epic's three gears (Store Page,
+     About, Achievements) and Steam's Achievements gear were never added. A
+     click away closed the menu on screen but left its flag true, so the
+     next press of the gear read "already open", closed it instead, and the
+     gear never opened again — "no longer selectable after clicking through
+     other tabs". Every *SettingsOpen key in state is one of these menus'
+     open flags, so all of them are cleared here, including any added later. */
+  Object.keys(state).forEach(k => { if (/SettingsOpen$/.test(k)) state[k] = false; });
   /* And Epic's four Product Details pickers (v8.46) — one flag for whichever
      is open plus the text typed into it, for exactly the reason given above:
      they survive a reRenderStepModal on purpose, so closing one by clicking
@@ -19667,7 +19796,6 @@ function FSavedAchievements() {
     const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
     const fieldLabel    = ACFG.labels[field] || field;
     const perLangBudget = field === 'displayName' ? 80 : 200;
-    const maxTokens     = Math.min(8192, 300 + eligible.length * perLangBudget);
 
     const prompt = `Translate the following ${ACFG.promptSubject || 'Game Center achievement'} ${fieldLabel} text for a mobile/video game into each of the listed languages.
 
@@ -19694,28 +19822,9 @@ function FSavedAchievements() {
       // Achievements are the dominant term in the fan-out that comment
       // describes: every saved achievement times every translatable field,
       // for this platform alone.
-      await _enqueueTranslateTask(async () => {
-      const res = await fetch(CLAUDE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'x-api-key':                                 CLAUDE_API_KEY,
-          'anthropic-version':                         '2023-06-01',
-          'content-type':                              'application/json',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model:      CLAUDE_MODEL,
-          max_tokens: maxTokens,
-          messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
-        }),
-      });
-
-      if (!res.ok) throw await smClaudeHttpError(res);
-      const data    = await res.json();
-      const resText = (data.content?.[0]?.text || '').trim();
-      const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-      const parsed  = JSON.parse(cleaned);
-      const results = parsed.translations || {};
+      /* One request per language group, sized by the text, each in its own
+         queue slot, retried and time-limited (v9.53, _claudeTranslateLangs). */
+      const results = await _claudeTranslateLangs({ prompt, langList, langs: eligible, text, perLangBudget });
 
       eligible.forEach(lang => {
         const translated = results[lang];
@@ -19740,7 +19849,6 @@ function FSavedAchievements() {
       });
 
       state[P + 'TranslateStatus'][achId][field] = 'complete';
-      });
     } catch (e) {
       console.warn('[Mac App Store Achievement Localizations Translate]', achId, field, e.message);
       state[P + 'TranslateStatus'][achId][field] = 'error';
@@ -20432,7 +20540,7 @@ Rules:
     // describes: every saved achievement times every translatable field,
     // for this platform alone.
     await _enqueueTranslateTask(async () => {
-    const res = await fetch(CLAUDE_ENDPOINT, {
+    const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
         'x-api-key':                                 CLAUDE_API_KEY,
@@ -21160,7 +21268,7 @@ Rules:
   try {
     // Queued — see _enqueueTranslateTask's own comment (above, this file).
     await _enqueueTranslateTask(async () => {
-    const res = await fetch(CLAUDE_ENDPOINT, {
+    const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
         'x-api-key':                                 CLAUDE_API_KEY,
@@ -21778,7 +21886,7 @@ Rules:
   try {
     // Queued — see _enqueueTranslateTask's own comment (above, this file).
     await _enqueueTranslateTask(async () => {
-    const res = await fetch(CLAUDE_ENDPOINT, {
+    const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
         'x-api-key':                                 CLAUDE_API_KEY,
@@ -22444,7 +22552,7 @@ Rules:
   try {
     // Queued — see _enqueueTranslateTask's own comment (above, this file).
     await _enqueueTranslateTask(async () => {
-    const res = await fetch(CLAUDE_ENDPOINT, {
+    const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
         'x-api-key':                                 CLAUDE_API_KEY,
@@ -22964,7 +23072,7 @@ Rules:
   try {
     // Queued — see _enqueueTranslateTask's own comment (above, this file).
     await _enqueueTranslateTask(async () => {
-    const res = await fetch(CLAUDE_ENDPOINT, {
+    const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
       method: 'POST',
       headers: {
         'x-api-key':                                 CLAUDE_API_KEY,
