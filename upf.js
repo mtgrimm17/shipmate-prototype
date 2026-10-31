@@ -91,6 +91,22 @@ const UPF = {
   /* Connect wizard: hand the entered App Store Connect key to the local helper,
      which stores it and verifies it with a live call. Returns {ok, verified,
      teamId} or {ok:false, error}. Never throws. */
+  /* THE PROBE A RENDER MAY MAKE (v9.55). upfBuildPanelHTML asks for the
+     agent every time it draws while the agent is down, and it draws on every
+     dashboard repaint — measured: twenty repaints, twenty requests to
+     127.0.0.1:7343 from a machine with no agent. On a public site that is a
+     stream of requests to the visitor's own computer (which current Chrome
+     can turn into a "local network access" prompt). While the agent is down
+     this probes at most once every 30 seconds; a press of Build or Connect
+     still calls health() and still probes at once. */
+  healthQuiet() {
+    if (state.upf.agent) return Promise.resolve(state.upf.agent);
+    const now = Date.now();
+    if (this._quietProbeAt && now - this._quietProbeAt < 30000) return Promise.resolve(state.upf.agent);
+    this._quietProbeAt = now;
+    return this.health();
+  },
+
   async saveAccount(payload) {
     try {
       return await this._post('/account', payload);
@@ -126,8 +142,13 @@ const UPF = {
     return { ok: true, started: true };
   },
 
-  /* One probe per page load. A failed probe is remembered as `false` so a
-     machine without the agent never pays for a second connection attempt. */
+  /* A probe of the local agent. A SUCCESS is cached for the page; a failure
+     is not (an agent started after the page loaded must still be noticed), so
+     a direct call after a failure probes again. That is right for a button a
+     developer pressed — and wrong for a repaint, which is what healthQuiet is
+     for. (This note used to say a failure was remembered so a machine without
+     the agent "never pays for a second connection attempt"; the code beneath
+     it has never done that.) */
   async health() {
     if (state.upf.agent) return state.upf.agent;   // cache only a SUCCESSFUL probe;
     // null or false both re-probe, so an agent that starts after the page loaded is noticed.
@@ -1000,7 +1021,10 @@ const UPF = {
     const u = state.upf;
     if (u.agent === false || u.agent === null) {
       const wasUnknown = (u.agent === null);
-      this.health().then(h => {
+      /* healthQuiet, not health (v9.55): this runs on every Mac card render,
+         and ensureMatch's throttle comes AFTER the probe — so with the agent
+         down, every repaint was a request to 127.0.0.1:7343. */
+      this.healthQuiet().then(h => {
         if (h) this.ensureMatch();
         // Agent just confirmed DOWN (was unknown): repaint so a "checking" row
         // falls to the Upload pill instead of spinning forever.
@@ -2038,7 +2062,7 @@ function upfBuildPanelHTML(pid) {
   if (typeof UPFEGS !== 'undefined' && UPFEGS.handles(pid)) return UPFEGS.panelHTML(pid);
   if (typeof UPF === 'undefined' || !UPF.isMac(pid)) return '';
   const u = state.upf;
-  if (u.agent === false || u.agent === null) { UPF.health().then(h => { if (h) UPF.ensureMatch(); }); return ''; }
+  if (u.agent === false || u.agent === null) { UPF.healthQuiet().then(h => { if (h) UPF.ensureMatch(); }); return ''; }
   /* Agent is up but this game isn't matched to the local Steam library yet.
      Kick the (self-healing) match now — the one-shot load-time ensureMatch may
      have fired before the agent was detected as up, and nothing else drives it

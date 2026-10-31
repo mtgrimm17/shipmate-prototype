@@ -3761,6 +3761,10 @@ function reRenderStepModal() {
      that has to happen on EVERY repaint has to happen before them.
      refreshGuideCompletion is a no-op unless the done-state actually moved. */
   if (typeof refreshGuideCompletion === 'function') refreshGuideCompletion();
+  /* And any Review side this repaint is about to show gets its
+     back-translations (v9.55, _locSyncVisibleReview) — after the paint,
+     because visibility is read off the screen. */
+  setTimeout(() => { if (typeof _locSyncVisibleReview === 'function') _locSyncVisibleReview(); }, 0);
 
   /* DON'T REPAINT UNDER A FIELD THE USER IS TYPING IN. The inline listing
      editors (ias-inline-input: Title/Subtitle/Description in the previews) are
@@ -4687,6 +4691,81 @@ function _pumpBackTranslateQueue() {
   }
 }
 
+/* ══ A BACK-TRANSLATION IS FETCHED WHEN SOMEONE CAN SEE IT (v9.55) ═══════
+   Every translation that landed asked for its back-translation straight
+   away, in every language, for every store — whether or not anyone ever
+   turned a card over. Measured on the live prototype after v9.54: adding
+   French to Hades made 3 translations and 101 back-translations, every one
+   of them for the Review side of a card nobody had flipped (French came
+   from Steam, so the back-translations were of Steam's own translations).
+
+   Now each *RefreshBackTranslation fetches only while a Review side is on
+   screen, and otherwise leaves its entry stale: `syncedTopText` still names
+   the old text, which is exactly what every surface's *SyncBackTranslations
+   looks for. Those already run when Review is turned on, and when the field
+   or item changes under it; _locSyncVisibleReview below covers the rest —
+   opening a step, flipping a preview, switching tab — so a Review side
+   always fills in once it is actually showing, whichever way you got there. */
+function _backTranslateWanted() {
+  return _locAnyReviewOnScreen();
+}
+
+/* Which surface's sync answers which view. Each takes the item it shows. */
+const LOC_REVIEW_SYNC = {
+  ios: {
+    storePage:    () => _locReviewSyncBackTranslations(),
+    iaps:         () => _iapLocSyncBackTranslations(_iapLocEffectiveIapId()),
+    achievements: () => _iasAchLocSyncBackTranslations(_iasAchLocEffectiveAchId()),
+  },
+  macos: {
+    storePage:    () => _masLocReviewSyncBackTranslations(),
+    iaps:         () => _masIapLocSyncBackTranslations(_masIapLocEffectiveIapId()),
+    achievements: () => _masAchLocSyncBackTranslations(_masAchLocEffectiveAchId()),
+  },
+  macos_full: {
+    storePage:    () => _macFullLocReviewSyncBackTranslations(),
+    iaps:         () => _macFullIapLocSyncBackTranslations(_macFullIapLocEffectiveIapId()),
+    achievements: () => _macFullAchLocSyncBackTranslations(_macFullAchLocEffectiveAchId()),
+  },
+  steam: {
+    storePage:    () => _steamLocReviewSyncBackTranslations(),
+    achievements: () => STEAM_ACH_LOC.syncBackTranslations(STEAM_ACH_LOC.effectiveAchId()),
+  },
+  egs: {
+    storePage:    () => _steamLocReviewSyncBackTranslations(state.egsLocReviewField || 'title'),
+    about:        () => EGS_ABOUT_LOC.syncBackTranslations(EGS_ABOUT_LOC.effectiveAchId()),
+    achievements: () => EGS_ACH_LOC.syncBackTranslations(EGS_ACH_LOC.effectiveAchId()),
+  },
+};
+
+/* Sync whatever Review side is showing, once per change of what is showing.
+   Called on every repaint and once a second, so it must be cheap and must
+   not loop: the key is the set of visible Review sides with their field and
+   item, and an unchanged key does nothing — a back-translation landing
+   repaints, the repaint calls this, and the key has not moved. */
+let _locReviewSyncedKey = '';
+function _locSyncVisibleReview() {
+  if (typeof LOC_SURFACE !== 'object') return;
+  const due = [];
+  Object.keys(LOC_SURFACE).forEach(pid => {
+    const views = LOC_SURFACE[pid].views || {};
+    Object.keys(views).forEach(v => {
+      const vc = views[v];
+      if (!vc.modeKey || state[vc.modeKey] !== 'review') return;
+      if (!_locTranslateVisible(pid, v, null, null)) return;
+      let item = '', field = '';
+      try { item = vc.itemFn ? String(vc.itemFn()) : ''; } catch (e) {}
+      try { field = vc.fieldFn ? vc.fieldFn() : (state[vc.fieldKey] || vc.defaultField || ''); } catch (e) {}
+      due.push({ key: [pid, v, field, item, (state.formData.localizations || []).join('+')].join('|'),
+                 run: (LOC_REVIEW_SYNC[pid] || {})[v] });
+    });
+  });
+  const key = due.map(d => d.key).join(',');
+  if (key === _locReviewSyncedKey) return;
+  _locReviewSyncedKey = key;
+  due.forEach(d => { try { if (d.run) d.run(); } catch (e) { console.warn('[Review sync]', d.key, e.message); } });
+}
+
 function _enqueueBackTranslateTask(taskFn) {
   return new Promise((resolve, reject) => {
     const job = { taskFn, resolve, reject };
@@ -4697,7 +4776,10 @@ function _enqueueBackTranslateTask(taskFn) {
 /* A queued back-translation must not sit forever once the translation
    queue has drained and nothing else pumps; this is the heartbeat that
    guarantees it. Cheap: it does nothing when there is nothing waiting. */
-setInterval(() => { if (_backTranslateQueue.length) _pumpBackTranslateQueue(); }, 1000);
+setInterval(() => {
+  if (_backTranslateQueue.length) _pumpBackTranslateQueue();
+  _locSyncVisibleReview();          // a Review side that came on screen by any route
+}, 1000);
 
 function _enqueueTranslateTask(taskFn) {
   return new Promise((resolve, reject) => {
@@ -9308,7 +9390,7 @@ function confirmGameImport() {
   state.formData.description = ls.description;
   _wsPropagateAboutGame(ls.description);
   _egsPropagateAboutBody(ls.description);
-  _egsAboutTranslateFirstBody();
+  _descriptionSettledTranslate();
   _macFullPropagateDescription(ls.description);
   _applePropagateDescription(ls.description);
   const descEl = document.getElementById('ob-desc');
@@ -10500,7 +10582,7 @@ function _fillDescriptionField(text, source) {
   _macFullPropagateDescription(text || '');
   _applePropagateDescription(text || '');
   _egsPropagateAboutBody(text || '');
-  _egsAboutTranslateFirstBody();
+  _descriptionSettledTranslate();
   const descEl = document.getElementById('ob-desc');
   if (descEl) {
     descEl.value = text || '';
@@ -12658,8 +12740,7 @@ function _applyFieldValue(field, value) {
     _egsPropagateAboutBody(value);
     const el = document.getElementById('ob-desc');
     if (el) { el.value = value; charCount('ob-desc-count', value, 4000); }
-    _iasTriggerAutoTranslate('description', value);
-    _egsAboutTranslateFirstBody();
+    _descriptionSettledTranslate();
   } else if (field === 'subtitle') {
     state.formData.subtitle = value;
     const el = document.getElementById('ob-subtitle');
@@ -13871,6 +13952,7 @@ async function _masLocReviewRefreshBackTranslation(field, lang, topText) {
     return;
   }
 
+  if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
   entry.status = 'loading';
   _locDeferredRerenderBack('macos', 'storePage', field, null);
 
@@ -14705,6 +14787,7 @@ async function _steamLocReviewRefreshBackTranslation(field, lang, topText) {
     return;
   }
 
+  if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
   entry.status = 'loading';
   _locDeferredRerenderBack('steam', 'storePage', field, null);
 
@@ -15259,6 +15342,7 @@ async function _locReviewRefreshBackTranslation(field, lang, topText) {
     return;
   }
 
+  if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
   entry.status = 'loading';
   _locDeferredRerenderBack('ios', 'storePage', field, null);
 
@@ -16171,6 +16255,7 @@ async function _iapLocRefreshBackTranslation(iapId, field, lang, topText) {
     return;
   }
 
+  if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
   entry.status = 'loading';
   _locDeferredRerenderBack('ios', 'iaps', field, iapId);
 
@@ -16697,6 +16782,7 @@ async function _masIapLocRefreshBackTranslation(iapId, field, lang, topText) {
     return;
   }
 
+  if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
   entry.status = 'loading';
   _locDeferredRerenderBack('macos', 'iaps', field, iapId);
 
@@ -20119,6 +20205,7 @@ function FSavedAchievements() {
       return;
     }
 
+    if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
     entry.status = 'loading';
     _locDeferredRerenderBack(ACFG.pid, V, field, achId);
 
@@ -20871,6 +20958,7 @@ async function _masAchLocRefreshBackTranslation(achId, field, lang, topText) {
     return;
   }
 
+  if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
   entry.status = 'loading';
   _locDeferredRerenderBack('macos', 'achievements', field, achId);
 
@@ -21597,6 +21685,7 @@ async function _iasAchLocRefreshBackTranslation(achId, field, lang, topText) {
     return;
   }
 
+  if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
   entry.status = 'loading';
   _locDeferredRerenderBack('ios', 'achievements', field, achId);
 
@@ -22229,6 +22318,7 @@ async function _macFullAchLocRefreshBackTranslation(achId, field, lang, topText)
     return;
   }
 
+  if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
   entry.status = 'loading';
   _locDeferredRerenderBack('macos_full', 'achievements', field, achId);
 
@@ -22872,6 +22962,7 @@ async function _macFullLocReviewRefreshBackTranslation(field, lang, topText) {
     return;
   }
 
+  if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
   entry.status = 'loading';
   _locDeferredRerenderBack('macos_full', 'storePage', field, null);
 
@@ -23401,6 +23492,7 @@ async function _macFullIapLocRefreshBackTranslation(iapId, field, lang, topText)
     return;
   }
 
+  if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
   entry.status = 'loading';
   _locDeferredRerenderBack('macos_full', 'iaps', field, iapId);
 
@@ -27663,6 +27755,32 @@ function _locCatchUpPlatform(pid) {
   if (pid === 'ios'        && typeof _iasAchLocPropagateAllFields     === 'function') _iasAchLocPropagateAllFields();
   if (pid === 'macos'      && typeof _masAchLocPropagateAllFields     === 'function') _masAchLocPropagateAllFields();
   if (pid === 'macos_full' && typeof _macFullAchLocPropagateAllFields === 'function') _macFullAchLocPropagateAllFields();
+}
+
+/* GAME DETAILS' DESCRIPTION, SETTLED (v9.55). Typing in it overwrites
+   several stores' copies at once (syncField: the App Store's and Mac App
+   Store's listing description, Mac App Store Full's, Steam's About This
+   Game, Epic's first About block), and each copy has its own translations.
+   Leaving the box asked for only two of them — the App Store's and Epic's
+   — so Steam's About This Game kept its French for the OLD text: measured
+   live, Steam's English ended "Now on Mac." and its French was still
+   Steam's translation of the sentence before it. Every copy the box wrote
+   is asked for here, for the stores that are on. Each translator checks
+   its own auto-translate switch and skips a language already current. */
+function _descriptionSettledTranslate() {
+  const on = pid => !!(state.activePlatforms && state.activePlatforms.has(pid));
+  const v = (state.formData && state.formData.description) || '';
+  _iasTriggerAutoTranslate('description', v);
+  if (on('steam') && state.webSite && typeof _steamTriggerAutoTranslate === 'function') {
+    _steamTriggerAutoTranslate('aboutGame', state.webSite.aboutGame || '');
+  }
+  if (on('macos') && state.macAppStoreListing && typeof _masTriggerAutoTranslate === 'function') {
+    _masTriggerAutoTranslate('description', state.macAppStoreListing.description || '');
+  }
+  if (on('macos_full') && state.macFullAppStoreListing && typeof _macFullTriggerAutoTranslate === 'function') {
+    _macFullTriggerAutoTranslate('description', state.macFullAppStoreListing.description || '');
+  }
+  _egsAboutTranslateFirstBody();
 }
 
 /* Epic turned on: whatever its About blocks already say (the body the

@@ -139,7 +139,15 @@ const UPFEGS = {
     const u = this.st();
     const esc = (s) => (typeof escHtml === 'function') ? escHtml(String(s)) : String(s);
     if (state.upf && (state.upf.agent === false || state.upf.agent === null)) {
-      UPF.health().then(() => this._repaint());
+      /* NOT A LOOP (v9.55). This is a render, and it used to probe the agent
+         and repaint when the probe came back — which drew this panel again,
+         which probed again. With no agent running that never stopped:
+         measured, 728 requests to 127.0.0.1:7343 and as many full repaints of
+         the step in ten seconds of Epic's Upload Build sitting open. Now the
+         probe is the rate-limited one, and the repaint happens only if the
+         answer changed (the agent came up, or an unknown became a no). */
+      const before = state.upf.agent;
+      UPF.healthQuiet().then(h => { if ((h || false) !== (before || false) || before === null) this._repaint(); });
       return `<div class="upf-panel"><div class="upf-intro">Shipmate builds an Epic Games Store version from your Steam Windows build on this Mac once the local agent is running.</div></div>`;
     }
     if (!u._restored) { u._restored = true; if (!u.started) this.restore(); }
