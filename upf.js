@@ -102,9 +102,19 @@ const UPF = {
   healthQuiet() {
     if (state.upf.agent) return Promise.resolve(state.upf.agent);
     const now = Date.now();
-    if (this._quietProbeAt && now - this._quietProbeAt < 30000) return Promise.resolve(state.upf.agent);
+    /* Within the window, hand back THE SAME PROBE — still running, or done —
+       never an instant "don't know" (fixed v9.57). v9.55 returned
+       Promise.resolve(state.upf.agent) here, which is `null` while the first
+       probe is still out; driveMatch repaints when an unknown resolves, the
+       repaint draws both Mac cards, each asked again, each got an instant
+       null, and the page locked in a microtask loop. Measured: with Mac App
+       Store and Mac App Store Full both on, the dashboard never finished
+       drawing. Sharing the real probe means an answer only ever arrives once
+       it is a real answer. */
+    if (this._quietProbe && now - this._quietProbeAt < 30000) return this._quietProbe;
     this._quietProbeAt = now;
-    return this.health();
+    this._quietProbe = this.health();
+    return this._quietProbe;
   },
 
   async saveAccount(payload) {
@@ -123,7 +133,12 @@ const UPF = {
     pid = pid || this.connectedMac() || 'macos';
     if (this._apiKeyInFlight) return { ok: true, inFlight: true };   // don't double-fire (the task auto-calls this)
     const h = await this.health().catch(() => null);
-    if (!opts.force && h && h.account && h.account.hasApiKey) {
+    /* NO AGENT, NO KEY (v9.57). Apple lets a key's .p8 be downloaded ONCE,
+       and the agent is where it is stored. Creating one with the agent down
+       spends that download on nothing and leaves a dead "Shipmate" key in the
+       developer's account — so say why and stop. */
+    if (!h) return { ok: false, error: 'agent' };
+    if (!opts.force && h.account && h.account.hasApiKey) {
       return { ok: true, already: true };
     }
     this._genKeyTeamId = (h && h.account && h.account.teamId) || '';
@@ -2228,7 +2243,11 @@ function _shipmateExtPresent(version) {
      would redraw the modal under the user's pointer for nothing. */
   try {
     if (state.stepModal && state.stepModal.stepId === 'connect'
-        && typeof reRenderStepModal === 'function') reRenderStepModal();
+        && typeof reRenderStepModal === 'function') {
+      reRenderStepModal();
+      // The extension turning up can be what completes steps 1–3 (v9.57).
+      if (typeof _maybeStartApiKey === 'function') _maybeStartApiKey(state.stepModal.platformId);
+    }
     else if (typeof renderDashboard === 'function') renderDashboard();
   } catch (_) {}
 }

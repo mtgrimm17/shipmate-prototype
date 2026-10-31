@@ -280,8 +280,6 @@ Always include the new version number in the ship note, e.g. `"v6.26 — add too
 // config.js (gitignored — never commit)
 const CONFIG = {
   CLAUDE_API_KEY:     'sk-ant-...',
-  IGDB_CLIENT_ID:     '...',
-  IGDB_CLIENT_SECRET: '...',
 };
 ```
 
@@ -289,10 +287,10 @@ The repo contains placeholder keys in `index.html`:
 ```js
 const CONFIG = {
   CLAUDE_API_KEY:     '__CLAUDE_API_KEY__',
-  IGDB_CLIENT_ID:     '__IGDB_CLIENT_ID__',
-  IGDB_CLIENT_SECRET: '__IGDB_CLIENT_SECRET__',
 };
 ```
+
+The page holds no IGDB credentials (since v9.57): game search and every IGDB lookup, including screenshots for a title with no Steam page, go through our own backend (`search.dev.shipmate.gg`), which holds them server-side. Nothing in Shipmate uses a third-party CORS proxy.
 
 **Never replace these placeholders in index.html with real keys.** Real keys go in `config.js` only.
 

@@ -389,50 +389,17 @@ async function analyzeCQWithClaude() {
    a single API with cover art and platform metadata.
 ══════════════════════════════════════════════════════════════ */
 
-const IGDB_CLIENT_ID     = (typeof CONFIG !== 'undefined' &&
-                            CONFIG.IGDB_CLIENT_ID &&
-                            CONFIG.IGDB_CLIENT_ID !== '__IGDB_CLIENT_ID__')
-                           ? CONFIG.IGDB_CLIENT_ID : '';
-const IGDB_CLIENT_SECRET = (typeof CONFIG !== 'undefined' &&
-                            CONFIG.IGDB_CLIENT_SECRET &&
-                            CONFIG.IGDB_CLIENT_SECRET !== '__IGDB_CLIENT_SECRET__')
-                           ? CONFIG.IGDB_CLIENT_SECRET : '';
-/* corsproxy.io now requires a paid API key for every request (confirmed
-   live: it returns 401 "A valid API key is required" even for a bare,
-   unrelated GET) — the free anonymous tier it ran on is gone. That broke
-   every call in this file that routed through _cors(), not just IGDB's.
-
-   _cors() now points at proxy.cors.sh instead (a Cloudflare Worker-based
-   free CORS proxy — no key needed in testing). Verified live against real
-   Steam traffic: 6/6 requests succeeded across both appdetails (JSON) and
-   store-page (HTML) fetches, ~0.5–0.8s each — and separately confirmed it
-   forwards POST + custom headers intact (relevant to IGDB_ENDPOINT below,
-   which needs both). allorigins.win/raw was also tested as a candidate and
-   does work, but only succeeded on roughly half of repeated live Steam
-   requests (random timeouts/408s) — not solid enough to rely on alone, so
-   it isn't used, though it — or another provider — would be a reasonable
-   second leg if proxy.cors.sh ever needs a fallback.
-
-   The IGDB *search* path has been moved off _cors() entirely onto our own
-   backend (IGDB_SEARCH_ENDPOINT) — a real fix rather than a proxy swap,
-   since that path also needed an IGDB/Twitch key the browser shouldn't
-   hold. _cors()/IGDB_ENDPOINT and the Twitch token flow are still used —
-   by the Steam appdetails/store-page fetches further down, by
-   _igdbFetchScreenshots' single-item follow-up lookup (also below — the
-   results _igdbSearchRaw hands back carry no screenshots, so a title with no
-   Steam app id fills its grid this way), and as the fallback wiring if
-   IGDB_SEARCH_ENDPOINT itself ever needs to be pointed back at a full
-   direct-IGDB search.
-
-   THAT ONE LOOKUP IS NOW THE ONLY LIVE USE OF THE PROXY (v6.62). Everything
-   else that went through it has been deleted: Steam's appdetails and
-   achievements-stats endpoints, the store page's HTML, and
-   _igdbFetchSteamAppId. What is left is a documented JSON API rather than a
-   scrape — but it is still a free proxy with no SLA, and the IGDB/Twitch
-   client secret travels through it. */
-const _cors = (u) => 'https://proxy.cors.sh/' + u;
-const IGDB_ENDPOINT      = _cors('https://api.igdb.com/v4/games');
-const TWITCH_TOKEN_URL   = 'https://id.twitch.tv/oauth2/token';
+/* NO IGDB CREDENTIALS AND NO CORS PROXY IN THE BROWSER (v9.57).
+   The last thing that used either was the screenshot lookup for a title with
+   no Steam page (_igdbFetchScreenshots, below): it fetched a Twitch OAuth
+   token with the IGDB client ID and SECRET in the URL, then queried IGDB —
+   both through proxy.cors.sh, a free third-party CORS proxy, so the secret
+   travelled through a third party on every such lookup, and was published in
+   this page's source by the deploy step besides. That lookup now goes to our
+   own backend (SHIPMATE_GAME_ENDPOINT ?igdbId=), which already holds IGDB
+   credentials for search. Nothing in Shipmate uses proxy.cors.sh, the Twitch
+   token endpoint or the IGDB client ID/secret any more, and index.html no
+   longer carries their placeholders. */
 // Our own backend (Shipmate infra) — looks up IGDB on the server side and
 // hands back a small, pre-shaped JSON result, so the browser never needs an
 // IGDB/Twitch key or a third-party CORS proxy for search. Also supports
@@ -493,16 +460,12 @@ const IGDB_SEARCH_PLATFORM_SLUGS = {
   'epic':        'egs',
 };
 
-// The Steam appdetails/store-page fetches below go through a free
-// third-party CORS proxy (_cors(), currently proxy.cors.sh) with no SLA —
-// it can stall or hang rather than cleanly erroring, and a bare fetch() has
-// no built-in timeout, so a stalled proxy would otherwise leave a Steam
-// import spinning forever with nothing to show for it. This wraps fetch
-// with a hard deadline so callers always get a rejection (with a
-// clearly-labeled message) within FETCH_TIMEOUT_MS, whether the proxy is
-// down, rate-limiting, or just slow. (The IGDB picklist search no longer
-// uses this at all — see IGDB_SEARCH_ENDPOINT above — but still benefits
-// from the same timeout wrapper against our own backend.)
+// A bare fetch() has no timeout, so a backend that stalls rather than
+// erroring would leave a Steam import spinning forever. This wraps fetch with
+// a hard deadline so callers always get a rejection (with a clearly-labelled
+// message) within FETCH_TIMEOUT_MS. It was written for a third-party CORS
+// proxy that failed by stalling; every call through it is now to our own
+// backend (search.dev.shipmate.gg), and the deadline still applies.
 const FETCH_TIMEOUT_MS = 10000;
 function _fetchWithTimeout(url, opts = {}, ms = FETCH_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -515,37 +478,6 @@ function _fetchWithTimeout(url, opts = {}, ms = FETCH_TIMEOUT_MS) {
     .finally(() => clearTimeout(timer));
 }
 
-// Cached for the page session (token is valid ~60 days)
-let _igdbAccessToken = null;
-
-async function _getIgdbToken() {
-  if (_igdbAccessToken) return _igdbAccessToken;
-  if (!IGDB_CLIENT_ID || !IGDB_CLIENT_SECRET) throw new Error('NO_IGDB_KEY');
-  // Routed through _cors() (proxy.cors.sh) — id.twitch.tv/oauth2/token is a
-  // server-to-server OAuth endpoint and does not send an
-  // Access-Control-Allow-Origin header on its response, so a browser fetch()
-  // straight to it is blocked by CORS: the request itself goes out (it's a
-  // "simple" POST — no custom headers here, so no preflight), but the
-  // browser refuses to hand the response back to this code, and fetch()
-  // rejects with a generic "Failed to fetch"/TypeError. That's the actual
-  // bug behind "IGDB screenshot fallback silently does nothing" — every
-  // caller (_igdbFetchScreenshots) starts by
-  // awaiting this function, so a broken token fetch here breaks BOTH: Steam
-  // App ID resolution never succeeds either, meaning `_applyIgdbScreenshotFallback`
-  // itself was ALSO already failing for its own IGDB API call — see
-  // IGDB_ENDPOINT's own comment above for why that call already goes
-  // through this same proxy. Wrapping the token request the identical way
-  // fixes it — proxy.cors.sh already forwards POST intact (see IGDB_ENDPOINT's
-  // comment), which is all this request needs (no custom headers).
-  const res = await _fetchWithTimeout(
-    _cors(`${TWITCH_TOKEN_URL}?client_id=${IGDB_CLIENT_ID}&client_secret=${IGDB_CLIENT_SECRET}&grant_type=client_credentials`),
-    { method: 'POST' }
-  );
-  if (!res.ok) throw new Error('IGDB auth failed (' + res.status + ')');
-  const data = await res.json();
-  _igdbAccessToken = data.access_token;
-  return _igdbAccessToken;
-}
 
 // IGDB website URL patterns → our platform IDs. Matches on the URL itself,
 // NOT the `category` field IGDB's website objects used to carry (category
@@ -728,45 +660,37 @@ async function _igdbSearchRaw(title) {
    this has had no callers since. Deleted rather than kept as fallback wiring,
    for the same reason as the Steam endpoints above. */
 
-/* Resolves a single title's screenshots by IGDB id — a small, targeted
-   follow-up query used once a title is picked (selectPicklistItem, app.js)
-   whenever Steam scraping doesn't produce screenshots for that title: no
-   Steam link at all, the Steam app-ID/appdetails lookup itself failed, or
-   Steam succeeded but simply has none listed for this game. Same reasoning
-   as the app-id lookup that used to sit above: IGDB_SEARCH_ENDPOINT's results never
-   carry screenshots (see _igdbSearchRaw), so this goes straight to IGDB
-   itself via IGDB_ENDPOINT/_cors() for just this one game. Returns [] for
-   "no screenshots" (not an error); only throws for a real fetch/auth
-   failure, which every caller already treats as non-fatal. */
+/* Resolves a single title's screenshots by IGDB id, for a title Steam can't
+   supply them for (no Steam page, the Steam lookup failed, or Steam lists
+   none). OUR BACKEND, SINCE v9.57: the same /game record a Steam id fetches,
+   asked by IGDB id instead (?igdbId=), screenshots in `images` as
+   { url, type: 'screenshot' } exactly as the Steam-keyed record carries them.
+   This used to query IGDB directly through proxy.cors.sh with a Twitch token
+   minted from the client secret (see the note where IGDB_CLIENT_ID was).
+
+   NOT YET SERVED IS NOT AN ERROR. When this was moved, the backend answered
+   ?igdbId= with 501 "Details with igdb id is not available yet" — the route
+   exists and is planned. A 501 or 404 returns [] ("no screenshots"), the
+   same answer every caller already handles for a game that has none, so
+   these titles simply arrive without screenshots until the route is served,
+   and pick them up with no change here once it is. Returns [] for "none";
+   throws only for a real network failure, which every caller already treats
+   as non-fatal. */
 async function _igdbFetchScreenshots(igdbId) {
-  const token = await _getIgdbToken();
-  const res = await _fetchWithTimeout(IGDB_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Client-ID':     IGDB_CLIENT_ID,
-      'Authorization': 'Bearer ' + token,
-      'Content-Type':  'text/plain',
-    },
-    body: `fields screenshots.url; where id = ${Number(igdbId)};`,
-  });
-
-  if (res.status === 401) {
-    _igdbAccessToken = null;               // invalidate and let caller retry
-    throw new Error('IGDB auth expired — please retry');
+  const id = Number(igdbId);
+  if (!id) return [];
+  const url = `${SHIPMATE_GAME_ENDPOINT}?igdbId=${encodeURIComponent(id)}&lang=english`;
+  const res = await _fetchWithTimeout(url);
+  if (res.status === 501 || res.status === 404) {
+    console.info('[Shipmate /game] screenshots by IGDB id are not served yet (' + res.status + ')');
+    return [];
   }
-  if (!res.ok) throw new Error('IGDB screenshots lookup failed (' + res.status + ')');
-
-  const games = await res.json();
-  const game  = games[0];
-  if (!game || !Array.isArray(game.screenshots)) return [];
-
-  // Same protocol-relative-URL and size-upgrade treatment _igdbSearchRaw
-  // applies to cover art — IGDB hands back a tiny t_thumb URL by default;
-  // upgraded here to t_screenshot_huge (1920×1080) for actual screenshot use.
-  return game.screenshots
-    .map(s => s && s.url)
-    .filter(Boolean)
-    .map(url => ((url.startsWith('//') ? 'https:' : '') + url).replace('t_thumb', 't_screenshot_huge'));
+  if (!res.ok) throw new Error('Shipmate /game (igdbId) failed (' + res.status + ')');
+  const game = await res.json();
+  const images = (game && Array.isArray(game.images)) ? game.images : [];
+  return images
+    .filter(im => im && im.url && (!im.type || im.type === 'screenshot'))
+    .map(im => ((im.url.startsWith('//') ? 'https:' : '') + im.url));
 }
 
 /* ── Steam library_hero direct CDN URL ────────────────────────────────
@@ -823,13 +747,12 @@ function steamLibraryHeroUrl2x(appId) {
 /* ══════════════════════════════════════════════════════════════════════
    SHIPMATE'S OWN /game — one first-party call in place of four proxied ones
    ══════════════════════════════════════════════════════════════════════
-   Everything below this block that talks to store.steampowered.com or
-   steamcommunity.com does so through _cors() — a free third-party CORS proxy
-   with no SLA, which has already had to be swapped once when the previous
-   one went paid, and which fails by stalling rather than erroring (hence
-   FETCH_TIMEOUT_MS). This endpoint is ours, sends its own CORS headers, needs
-   no key, and returns IGDB and Steam merged into one record — so the whole
-   proxy dependency goes with it.
+   Steam's store and community pages used to be fetched through a free
+   third-party CORS proxy with no SLA, which failed by stalling rather than
+   erroring (hence FETCH_TIMEOUT_MS). This endpoint is ours, sends its own CORS
+   headers, needs no key, and returns IGDB and Steam merged into one record —
+   and since v9.57 it answers the IGDB-only screenshot lookup too, so no proxy
+   is left anywhere.
 
    ONE SHAPE, TWO KINDS OF CALL, AND THEY ARE NOT INTERCHANGEABLE:
 

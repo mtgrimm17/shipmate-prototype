@@ -523,6 +523,7 @@ async function toggleStepSection(pid, stepId) {
   if (pid === 'egs' && stepId === 'about' && typeof _egsEnsureAboutBlock === 'function') {
     _egsEnsureAboutBlock();
   }
+  if (pid === 'egs') _egsShortDescCatchUp(stepId);
   if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
     seedOnboardingToIOS(pid);
     if (pid === 'macos')      seedMacAppStoreListing();
@@ -2412,7 +2413,7 @@ function seedMacAppStoreListing() {
     // Deep-copied so editing a supporting language's Mac App Store text can
     // never mutate the App Store's own localizedStoreText entry (or vice
     // versa) — they only share a starting point, never live storage.
-    localizedStoreText: JSON.parse(JSON.stringify(fd.localizedStoreText || {})),
+    localizedStoreText: _locSharedCopy(fd.localizedStoreText || {}),   // without the App Store's hand edits (v9.57)
   };
 }
 
@@ -2933,7 +2934,7 @@ function seedMacFullAppStoreListing() {
     supportUrl:       state.steamSupportUrl || '',
     marketingUrl:     (state.webSite && state.webSite.officialWebsite) || '',
     copyright:        '',
-    localizedStoreText: JSON.parse(JSON.stringify(fd.localizedStoreText || {})),
+    localizedStoreText: _locSharedCopy(fd.localizedStoreText || {}),   // without the App Store's hand edits (v9.57)
   };
 }
 
@@ -3307,6 +3308,7 @@ async function openStepModal(pid, stepId) {
   if (pid === 'egs' && stepId === 'about' && typeof _egsEnsureAboutBlock === 'function') {
     _egsEnsureAboutBlock();
   }
+  if (pid === 'egs') _egsShortDescCatchUp(stepId);
 
   if (pid === 'web') {
     state.stepModal = { platformId: pid, stepId, inferenceStatus: null };
@@ -3404,6 +3406,8 @@ async function openStepModal(pid, stepId) {
 
   // Open overlay immediately so user sees something
   renderStepModal();
+  // Opening Connect with steps 1–3 already done: the key is the current task (v9.57).
+  if (stepId === 'connect') _maybeStartApiKey(pid);
 
   document.getElementById('submit-overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
@@ -4171,6 +4175,7 @@ const LOC_SURFACE = {
     viewKey: 'egsLocsView',
     views: {
       storePage:    { fieldKey: 'egsLocReviewField', modeKey: 'egsLocReviewMode', defaultField: 'title',
+                      fieldFn: () => _egsLocField(),
                       screens: [{ stepId: 'storePreview', flip: null }] },
       achievements: { fieldKey: 'egsAchLocField', modeKey: 'egsAchLocMode', defaultField: 'unlockedDisplayName',
                       itemFn: () => EGS_ACH_LOC.effectiveAchId(), screens: [] },
@@ -4334,6 +4339,47 @@ function _locDeferredRerenderStorePage(field, steamField) {
    point anything Steam did NOT fill becomes eligible and gets translated as
    the fallback. A title with no Steam link at all has no steamLocInfo, so this
    is false and translation proceeds immediately, exactly as before. */
+/* ── A STORE'S HAND EDIT STAYS IN THAT STORE (v9.57, by request) ─────────
+   Translations start out shared — one request per text and language, and a
+   store with no copy of its own may show another's. What a developer then
+   types into one store's card is that store's alone. The App Store's
+   per-language entries are the ones other stores read (Mac App Store falls
+   back to them; both Mac listings are seeded from them), so a hand edit
+   there keeps the shared value it replaced beside it: `<field>Edited` marks
+   the edit, `<field>Shared` holds what everyone else should go on seeing.
+   The next machine or Steam write clears both — the edit is overwritten
+   then for the App Store too, the way it always has been. */
+function _locMarkEdited(entry, field) {
+  if (!entry || entry[field + 'Edited']) return;
+  entry[field + 'Shared'] = entry[field] || '';
+  entry[field + 'Edited'] = true;
+}
+function _locClearEdited(entry, field) {
+  if (!entry) return;
+  delete entry[field + 'Edited'];
+  delete entry[field + 'Shared'];
+}
+function _locSharedValue(entry, field) {
+  if (!entry) return '';
+  return (entry[field + 'Edited'] ? entry[field + 'Shared'] : entry[field]) || '';
+}
+/* A deep copy of a per-language store holding only what is shared: hand
+   edits are replaced by the values they replaced, and the markers dropped. */
+function _locSharedCopy(store) {
+  const out = {};
+  Object.keys(store || {}).forEach(lang => {
+    const e = store[lang];
+    if (!e || typeof e !== 'object') return;
+    const c = {};
+    Object.keys(e).forEach(k => {
+      if (/(Edited|Shared)$/.test(k)) return;
+      c[k] = (e[k + 'Edited']) ? (e[k + 'Shared'] || '') : e[k];
+    });
+    out[lang] = JSON.parse(JSON.stringify(c));
+  });
+  return out;
+}
+
 function _steamAlreadySupplied(entry, field, text) {
   if (!entry) return false;
   return !!entry[field + 'FromSteam'] && entry[field + 'SourceText'] === text;
@@ -4732,7 +4778,7 @@ const LOC_REVIEW_SYNC = {
     achievements: () => STEAM_ACH_LOC.syncBackTranslations(STEAM_ACH_LOC.effectiveAchId()),
   },
   egs: {
-    storePage:    () => _steamLocReviewSyncBackTranslations(state.egsLocReviewField || 'title'),
+    storePage:    () => _steamLocReviewSyncBackTranslations(_egsLocField()),
     about:        () => EGS_ABOUT_LOC.syncBackTranslations(EGS_ABOUT_LOC.effectiveAchId()),
     achievements: () => EGS_ACH_LOC.syncBackTranslations(EGS_ACH_LOC.effectiveAchId()),
   },
@@ -8344,6 +8390,7 @@ function connectAdd(pid) {
     state._apiKeyAutoStarted = false;   // fresh attempt for this connect
     state._apiKeyFailed = false;
     if (typeof reRenderStepModal === 'function') reRenderStepModal();
+    _maybeStartApiKey(pid);            // sign-in confirmed: the key is now the current task (v9.57)
     return;
   }
 
@@ -8363,6 +8410,55 @@ function connectAdd(pid) {
   if (typeof UPF !== 'undefined' && UPF.isMac(pid)) UPF.onConnected(pid);
 }
 
+/* START THE API KEY FROM AN EVENT, NOT FROM A PAINT (v9.57). The 4th Connect
+   task creates an API key in the developer's App Store Connect account. Until
+   v9.56 the function that DRAWS that row started it, so whatever repainted the
+   open modal could. Now the events that make it the current task call this:
+     · connectAdd — the extension (or the button) confirmed the sign-in;
+     · openStepModal('connect') — opened with steps 1–3 already done;
+     · the extension announcing itself while the step is open.
+   Once per connect (state._apiKeyAutoStarted; connectAdd and sign-out reset
+   it), never while one is running or after a failure (that is "Try again"). */
+function _maybeStartApiKey(pid) {
+  if (!(state.stepModal && state.stepModal.stepId === 'connect' && state.stepModal.platformId === pid)) return false;
+  if (typeof UPF === 'undefined' || typeof UPF.generateApiKey !== 'function') return false;
+  if (!UPF.isMac || !UPF.isMac(pid)) return false;
+  if (UPF._apiKeyInFlight || state._apiKeyFailed || state._apiKeyAutoStarted) return false;
+  if (typeof _connectKeyTaskIsCurrent !== 'function' || !_connectKeyTaskIsCurrent(pid)) return false;
+  startApiKey(pid);
+  return true;
+}
+
+/* Generate — or confirm an existing — key. The "Set up the key" button calls
+   this directly; _maybeStartApiKey calls it for the events above. */
+function startApiKey(pid) {
+  if (typeof UPF === 'undefined' || typeof UPF.generateApiKey !== 'function') return;
+  state._apiKeyAutoStarted = true;
+  state._apiKeyFailed = false;
+  Promise.resolve().then(() => UPF.generateApiKey(pid)).then((r) => {
+    if (r && r.already) {
+      // The agent already holds a key: the step is still performed (confirmed),
+      // so mark it done, refresh health and finish the connect — the generate
+      // path does the same from _onAscTaskResult.
+      state._apiKeyStepDone = true;
+      state.upf.agent = null;
+      UPF.health().then(() => {
+        if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
+        try { UPF.onConnected(pid); } catch (_) {}
+      });
+    } else if (r && r.ok === false) {
+      state._apiKeyFailed = true;      // e.g. the agent is not running: "Try again"
+      if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
+    } else if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') {
+      reRenderStepModal();     // show "Creating a 'Shipmate' API key…""
+    }
+  }).catch(() => {
+    state._apiKeyFailed = true;
+    if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
+  });
+  if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
+}
+
 // Retry the App Store Connect API-key setup after a failure (the "Try again"
 // button in the Connect modal's key task). Clear the failure/guard flags and
 // force a fresh generation.
@@ -8370,7 +8466,12 @@ function retryApiKey(pid) {
   state._apiKeyFailed = false;
   state._apiKeyAutoStarted = true;   // this call IS the (re)start
   if (typeof UPF !== 'undefined' && typeof UPF.generateApiKey === 'function') {
-    UPF.generateApiKey(pid, { force: true }).catch(() => {});
+    UPF.generateApiKey(pid, { force: true }).then((r) => {
+      if (r && r.ok === false) {
+        state._apiKeyFailed = true;
+        if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
+      }
+    }).catch(() => {});
   }
   if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
 }
@@ -9854,12 +9955,9 @@ function selectPicklistItem(igdbId) {
   // from IGDB_SEARCH_ENDPOINT's own steam_id field (see _igdbSearchRaw,
   // claude.js), so there's no separate app-id lookup to make anymore. This
   // used to resolve the app id with a follow-up query (_igdbFetchSteamAppId,
-  // claude.js) straight to IGDB itself via IGDB_ENDPOINT/_cors() — that
-  // function was deleted in v6.62, having had no callers since, and is no
-  // longer called from
-  // here, which removes both the extra network round-trip and this call's
-  // dependency on the same _cors()/proxy.cors.sh path the Steam appdetails/
-  // store-page fetches below still separately rely on.
+  // claude.js) straight to IGDB through a third-party CORS proxy — deleted in
+  // v6.62. Since v9.57 nothing in Shipmate uses that proxy at all: every
+  // lookup, the IGDB-only screenshot fallback included, goes to our backend.
   //
   // Each of these calls only overwrites a field once it actually has Steam
   // content for it (see _applySteamAboutData), so this safely upgrades the
@@ -11183,6 +11281,7 @@ async function _checkSteamLocalizedDescriptionInner(lang) {
     // and its translation overrides this Steam-sourced text — Steam only
     // gets to supply a language's *initial* Description.
     entry.descriptionFromSteam  = true;
+    _locClearEdited(entry, 'description');   // Steam's text, not an edit (v9.57)
     // Also refresh the staleness cache to the CURRENT primary Description,
     // so a translate pass already in flight when this write lands (or one
     // that runs before the flag above exists, e.g. this exact call racing
@@ -11279,6 +11378,7 @@ async function _checkSteamLocalizedListingInner(lang) {
       const entry = fd.localizedStoreText[lang];
       entry.titleFromSteam  = true;
       entry.titleSourceText = fd.title || '';
+      _locClearEdited(entry, 'title');
     }
   }
 
@@ -11332,6 +11432,18 @@ async function _checkSteamLocalizedListingInner(lang) {
     // Go Ape Ship! listing): 5/5 trials lost the race for Chinese and 4/5
     // for Spanish before this fix; 4/4 held after it.
     wsEntry.descriptionSourceText = _steamFieldValue('description', fd.primaryLanguage || 'en');
+    /* Epic's short description is its own since v9.57, but Steam's real
+       translation is neutral data, not an edit — so Epic gets it too while
+       its own English is still Steam's, and it has not been edited there. */
+    const egsPrimary = _steamFieldValue('shortDesc', fd.primaryLanguage || 'en');
+    if (state.egsSubmitAnswers && egsPrimary && egsPrimary === baselineShortDesc) {
+      const ee = _steamLocEntry('shortDesc', lang, true);
+      if (ee && !ee.shortDescEdited) {
+        ee.shortDesc = localizedShortDesc;
+        ee.shortDescFromSteam = true;
+        ee.shortDescSourceText = egsPrimary;
+      }
+    }
   }
 
   // Developer/Publisher — Steam essentially never localizes these, but
@@ -12998,6 +13110,7 @@ function _iasSetFieldValue(field, lang, value) {
   }
   if (!fd.localizedStoreText) fd.localizedStoreText = {};
   if (!fd.localizedStoreText[lang]) fd.localizedStoreText[lang] = _iasBlankLocalizedText();
+  _locMarkEdited(fd.localizedStoreText[lang], field);      // the App Store's own (v9.57)
   fd.localizedStoreText[lang][field] = value;
 }
 
@@ -13023,6 +13136,7 @@ function _iasPropagateTitle(primaryValue) {
   supportedLangs.forEach(lang => {
     if (!fd.localizedStoreText[lang]) fd.localizedStoreText[lang] = _iasBlankLocalizedText();
     fd.localizedStoreText[lang].title = primaryValue || '';
+    _locClearEdited(fd.localizedStoreText[lang], 'title');
   });
 }
 
@@ -13234,6 +13348,7 @@ Rules:
       if (field === 'title' && entry.titleFromSteam && entry.titleSourceText === text) return;
       entry[field]     = translated;
       entry[sourceKey] = text;
+      _locClearEdited(entry, field);         // a machine write, shared again (v9.57)
       // This write just replaced whatever Steam may have supplied with a
       // fresh AI translation — the current text is no longer Steam's own,
       // so the flag no longer applies (if it was even set; harmless no-op
@@ -13421,7 +13536,9 @@ function _masFieldValue(field, lang) {
   }
   const entry = ml.localizedStoreText && ml.localizedStoreText[lang];
   const fdEntry = fd.localizedStoreText && fd.localizedStoreText[lang];
-  return (entry && entry[field]) || (fdEntry && fdEntry[field]) || '';
+  /* The App Store's copy only as far as it is shared: an edit made in the
+     App Store stays there (v9.57, _locSharedValue). */
+  return (entry && entry[field]) || _locSharedValue(fdEntry, field);
 }
 
 function _masLangHasOverLimitField(lang) {
@@ -14443,8 +14560,8 @@ const STEAM_SHARED_LISTING_FIELDS = new Set(['title']);
    STEAM_FIELD_CHAR_LIMITS does not carry it, so Steam's own surfaces — its
    field dropdown, its language warnings — cannot see a field its store page
    does not have. Epic's limit lives in EGS_LOC_FIELD_CHAR_LIMITS. */
-const STEAM_LOC_TRANSLATABLE_FIELDS = ['description', 'headline', 'developer', 'publisher', 'aboutGame'];
-const STEAM_AUTO_TRANSLATE_DEFAULT_FIELDS = ['description', 'headline', 'aboutGame'];
+const STEAM_LOC_TRANSLATABLE_FIELDS = ['description', 'headline', 'developer', 'publisher', 'aboutGame', 'shortDesc'];
+const STEAM_AUTO_TRANSLATE_DEFAULT_FIELDS = ['description', 'headline', 'aboutGame', 'shortDesc'];
 /* ── EMPTY SINCE v9.45, AND KEPT ────────────────────────────────────────
    Its one member was `headline`, the field Epic had and Steam did not, which
    is why the shared per-language store needed a second drawer at all. The
@@ -14456,9 +14573,16 @@ const STEAM_AUTO_TRANSLATE_DEFAULT_FIELDS = ['description', 'headline', 'aboutGa
    place the rule is written down: a field only one of these two stores has
    gets its own drawer by name, not by accident. _steamLocStore below is the
    function that reads it. */
-const EGS_ONLY_LOC_FIELDS = new Set();
+/* ONE MEMBER AGAIN (v9.57): Epic's short description. It used to be
+   Steam's (`description`, read from the same drawer), so an edit to the
+   French on either store rewrote the other's. A store's edits stay in that
+   store now; what the two still share is the translation of the same
+   English, which _claudeTranslateLangs asks for once (v9.56), and Steam's
+   own scraped localizations, which seed both (_checkSteamLocalizedListing).
+   The name is Epic's own key — egsSubmitAnswers.shortDesc is the English. */
+const EGS_ONLY_LOC_FIELDS = new Set(['shortDesc']);
 // Epic's own limit table. `headline` left it with the field itself.
-const EGS_LOC_FIELD_CHAR_LIMITS = { description: 300 };
+const EGS_LOC_FIELD_CHAR_LIMITS = { shortDesc: 300 };
 function _egsLocFieldHasOverLimitLang(field, langCodes) {
   const limit = EGS_LOC_FIELD_CHAR_LIMITS[field];
   if (limit == null) return false;
@@ -14468,6 +14592,7 @@ function _egsLocFieldHasOverLimitLang(field, langCodes) {
 // Prompt labels for Steam's own translate call, mirroring IAS_FIELD_LABELS.
 const STEAM_FIELD_LABELS = {
   description: 'short description',
+  shortDesc:   'short description',
   headline:    'store page headline',
   developer:   'developer name',
   publisher:   'publisher name',
@@ -14502,14 +14627,35 @@ function _steamLocStore(field, create) {
   if (EGS_ONLY_LOC_FIELDS.has(field)) {
     const ea = state.egsSubmitAnswers;
     if (!ea) return null;
-    if (!ea.localizedHeadline && create) ea.localizedHeadline = {};
-    return ea.localizedHeadline || null;
+    /* Epic's own drawer. `localizedHeadline` was its name while the headline
+       was the only field in it; that map is left alone for the About seed
+       that still reads it (_egsAboutSeedLocs, state.js). */
+    if (!ea.localizedStorePage && create) ea.localizedStorePage = {};
+    return ea.localizedStorePage || null;
   }
   const ws = state.webSite;
   if (!ws) return null;
   if (!ws.localizedStoreText && create) ws.localizedStoreText = {};
   return ws.localizedStoreText || null;
 }
+/* Which surface shows a field of this family: Epic's own fields are on
+   Epic's Localizations, everything else on Steam's (v9.57). */
+/* The Epic Store Page field on screen. A project saved before v9.57 may
+   hold 'description', which is Epic's 'shortDesc' now. */
+/* Epic's short description has had its own languages since v9.57; a project
+   from before keeps its French in Steam's drawer, so the pages that show
+   Epic's fill Epic's in on opening. A language already current is skipped,
+   so later opens ask for nothing. */
+function _egsShortDescCatchUp(stepId) {
+  if (stepId !== 'localizations' && stepId !== 'storePreview') return;
+  if (!state.egsSubmitAnswers || typeof _steamTriggerAutoTranslate !== 'function') return;
+  _steamTriggerAutoTranslate('shortDesc', _steamFieldValue('shortDesc', (state.formData || {}).primaryLanguage || 'en'));
+}
+function _egsLocField() {
+  const f = state.egsLocReviewField === 'description' ? 'shortDesc' : state.egsLocReviewField;
+  return (typeof EGS_LOC_REVIEW_FIELDS !== 'undefined' && EGS_LOC_REVIEW_FIELDS.some(x => x.value === f)) ? f : 'title';
+}
+function _steamLocSurface(field) { return EGS_ONLY_LOC_FIELDS.has(field) ? 'egs' : 'steam'; }
 function _steamLocEntry(field, lang, create) {
   const store = _steamLocStore(field, create);
   if (!store) return null;
@@ -14531,7 +14677,12 @@ function _steamFieldValue(field, lang) {
     const ea = state.egsSubmitAnswers;
     if (!ea) return '';
     const primary = (state.formData || {}).primaryLanguage || 'en';
-    if (lang === primary) return ea[field] || '';
+    if (lang === primary) {
+      // Epic's short description: its own, else Steam's scraped one — the
+      // same answer the page and the status bar give (egsShortDesc).
+      if (field === 'shortDesc') return (typeof egsShortDesc === 'function') ? egsShortDesc() : (ea.shortDesc || '');
+      return ea[field] || '';
+    }
     const entry = _steamLocEntry(field, lang, false);
     return (entry && entry[field]) || '';
   }
@@ -14594,11 +14745,13 @@ function _steamSetFieldValue(field, lang, value) {
     const primary = (state.formData || {}).primaryLanguage || 'en';
     if (lang === primary) {
       ea[field] = value;
-      if (_steamFieldAutoTranslateEnabled(field)) _steamTriggerAutoTranslate(field, value);
+      // Through the reader: a cleared short description shows Steam's again,
+      // and that is what the languages follow.
+      if (_steamFieldAutoTranslateEnabled(field)) _steamTriggerAutoTranslate(field, _steamFieldValue(field, primary));
       return;
     }
     const entry = _steamLocEntry(field, lang, true);
-    if (entry) entry[field] = value;
+    if (entry) { _locMarkEdited(entry, field); entry[field] = value; }
     return;
   }
   const ws = state.webSite;
@@ -14639,6 +14792,8 @@ function _steamFieldAutoTranslateEnabled(field) {
 // itself.
 async function _steamTriggerAutoTranslate(field, primaryValue) {
   if (!_steamFieldAutoTranslateEnabled(field)) return;
+  // Epic's own field: nothing to translate for a store nobody is shipping to.
+  if (EGS_ONLY_LOC_FIELDS.has(field) && !(state.activePlatforms && state.activePlatforms.has('egs'))) return;
   const ws = state.webSite;
   if (!ws) return;
   const fd = state.formData;
@@ -14671,7 +14826,7 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
       const backEntry = _steamLocReviewBackTranslationEntry(field, lang);
       if (backEntry.syncedTopText !== '') _steamLocReviewRefreshBackTranslation(field, lang, '');
     });
-    _locDeferredRerender('steam', 'storePage', field, null);
+    _locDeferredRerender(_steamLocSurface(field), 'storePage', field, null);
     return;
   }
 
@@ -14686,7 +14841,7 @@ async function _steamTriggerAutoTranslate(field, primaryValue) {
     if (!entry) return;
     entry[inFlightKey] = text;
   });
-  _locDeferredRerender('steam', 'storePage', field, null);
+  _locDeferredRerender(_steamLocSurface(field), 'storePage', field, null);
 
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel    = STEAM_FIELD_LABELS[field] || field;
@@ -14738,6 +14893,7 @@ Rules:
       if (entry[field + 'FromSteam'] && entry[sourceKey] === text) return;
       entry[field]     = translated;
       entry[sourceKey] = text;
+      _locClearEdited(entry, field);
       // This write just replaced whatever Steam may have supplied with a
       // fresh AI translation — no longer Steam's own text, so the flag no
       // longer applies (harmless no-op if it was never set).
@@ -14751,13 +14907,13 @@ Rules:
     console.warn('[Steam Store Preview Translate]', field, e.message);
     state.steamTranslateStatus[field] = 'error';
     eligible.forEach(lang => {
-      const entry = ws.localizedStoreText && ws.localizedStoreText[lang];
+      const entry = _steamLocEntry(field, lang, false);
       if (entry) delete entry[inFlightKey];
     });
   }
   state.steamTranslatePendingLangs[field] = [];
 
-  _locDeferredRerender('steam', 'storePage', field, null);
+  _locDeferredRerender(_steamLocSurface(field), 'storePage', field, null);
 }
 
 // Mirrors _masFieldTranslatePending — Title defers to _iasFieldTranslatePending
@@ -14870,13 +15026,13 @@ async function _steamLocReviewRefreshBackTranslation(field, lang, topText) {
     entry.text = '';
     entry.syncedTopText = topText;
     entry.status = null;
-    _locDeferredRerenderBack('steam', 'storePage', field, null);
+    _locDeferredRerenderBack(_steamLocSurface(field), 'storePage', field, null);
     return;
   }
 
   if (!_backTranslateWanted()) return;   // lazy: fetched when a Review side shows it (v9.55)
   entry.status = 'loading';
-  _locDeferredRerenderBack('steam', 'storePage', field, null);
+  _locDeferredRerenderBack(_steamLocSurface(field), 'storePage', field, null);
 
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
@@ -14893,7 +15049,7 @@ async function _steamLocReviewRefreshBackTranslation(field, lang, topText) {
     freshEntry.syncedTopText = topText;
     freshEntry.status = null;
   }
-  _locDeferredRerenderBack('steam', 'storePage', field, null);
+  _locDeferredRerenderBack(_steamLocSurface(field), 'storePage', field, null);
 }
 
 async function _steamLocReviewCommitPrimaryEdit(field, lang, value) {
@@ -15133,8 +15289,7 @@ function _steamLocReviewSourceBadge(field, lang) {
     if (_iasFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (fd[field] || '')) return 'ai';
     return null;
   }
-  const ws = state.webSite;
-  const entry = ws && ws.localizedStoreText && ws.localizedStoreText[lang];
+  const entry = _steamLocEntry(field, lang, false);
   if (!entry) return null;
   if (entry[field + 'FromSteam']) return 'steam';
   if (_steamFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === _steamFieldValue(field, primary)) return 'ai';
@@ -25264,7 +25419,7 @@ function toggleEgsLocReviewMode() {
      same way Steam's own toggle does — otherwise the bottom halves open empty
      and look broken rather than pending. */
   if (state.egsLocReviewMode === 'review' && typeof _steamLocReviewSyncBackTranslations === 'function') {
-    _steamLocReviewSyncBackTranslations(state.egsLocReviewField || 'title');
+    _steamLocReviewSyncBackTranslations(_egsLocField());
   }
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
 }
@@ -25312,7 +25467,13 @@ function answerEgsProductField(fieldId, value) {
    else. Trimmed on write so that a field holding only spaces is empty to
    every completeness check rather than empty to the eye alone. */
 function setEgsProductText(fieldId, value) {
-  state.egsSubmitAnswers[fieldId] = (value || '').trim();
+  if (fieldId === 'shortDesc' && typeof _steamSetFieldValue === 'function') {
+    // Epic's own English short description: written, and its languages
+    // translated from it (v9.57 — they used to be Steam's).
+    _steamSetFieldValue('shortDesc', (state.formData || {}).primaryLanguage || 'en', (value || '').trim());
+  } else {
+    state.egsSubmitAnswers[fieldId] = (value || '').trim();
+  }
   _egsProductRepaint();
 }
 
@@ -27857,6 +28018,10 @@ function _egsAboutCatchUpTranslations() {
   if (typeof EGS_ABOUT_LOC !== 'object' || typeof seedEgsAboutBlocks !== 'function') return;
   seedEgsAboutBlocks();
   EGS_ABOUT_LOC.propagateAllFields();
+  // and its own short description (v9.57 — it used to be Steam's).
+  if (typeof _steamTriggerAutoTranslate === 'function' && state.egsSubmitAnswers) {
+    _steamTriggerAutoTranslate('shortDesc', _steamFieldValue('shortDesc', (state.formData || {}).primaryLanguage || 'en'));
+  }
 }
 
 /* ONE WAY, AND IT OVERWRITES (by request). Game Details' Description fills both

@@ -4325,10 +4325,13 @@ function isEgsSectionComplete(sectionId) {
     const langs = (state.formData.localizations || [])
       .filter(l => l !== (state.formData.primaryLanguage || 'en'));
     if (!langs.length) return !!a.localizationsSeen;   // nothing to translate yet
-    const store = (state.webSite && state.webSite.localizedStoreText) || {};
+    /* Epic's OWN copies (v9.57): its short description is no longer Steam's,
+       and its About has been its own blocks since v9.45 — this still read
+       Steam's About This Game. */
     return langs.every(l => {
-      const e = store[l] || {};
-      return !!(e.description || '').trim() && !!(e.aboutGame || '').trim();
+      const sd = (typeof _steamFieldValue === 'function') ? _steamFieldValue('shortDesc', l) : '';
+      const body = (typeof egsBodyText === 'function') ? egsBodyText(l) : '';
+      return !!(sd || '').trim() && !!(body || '').trim();
     });
   }
   if (sectionId === 'improveSubmission') return !!a.improveSubmissionSeen;

@@ -7381,6 +7381,24 @@ const SM_FLIP_LABELS = {
 const _CM_EXT_ICO = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7V5a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2H7a1 1 0 0 0-1 1v3H4a2 2 0 0 0 0 4h2v3a1 1 0 0 0 1 1h3v-2a2 2 0 0 1 4 0v2h3a1 1 0 0 0 1-1v-3h2a2 2 0 0 0 0-4h-2V8a1 1 0 0 0-1-1z"/></svg>`;
 const _CM_KEY_ICO = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2m-4 4 3 3m-5-1 3 3"/></svg>`;
 
+/* Steps 1–3 of Connect Account (download, install, sign in) are done — the
+   point at which the 4th, the API key, becomes the current task. Shared by
+   the list below and by _maybeStartApiKey (app.js), which is what STARTS the
+   key: a builder only ever reads (v9.57). */
+function _connectPriorTasksDone(pid) {
+  const extDone    = (typeof shipmateExtReady === 'function') && shipmateExtReady();
+  const downloaded = extDone || !!state.extensionDownloaded;
+  const signedIn   = (typeof isPlatformConnected === 'function') && isPlatformConnected(pid);
+  return downloaded && extDone && signedIn;
+}
+/* The key task is the one needing attention: 1–3 done, the key step itself not. */
+function _connectKeyTaskIsCurrent(pid) {
+  if (!_connectPriorTasksDone(pid)) return false;
+  const hasApiKey = !!(state.upf && state.upf.agent && state.upf.agent.account && state.upf.agent.account.hasApiKey);
+  const keyDone = state._apiKeyStepDone === undefined ? hasApiKey : !!state._apiKeyStepDone;
+  return !keyDone;
+}
+
 function buildConnectStepSection(pid) {
   /* ASK THE EXTENSION BEFORE DRAWING THE LIST (v8.22). The first two tasks here
      are Download and Install, and making someone do both again because the page
@@ -7414,7 +7432,7 @@ function buildConnectStepSection(pid) {
        turning it green. The done value itself is a session flag (not raw hasApiKey)
        so the completion is driven by the agent having run; undefined (re-viewing an
        already-connected account) falls back to hasApiKey. */
-  const _priorDone = downloaded && extDone && signedIn;
+  const _priorDone = _connectPriorTasksDone(pid);
   const tasks = [
     { id: 'download', title: 'Download the Shipmate extension',   done: downloaded },
     { id: 'install',  title: 'Install it in Chrome',              done: extDone    },
@@ -7504,30 +7522,17 @@ function _connectTaskDetail(pid, taskId) {
       </div>`;
   }
   if (taskId === 'apikey') {
-    // Shipmate does this one itself: generate (or reuse) the API key through the
-    // extension and import it into the agent. Kick it off ONCE when this becomes
-    // the current task (sync guard, since renders repeat), then just reflect the
-    // state — a spinner while it runs, a retry if it failed. generateApiKey's own
-    // health re-check covers the already-keyed case (refresh → task turns green).
+    /* Shipmate does this one itself — but it is NOT started here (v9.57). It
+       creates a key in the developer's Apple account, and a drawing function
+       that happened to paint this row was what used to start it: any repaint
+       of the open modal could. It is started by the events that make it the
+       current task — the extension confirming the App Store Connect sign-in
+       (connectAdd), the Connect step being opened with steps 1–3 already done,
+       or the extension turning up while the step is open — in
+       _maybeStartApiKey (app.js). This only shows where it stands, and says
+       plainly what is being done in the developer's account. */
     const inFlight = !!(typeof UPF !== 'undefined' && UPF._apiKeyInFlight);
     const failed   = !!state._apiKeyFailed;
-    if (!inFlight && !failed && !state._apiKeyAutoStarted
-        && typeof UPF !== 'undefined' && typeof UPF.generateApiKey === 'function') {
-      state._apiKeyAutoStarted = true;
-      Promise.resolve().then(() => UPF.generateApiKey(pid)).then((r) => {
-        if (r && r.already) {
-          // Agent already had a key — the step is still performed (confirmed) by the
-          // agent: mark it done so the disc turns green, refresh health, then finish
-          // the connect (the generate path does this via _onAscTaskResult).
-          state._apiKeyStepDone = true;
-          state.upf.agent = null;
-          UPF.health().then(() => {
-            if (state.stepModal && state.stepModal.stepId === 'connect' && typeof reRenderStepModal === 'function') reRenderStepModal();
-            try { UPF.onConnected(pid); } catch (_) {}
-          });
-        }
-      }).catch(() => {});
-    }
     if (failed) {
       return `
         <div class="cm-detail">
@@ -7535,9 +7540,19 @@ function _connectTaskDetail(pid, taskId) {
           <button class="platform-login-btn" type="button" onclick="retryApiKey('${pid}')">Try again</button>
         </div>`;
     }
+    if (!inFlight && !state._apiKeyAutoStarted) {
+      // Nothing has started it (e.g. the modal was painted by a path none of
+      // the events cover): offer it as a button rather than doing it unasked.
+      return `
+        <div class="cm-detail">
+          <div class="cm-detail-text">Shipmate will create an API key named “Shipmate” in your App Store Connect account, so it can fill in the rest of your submission.</div>
+          <button class="platform-login-btn" type="button" onclick="startApiKey('${pid}')">Set up the key</button>
+        </div>`;
+    }
     return `
       <div class="cm-detail">
-        <div class="cm-detail-text cm-working"><span class="build-proc-spin"></span>Setting up your App Store Connect key — this takes a few seconds.</div>
+        <div class="cm-detail-text cm-working"><span class="build-proc-spin"></span>Creating a “Shipmate” API key in your App Store Connect account — this takes a few seconds.</div>
+        <div class="platform-login-hint">If you already have one on this Mac, Shipmate reuses it instead.</div>
       </div>`;
   }
   return '';
@@ -13651,7 +13666,7 @@ const STEAM_LOC_REVIEW_FIELDS = [
    mean the first block's, which is a question nobody asked. */
 const EGS_LOC_REVIEW_FIELDS = [
   { value: 'title',       label: 'Product Name' },
-  { value: 'description', label: 'Short Description' },
+  { value: 'shortDesc',   label: 'Short Description' },   // Epic's own since v9.57
 ];
 
 /* ── EPIC GAMES STORE — LOCALIZATION REVIEW  (v7.31) ──────────────────────
@@ -13669,7 +13684,12 @@ const EGS_LOC_REVIEW_FIELDS = [
    should find it here rather than being asked again. It is the same argument
    Adam approved for IARC one version ago: one questionnaire, two storefronts.
 
-   The consequence is worth stating plainly rather than discovering: editing a
+   SUPERSEDED IN PART (v9.57, by request): the Short Description is Epic's
+   own now ('shortDesc', Epic's drawer), so an edit here stays on Epic and an
+   edit on Steam stays on Steam. What the two still share is the translation
+   of the same English (one request, _claudeTranslateLangs) and Steam's own
+   scraped localizations. Product Name is still the App Store's value.
+   The original note, kept for the history: editing a
    language's Short Description here changes it on Steam's page too. That is
    intended. Anything genuinely per-store — Epic's own character limits, which
    field is on screen, whether this surface is flipped to review — is Epic's
@@ -18384,6 +18404,8 @@ function _buildUnifiedLocalizationsSection(p) {
     // a field with no tab left to reselect it from — same treatment the view
     // fallback above gives a tab that has disappeared, and deliberately not
     // written back to state for the same reason.
+    // Epic's short description was 'description' until v9.57 (_egsLocField).
+    if (p.storePage.fieldKey === 'egsLocReviewField' && typeof _egsLocField === 'function') field = _egsLocField();
     if (!spFields.some(f => f.value === field)) field = spFields[0].value;
     const limit = (p.storePage.limits || IAS_FIELD_CHAR_LIMITS)[field];
     reviewMode = state[p.storePage.modeKey] === 'review';
@@ -21065,18 +21087,18 @@ function buildEgsLocalizationsSection() {
       fieldKey: 'egsLocReviewField', modeKey: 'egsLocReviewMode',
       settingsOpenKey: 'egsReviewSettingsOpen',
       autoCfgKey: 'steamAutoTranslateFields',
-      autoCfgDefault: { description: true },
+      autoCfgDefault: { shortDesc: true },
       fields: EGS_LOC_REVIEW_FIELDS,
       limits: EGS_LOC_FIELD_CHAR_LIMITS,
       /* Only the short description is long enough to want the wide card now
          that the body has moved to the About tab. */
-      longFields: ['description'],
+      longFields: ['shortDesc'],
       /* Product Name is the App Store's own value wherever it appears, so
          its switch reads and writes iasAutoTranslateFields — the same
          override Mac App Store's Title uses, for the same reason. */
       settingsRows: [
         ['title', 'Product Name', LOC_SHARED_AUTO_OVERRIDE],
-        ['description', 'Short Description'],
+        ['shortDesc', 'Short Description'],
       ],
       fieldHasOverLimitLang: _egsLocFieldHasOverLimitLang,
       fieldValue: _steamFieldValue,
@@ -21669,7 +21691,7 @@ function buildEgsStorePreviewSection() {
   const title     = locVal('title', (fd.title || '').trim());
   /* Steam's cached blurb stands in until somebody types their own, resolved
      by egsShortDesc so the page and the status bar cannot disagree. */
-  const desc      = locVal('description', egsShortDesc());
+  const desc      = locVal('shortDesc', egsShortDesc());
   /* THE ABOUT SECTION READS ITS OWN BLOCKS NOW (v9.45), each one carrying
      its own translations, so there is no single `headline`/`aboutGame` pair
      for locVal to resolve here any more — see the About block further down
@@ -22003,7 +22025,7 @@ function buildEgsStorePreviewSection() {
     id: 'egs-sp-short', cls: 'egs-sp-short', value: desc, multiline: true, rows: 3,
     limit: EGS_PAGE_LIMITS.shortDesc, placeholder: 'Short Description',
     onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.shortDesc})`,
-    onChange: locSet('description', `setEgsProductText('shortDesc', this.value)`) });
+    onChange: locSet('shortDesc', `setEgsProductText('shortDesc', this.value)`) });
 
   /* GENRES AND FEATURES SIT SIDE BY SIDE, because they do on Epic's own page
      — Rocket League's shows Genres in a narrow left column and Features in a

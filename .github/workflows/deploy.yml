@@ -27,8 +27,8 @@ jobs:
       - name: Inject secrets
         run: |
           sed -i 's/__CLAUDE_API_KEY__/${{ secrets.CLAUDE_API_KEY }}/g' index.html
-          sed -i 's/__IGDB_CLIENT_ID__/${{ secrets.IGDB_CLIENT_ID }}/g' index.html
-          sed -i 's/__IGDB_CLIENT_SECRET__/${{ secrets.IGDB_CLIENT_SECRET }}/g' index.html
+          # The IGDB client ID/secret are no longer injected (v9.57): nothing in the
+          # page uses them, and injecting the secret published it in the page source.
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
