@@ -4924,7 +4924,61 @@ async function _claudeTranslateCall(prompt, maxTokens) {
   return res.json();
 }
 
+/* THE SAME WORDS IN THE SAME LANGUAGE ARE TRANSLATED ONCE (v9.56), whichever
+   store asks. Game Details' Description is written into several stores'
+   copies at once — the App Store's description, Epic's first About block,
+   Steam's About This Game, both Mac App Store descriptions — and each store
+   asked for its own translation of the identical text, one request per store
+   per language. This keys a finished (or in-flight) translation by the text
+   and the language alone, so the first store's request answers the rest.
+
+   It follows the TEXT, not the field, which is what keeps it honest once the
+   copies part ways: edit Epic's About body (or give it a second block) and
+   its text no longer matches the description, so it is asked for on its own.
+   A language that failed is forgotten, so the next ask tries again. */
+const _claudeTextLangCache = new Map();
+const _textLangKey = (text, lang) => lang + '\u0000' + text;
+
 async function _claudeTranslateLangs({ prompt, langList, langs, text, perLangBudget }) {
+  /* Languages another request already has (or is getting) for these words. */
+  const borrowed = {};
+  const own = [];
+  langs.forEach(l => {
+    const k = _textLangKey(text, l);
+    if (_claudeTextLangCache.has(k)) borrowed[l] = _claudeTextLangCache.get(k);
+    else own.push(l);
+  });
+  const settleOwn = {};
+  own.forEach(l => {
+    let res; const p = new Promise(r => { res = r; });
+    settleOwn[l] = res;
+    _claudeTextLangCache.set(_textLangKey(text, l), p);
+  });
+  if (_claudeTextLangCache.size > 4000) _claudeTextLangCache.delete(_claudeTextLangCache.keys().next().value);
+  let result = {}, failure = null;
+  try {
+    result = own.length ? await _claudeTranslateLangsNow({ prompt, langList, langs: own, text, perLangBudget }) : {};
+  } catch (e) { failure = e; }
+  own.forEach(l => {
+    const v = result[l];
+    if (typeof v === 'string' && v.trim()) settleOwn[l](v);
+    else { _claudeTextLangCache.delete(_textLangKey(text, l)); settleOwn[l](undefined); }
+  });
+  /* Wait for the borrowed ones; any that came back empty are asked for here. */
+  const retry = [];
+  for (const l of Object.keys(borrowed)) {
+    const v = await borrowed[l];
+    if (typeof v === 'string' && v.trim()) result[l] = v; else retry.push(l);
+  }
+  if (retry.length) {
+    try { Object.assign(result, await _claudeTranslateLangsNow({ prompt, langList, langs: retry, text, perLangBudget })); }
+    catch (e) { failure = failure || e; }
+  }
+  if (failure && !langs.some(l => typeof result[l] === 'string' && result[l].trim())) throw failure;
+  return result;
+}
+
+async function _claudeTranslateLangsNow({ prompt, langList, langs, text, perLangBudget }) {
   const per   = _claudeTranslateTokensPerLang(text, perLangBudget);
   const room  = CLAUDE_TRANSLATE_MAX_TOKENS - 300;
   const size  = Math.max(1, Math.floor(room / per));
@@ -6540,6 +6594,12 @@ function smFakeStoreInsights(on = true) {
      so leaving the failed analysis in place kept "Analysis failed" on screen
      over a perfectly good set of suggestions. */
   state.improveSubmissionAnalysis = { grade: 'B' };
+  /* A preview must stay put (v9.56): stamped with what the listing is NOW,
+     as a real run's result is, or the next open of Improve would read it as
+     stale and replace the fixture with a real analysis. */
+  const _fp = _improveBasis();
+  state.storePageInsights.basis = _fp.sp;
+  state.improveSubmissionAnalysis.basis = _fp.ai;
   reRenderStepModal();
 }
 
@@ -12305,6 +12365,12 @@ function _parseAnalysisArray(text) {
 }
 
 async function runImproveSubmissionAnalysis(platformId) {
+  const basis = _improveBasis().ai;
+  try { await _runImproveSubmissionAnalysisNow(platformId); }
+  finally { if (state.improveSubmissionAnalysis && !state.improveSubmissionAnalysis.loading) state.improveSubmissionAnalysis.basis = basis; }
+}
+
+async function _runImproveSubmissionAnalysisNow(platformId) {
   if (!CLAUDE_API_KEY) {
     state.improveSubmissionAnalysis = { error: 'No API key configured.' };
     reRenderStepModal(); return;
@@ -12487,6 +12553,12 @@ Only include findings that are genuinely meaningful. Omit filler. If something i
 /* ── Store Page AI Insights ("Fix it" button) ──────────────── */
 
 async function runStorePageInsights() {
+  const basis = _improveBasis().sp;
+  try { await _runStorePageInsightsNow(); }
+  finally { if (state.storePageInsights && !state.storePageInsights.loading) state.storePageInsights.basis = basis; }
+}
+
+async function _runStorePageInsightsNow() {
   if (!CLAUDE_API_KEY) {
     state.storePageInsights = { error: 'No API key configured.' };
     reRenderStepModal(); return;
@@ -12701,18 +12773,53 @@ function _selectedStoreItem() {
 }
 
 /* Auto-trigger both analyses when the Improve Your Submission step opens */
-function _autoRunImproveSubmission(pid) {
-  const needsSP = !state.storePageInsights || !!state.storePageInsights.error;
-  const needsAI = !state.improveSubmissionAnalysis || !!state.improveSubmissionAnalysis.error;
+/* WHAT EACH ANALYSIS LOOKED AT (v9.56), as a fingerprint stamped on its
+   result. Store-page suggestions read the title, subtitle and description;
+   the report card reads the app icon, the first five screenshots and the
+   title. Opening Improve Your Submission re-runs an analysis whose
+   fingerprint no longer matches — the listing was edited since — and leaves
+   one that does alone. Screenshots and the icon are fingerprinted by
+   identity (pool ref or id), and a data URL by its length and ends, so this
+   is cheap to compute on every open. */
+function _improveFingerprint(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36) + ':' + str.length;
+}
+function _improveAssetId(a) {
+  if (!a) return '';
+  if (typeof a === 'string') return a.length + a.slice(0, 48) + a.slice(-48);
+  const src = (typeof _screenshotSrc === 'function' ? _screenshotSrc(a) : a.dataUrl) || '';
+  return [a.ref || '', a.id || '', src.length, src.slice(0, 48), src.slice(-48)].join('~');
+}
+function _improveBasis() {
+  const fd = state.formData || {};
+  const ups = state.uploads || {};
+  return {
+    sp: _improveFingerprint([fd.title || '', fd.subtitle || '', fd.description || ''].join('\u0001')),
+    ai: _improveFingerprint([fd.title || '', _improveAssetId(ups.appIcon),
+          ...(ups.screenshots || []).slice(0, 5).map(_improveAssetId)].join('\u0001')),
+  };
+}
 
-  // Reset cycling index and dismissed/accepted on fresh analysis run
-  /* A fresh analysis produces a different list, so every carousel goes back to
-     its first card and the answers recorded against the old list are dropped.
-     acceptedFixes is deliberately NOT cleared: those values are already written
-     into the real store copy, and forgetting them here would re-offer a fix the
-     user has applied. */
-  state.improveIdx = { storePage: 0 };
-  state.dismissedFixes = new Set();
+function _autoRunImproveSubmission(pid) {
+  const basis = _improveBasis();
+  const stale = (r, b) => !r || !!r.error || (!r.loading && r.basis !== b);
+  const needsSP = stale(state.storePageInsights, basis.sp);
+  const needsAI = stale(state.improveSubmissionAnalysis, basis.ai);
+
+  /* A fresh store-page analysis produces a different list, so the carousel
+     goes back to its first card and the dismissals recorded against the old
+     list are dropped. ONLY THEN (v9.56): this used to run on every open, so a
+     suggestion you had dismissed came back the next time you opened the step,
+     with nothing re-run. acceptedFixes is deliberately NOT cleared: those
+     values are already written into the real store copy, and forgetting them
+     here would re-offer a fix the user has applied. */
+  if (needsSP) {
+    state.improveIdx = { storePage: 0 };
+    state.dismissedFixes = new Set();
+  }
+  if (!needsSP && !needsAI) return;
 
   if (needsSP) state.storePageInsights        = { loading: true };
   if (needsAI) state.improveSubmissionAnalysis = { loading: true };
@@ -13449,7 +13556,6 @@ async function _masTriggerAutoTranslate(field, primaryValue) {
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
   const perLangBudget  = (field === 'subtitle' || field === 'title') ? 120 : (field === 'releaseNotes' ? 600 : 1200);
-  const maxTokens      = Math.min(8192, 300 + eligible.length * perLangBudget);
 
   const prompt = `Translate the following Mac app store ${fieldLabel} text for a video game into each of the listed languages.
 
@@ -13473,28 +13579,10 @@ Rules:
 
   try {
     // Queued — see _enqueueTranslateTask's own comment (above, this file).
-    await _enqueueTranslateTask(async () => {
-    const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'x-api-key':                                 CLAUDE_API_KEY,
-        'anthropic-version':                         '2023-06-01',
-        'content-type':                              'application/json',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model:      CLAUDE_MODEL,
-        max_tokens: maxTokens,
-        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
-      }),
-    });
-
-    if (!res.ok) throw await smClaudeHttpError(res);
-    const data    = await res.json();
-    const resText = (data.content?.[0]?.text || '').trim();
-    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed  = JSON.parse(cleaned);
-    const results = parsed.translations || {};
+    /* Through the shared path since v9.56 (_claudeTranslateLangs): sized by
+       the text, split to fit, and the same words in the same language as
+       another store's copy are one request between them. */
+    const results = await _claudeTranslateLangs({ prompt, langList, langs: eligible, text, perLangBudget });
 
     if (!ml.localizedStoreText) ml.localizedStoreText = {};
     eligible.forEach(lang => {
@@ -13518,7 +13606,6 @@ Rules:
     });
 
     state.masTranslateStatus[field] = 'complete';
-    });
   } catch (e) {
     console.warn('[Mac App Store Preview Translate]', field, e.message);
     state.masTranslateStatus[field] = 'error';
@@ -20048,7 +20135,7 @@ function FSavedAchievements() {
     }
 
   Rules:
-  - Preserve the tone and meaning of the source text.
+  - Preserve the tone, meaning, and any line breaks in the source text.
   - Write natural, idiomatic translations for a native speaker of each target language — not literal word-for-word.
   - Include every requested language code as a key.`;
 
@@ -22796,7 +22883,6 @@ async function _macFullTriggerAutoTranslate(field, primaryValue) {
   const langList      = eligible.map(l => `${l}: ${OB_LANG_NAMES[l] || l}`).join('\n');
   const fieldLabel     = IAS_FIELD_LABELS[field] || field;
   const perLangBudget  = (field === 'subtitle' || field === 'title') ? 120 : (field === 'releaseNotes' ? 600 : 1200);
-  const maxTokens      = Math.min(8192, 300 + eligible.length * perLangBudget);
 
   const prompt = `Translate the following Mac app store ${fieldLabel} text for a video game into each of the listed languages.
 
@@ -22820,28 +22906,10 @@ Rules:
 
   try {
     // Queued — see _enqueueTranslateTask's own comment (above, this file).
-    await _enqueueTranslateTask(async () => {
-    const res = await _claudeFetchRetry(CLAUDE_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'x-api-key':                                 CLAUDE_API_KEY,
-        'anthropic-version':                         '2023-06-01',
-        'content-type':                              'application/json',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model:      CLAUDE_MODEL,
-        max_tokens: maxTokens,
-        messages:   [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
-      }),
-    });
-
-    if (!res.ok) throw await smClaudeHttpError(res);
-    const data    = await res.json();
-    const resText = (data.content?.[0]?.text || '').trim();
-    const cleaned = resText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed  = JSON.parse(cleaned);
-    const results = parsed.translations || {};
+    /* Through the shared path since v9.56 (_claudeTranslateLangs): sized by
+       the text, split to fit, and the same words in the same language as
+       another store's copy are one request between them. */
+    const results = await _claudeTranslateLangs({ prompt, langList, langs: eligible, text, perLangBudget });
 
     if (!ml.localizedStoreText) ml.localizedStoreText = {};
     eligible.forEach(lang => {
@@ -22857,7 +22925,6 @@ Rules:
     });
 
     state.macFullTranslateStatus[field] = 'complete';
-    });
   } catch (e) {
     console.warn('[Mac App Store Full Preview Translate]', field, e.message);
     state.macFullTranslateStatus[field] = 'error';
