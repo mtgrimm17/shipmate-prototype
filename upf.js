@@ -578,7 +578,8 @@ const UPF = {
                description: L.description || f.description, releaseNotes: L.releaseNotes || f.releaseNotes };
     }
     const L = store || {};
-    return { title: f.title, subtitle: f.subtitle,
+    // The App Store's own title (v9.58), which this record shares with macos.
+    return { title: (typeof appStoreTitle === 'function' ? appStoreTitle() : f.title), subtitle: f.subtitle,
              description: (state.appStoreListing && state.appStoreListing.description) || f.description,
              releaseNotes: L.releaseNotes || f.releaseNotes };
   },
@@ -1252,7 +1253,13 @@ const UPF = {
       const ml = state.macAppStoreListing = state.macAppStoreListing || {};
       const set = (obj, k, v) => { if (v != null && v !== '') obj[k] = v; };
       // Listing text + URLs — the sources buildListing reads for macos.
-      set(f, 'title', L.name);
+      // App Store Connect's name is the App Store's own title (v9.58); Game
+      // Details' only if it has none yet.
+      if (L.name) {
+        if (!state.appStoreListing) state.appStoreListing = { description: null };
+        state.appStoreListing.title = L.name;
+        if (!f.title) f.title = L.name;
+      }
       set(f, 'subtitle', L.subtitle);
       if (L.description != null && L.description !== '') {
         f.description = L.description;

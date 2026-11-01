@@ -4174,7 +4174,7 @@ const LOC_SURFACE = {
     unifiedStep: 'localizations',
     viewKey: 'egsLocsView',
     views: {
-      storePage:    { fieldKey: 'egsLocReviewField', modeKey: 'egsLocReviewMode', defaultField: 'title',
+      storePage:    { fieldKey: 'egsLocReviewField', modeKey: 'egsLocReviewMode', defaultField: 'productName',
                       fieldFn: () => _egsLocField(),
                       screens: [{ stepId: 'storePreview', flip: null }] },
       achievements: { fieldKey: 'egsAchLocField', modeKey: 'egsAchLocMode', defaultField: 'unlockedDisplayName',
@@ -8730,6 +8730,9 @@ function syncField(field, value) {
     }
   }
   state.formData[field] = value;
+  // Typing in Game Details' title: every store follows it again (v9.58);
+  // their languages are re-mirrored when the box is left (_settleStoreTitles).
+  if (field === 'title') _overwriteStoreTitles(value);
   // Keep platform privacy URLs in sync when the global field is updated
   if (field === 'privacyUrl') {
     state.iosSubmitAnswers.privacyPolicyUrl     = value;
@@ -9819,7 +9822,7 @@ function selectPicklistItem(igdbId) {
     titleEl.value = item.name;
     charCount('ob-title-count', item.name, 30);
   }
-  _iasPropagateTitle(item.name);
+  _settleStoreTitles(item.name);   // Game Details' title overwrites every store's (v9.58)
 
   // Clear whatever's already in Steam's "Select Key Art" section — Capsule
   // Image, Header Image, IGDB Cover Art, Library Hero — before this new
@@ -11373,13 +11376,25 @@ async function _checkSteamLocalizedListingInner(lang) {
   const localizedName = (data.name || '').trim();
   const baselineName  = (info.baselineName || '').trim();
   if (localizedName && localizedName !== baselineName) {
-    _iasSetFieldValue('title', lang, localizedName);
-    if (fd.localizedStoreText && fd.localizedStoreText[lang]) {
-      const entry = fd.localizedStoreText[lang];
-      entry.titleFromSteam  = true;
-      entry.titleSourceText = fd.title || '';
-      _locClearEdited(entry, 'title');
+    /* Steam's name in this language is for the GAME's title, so each store
+       whose title is still that one gets it; a store that renamed itself
+       keeps its own (v9.58). */
+    const srcTitle = fd.title || '';
+    if (appStoreTitle() === srcTitle) {
+      _iasSetFieldValue('title', lang, localizedName);
+      if (fd.localizedStoreText && fd.localizedStoreText[lang]) {
+        const entry = fd.localizedStoreText[lang];
+        entry.titleFromSteam  = true;
+        entry.titleSourceText = srcTitle;
+        _locClearEdited(entry, 'title');
+      }
     }
+    [['title', steamTitle()], ['productName', egsProductName()]].forEach(([f, prim]) => {
+      if (prim !== srcTitle) return;
+      const e = _steamLocEntry(f, lang, true);
+      if (!e || e[f + 'Edited']) return;
+      e[f] = localizedName; e[f + 'FromSteam'] = true; e[f + 'SourceText'] = prim;
+    });
   }
 
   if (!ws.localizedStoreText) ws.localizedStoreText = {};
@@ -11728,11 +11743,14 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     _applySteamLegalNotice(data.legalNotice);
     _applySteamRequirements(data.requirements);
     _applySteamCategories(data.categories);
-    if (data.developers && data.developers.length) state.webSite.developer = data.developers.join(', ');
+    /* The game's developer and publisher (v9.58): kept as the source on
+       state.formData and written over every store's own copy — Steam's
+       (webSite) and Epic's — the way Game Details' title is. */
+    if (data.developers && data.developers.length) _setGameDevPub('developer', data.developers.join(', '));
     // Publisher — same "join Steam's list" treatment as Developer above,
     // just a different appdetails field (a game can, and often does, have
     // different developer(s) and publisher(s)).
-    if (data.publishers && data.publishers.length) state.webSite.publisher = data.publishers.join(', ');
+    if (data.publishers && data.publishers.length) _setGameDevPub('publisher', data.publishers.join(', '));
     // Official Website — Steam's appdetails 'website' field (the game's own
     // landing page, when the developer has set one on the store page —
     // Steam leaves this blank more often than not, so this often stays
@@ -12586,7 +12604,7 @@ Only include findings that are genuinely meaningful. Omit filler. If something i
   const fd = state.formData;
   if (fd.title || fd.description) {
     content.push({ type: 'text', text:
-      `STORE PAGE COPY:\nTitle: ${fd.title || '(no title)'}\nDescription: ${(fd.description || '(no description)').slice(0, 800)}${(fd.description || '').length > 800 ? '…' : ''}` });
+      `STORE PAGE COPY:\nTitle: ${appStoreTitle() || '(no title)'}\nDescription: ${(fd.description || '(no description)').slice(0, 800)}${(fd.description || '').length > 800 ? '…' : ''}` });
   }
 
   // Attach icon if present
@@ -12679,7 +12697,7 @@ async function _runStorePageInsightsNow() {
   reRenderStepModal();
 
   const fd    = state.formData;
-  const title = fd.title || '(no title)';
+  const title = appStoreTitle() || '(no title)';   // the App Store's own (v9.58)
   const desc  = fd.description || '(no description)';
 
   const subtitle = state.formData.subtitle || '';
@@ -12908,8 +12926,8 @@ function _improveBasis() {
   const fd = state.formData || {};
   const ups = state.uploads || {};
   return {
-    sp: _improveFingerprint([fd.title || '', fd.subtitle || '', fd.description || ''].join('\u0001')),
-    ai: _improveFingerprint([fd.title || '', _improveAssetId(ups.appIcon),
+    sp: _improveFingerprint([appStoreTitle(), fd.subtitle || '', fd.description || ''].join('\u0001')),
+    ai: _improveFingerprint([appStoreTitle(), _improveAssetId(ups.appIcon),
           ...(ups.screenshots || []).slice(0, 5).map(_improveAssetId)].join('\u0001')),
   };
 }
@@ -12966,10 +12984,9 @@ function _applyFieldValue(field, value) {
     if (el) { el.value = value; charCount('ob-subtitle-count', value, 30); }
     _iasTriggerAutoTranslate('subtitle', value);
   } else if (field === 'title') {
-    state.formData.title = value;
-    const el = document.getElementById('ob-title');
-    if (el) { el.value = value; charCount('ob-title-count', value, 30); }
-    _iasPropagateTitle(value);
+    // Improve reviews the App Store's page, so a title fix is the App
+    // Store's title — not Game Details', which would rename every store (v9.58).
+    _iasSetFieldValue('title', (state.formData.primaryLanguage || 'en'), value);
   }
 }
 
@@ -13026,6 +13043,8 @@ function _iasFieldValue(field, lang) {
   if (lang === primary && field === 'description') {
     return (state.appStoreListing?.description) ?? (fd.description || '');
   }
+  // The App Store's own title since v9.58 (null = still Game Details').
+  if (lang === primary && field === 'title') return appStoreTitle();
   if (lang === primary) return fd[field] || '';
   const entry = fd.localizedStoreText && fd.localizedStoreText[lang];
   return (entry && entry[field]) || '';
@@ -13086,7 +13105,8 @@ function _locReviewSourceBadge(field, lang) {
      sets titleFromSteam the same way. Generic now, so every field Steam
      genuinely supplied says so. */
   if (entry[field + 'FromSteam']) return 'steam';
-  if (_iasFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === (fd[field] || '')) return 'ai';
+  const src = field === 'title' ? appStoreTitle() : (fd[field] || '');
+  if (_iasFieldAutoTranslateEnabled(field) && entry[field + 'SourceText'] === src) return 'ai';
   return null;
 }
 
@@ -13102,10 +13122,18 @@ function _iasSetFieldValue(field, lang, value) {
     if (_iasFieldAutoTranslateEnabled(field)) _iasTriggerAutoTranslate(field, value);
     return;
   }
+  if (lang === primary && field === 'title') {
+    // The App Store's own (v9.58) — Game Details' title is left alone.
+    // Mac App Store reads this one too: the two are one App Store Connect
+    // record, which holds one name (MAS_SHARED_LISTING_FIELDS).
+    if (!state.appStoreListing) state.appStoreListing = { description: null };
+    state.appStoreListing.title = value;
+    _iasPropagateTitle(value);
+    return;
+  }
   if (lang === primary) {
     fd[field] = value;
-    if (field === 'title') _iasPropagateTitle(value);
-    else if (_iasFieldAutoTranslateEnabled(field)) _iasTriggerAutoTranslate(field, value);
+    if (_iasFieldAutoTranslateEnabled(field)) _iasTriggerAutoTranslate(field, value);
     return;
   }
   if (!fd.localizedStoreText) fd.localizedStoreText = {};
@@ -13416,7 +13444,7 @@ function _iasRetryTranslate(field) {
 // _iasPropagateTitle/_iasTriggerAutoTranslate.
 function _iasPropagateAllFields() {
   const fd = state.formData;
-  _iasPropagateTitle(fd.title);
+  _iasPropagateTitle(appStoreTitle());
   IAS_TRANSLATABLE_FIELDS.forEach(field => _iasTriggerAutoTranslate(field, fd[field]));
 }
 
@@ -13436,7 +13464,7 @@ function _iasToggleAutoTranslateField(field) {
   state.iasAutoTranslateFields[field] = !state.iasAutoTranslateFields[field];
   if (state.iasAutoTranslateFields[field]) {
     const fd = state.formData;
-    if (field === 'title') _iasPropagateTitle(fd.title || '');
+    if (field === 'title') _iasPropagateTitle(appStoreTitle());
     else _iasTriggerAutoTranslate(field, fd[field] || '');
   }
   reRenderStepModal();
@@ -14450,7 +14478,7 @@ function _masLocReviewSourceBadge(field, lang) {
   const sharedBadge = () => {
     if (!shared) return null;
     if (shared[field + 'FromSteam']) return 'steam';
-    if (_iasFieldAutoTranslateEnabled(field) && shared[field + 'SourceText'] === (fd[field] || '')) return 'ai';
+    if (_iasFieldAutoTranslateEnabled(field) && shared[field + 'SourceText'] === (field === 'title' ? appStoreTitle() : (fd[field] || ''))) return 'ai';
     return null;
   };
   if (MAS_SHARED_LISTING_FIELDS.has(field)) return sharedBadge();
@@ -14537,7 +14565,9 @@ const STEAM_FIELD_CHAR_LIMITS = { description: 300 };
 
 // Title is shared with the App Store's own listing — see this cluster's own
 // header comment above. Mirrors MAS_SHARED_LISTING_FIELDS.
-const STEAM_SHARED_LISTING_FIELDS = new Set(['title']);
+/* EMPTY SINCE v9.58, by request: Steam's title is Steam's own (ws.storeTitle,
+   null = still Game Details'), with its own languages in Steam's drawer. */
+const STEAM_SHARED_LISTING_FIELDS = new Set();
 
 // The 4 fields Steam keeps its own independent per-language copy of — NOT
 // Title (shared, see STEAM_SHARED_LISTING_FIELDS above). Used as the
@@ -14580,7 +14610,7 @@ const STEAM_AUTO_TRANSLATE_DEFAULT_FIELDS = ['description', 'headline', 'aboutGa
    English, which _claudeTranslateLangs asks for once (v9.56), and Steam's
    own scraped localizations, which seed both (_checkSteamLocalizedListing).
    The name is Epic's own key — egsSubmitAnswers.shortDesc is the English. */
-const EGS_ONLY_LOC_FIELDS = new Set(['shortDesc']);
+const EGS_ONLY_LOC_FIELDS = new Set(['shortDesc', 'productName']);   // productName: Epic's own title (v9.58)
 // Epic's own limit table. `headline` left it with the field itself.
 const EGS_LOC_FIELD_CHAR_LIMITS = { shortDesc: 300 };
 function _egsLocFieldHasOverLimitLang(field, langCodes) {
@@ -14591,6 +14621,8 @@ function _egsLocFieldHasOverLimitLang(field, langCodes) {
 
 // Prompt labels for Steam's own translate call, mirroring IAS_FIELD_LABELS.
 const STEAM_FIELD_LABELS = {
+  title:       'game title',
+  productName: 'product name',
   description: 'short description',
   shortDesc:   'short description',
   headline:    'store page headline',
@@ -14652,8 +14684,9 @@ function _egsShortDescCatchUp(stepId) {
   _steamTriggerAutoTranslate('shortDesc', _steamFieldValue('shortDesc', (state.formData || {}).primaryLanguage || 'en'));
 }
 function _egsLocField() {
-  const f = state.egsLocReviewField === 'description' ? 'shortDesc' : state.egsLocReviewField;
-  return (typeof EGS_LOC_REVIEW_FIELDS !== 'undefined' && EGS_LOC_REVIEW_FIELDS.some(x => x.value === f)) ? f : 'title';
+  const old = { description: 'shortDesc', title: 'productName' };   // names before v9.58
+  const f = old[state.egsLocReviewField] || state.egsLocReviewField;
+  return (typeof EGS_LOC_REVIEW_FIELDS !== 'undefined' && EGS_LOC_REVIEW_FIELDS.some(x => x.value === f)) ? f : 'productName';
 }
 function _steamLocSurface(field) { return EGS_ONLY_LOC_FIELDS.has(field) ? 'egs' : 'steam'; }
 function _steamLocEntry(field, lang, create) {
@@ -14681,6 +14714,7 @@ function _steamFieldValue(field, lang) {
       // Epic's short description: its own, else Steam's scraped one — the
       // same answer the page and the status bar give (egsShortDesc).
       if (field === 'shortDesc') return (typeof egsShortDesc === 'function') ? egsShortDesc() : (ea.shortDesc || '');
+      if (field === 'productName') return egsProductName();
       return ea[field] || '';
     }
     const entry = _steamLocEntry(field, lang, false);
@@ -14690,6 +14724,7 @@ function _steamFieldValue(field, lang) {
   if (!ws) return '';
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
+  if (lang === primary && field === 'title') return steamTitle();
   if (lang === primary) {
     const own = ws[field] || '';
     if (own) return own;
@@ -14745,6 +14780,7 @@ function _steamSetFieldValue(field, lang, value) {
     const primary = (state.formData || {}).primaryLanguage || 'en';
     if (lang === primary) {
       ea[field] = value;
+      if (field === 'productName') { _steamPropagateTitleField('productName', value); return; }
       // Through the reader: a cleared short description shows Steam's again,
       // and that is what the languages follow.
       if (_steamFieldAutoTranslateEnabled(field)) _steamTriggerAutoTranslate(field, _steamFieldValue(field, primary));
@@ -14758,6 +14794,11 @@ function _steamSetFieldValue(field, lang, value) {
   if (!ws) return;
   const fd = state.formData;
   const primary = fd.primaryLanguage || 'en';
+  if (lang === primary && field === 'title') {
+    ws.storeTitle = value;                         // Steam's own (v9.58)
+    _steamPropagateTitleField('title', value);
+    return;
+  }
   if (lang === primary) {
     ws[field] = value;
     if (_steamFieldAutoTranslateEnabled(field)) _steamTriggerAutoTranslate(field, value);
@@ -14766,6 +14807,60 @@ function _steamSetFieldValue(field, lang, value) {
   if (!ws.localizedStoreText) ws.localizedStoreText = {};
   if (!ws.localizedStoreText[lang]) ws.localizedStoreText[lang] = _steamBlankLocalizedText();
   ws.localizedStoreText[lang][field] = value;
+}
+
+/* ── A STORE'S TITLE IN ITS OTHER LANGUAGES (v9.58) ──────────────────────
+   Steam's title ('title') and Epic's product name ('productName') are each
+   their store's own now, so each needs what _iasPropagateTitle does for the
+   App Store: copy the title into every language as it stands, or — with the
+   store's own "translate Title" switch on — translate it. A language Steam
+   localized for this same title keeps Steam's name. */
+function _steamPropagateTitleField(field, primaryValue) {
+  if (_steamFieldAutoTranslateEnabled(field)) { _steamTriggerAutoTranslate(field, primaryValue); return; }
+  const langs = (state.formData && state.formData.localizations) || [];
+  const v = primaryValue || '';
+  langs.forEach(lang => {
+    const e = _steamLocEntry(field, lang, true);
+    if (!e) return;
+    if (e[field + 'FromSteam'] && e[field + 'SourceText'] === v) return;
+    e[field] = v;
+    delete e[field + 'FromSteam'];
+    _locClearEdited(e, field);
+  });
+  /* No repaint, like _iasPropagateTitle: this runs on every keystroke in a
+     title box, and a repaint there takes the box out from under the cursor.
+     Whatever shows the other languages is drawn after the edit anyway. */
+}
+
+/* ── GAME DETAILS' TITLE, DEVELOPER AND PUBLISHER OVERWRITE EVERY STORE ──
+   (v9.58, by request.) Each store has its own copy now — the App Store's
+   (appStoreListing.title, which Mac App Store shares), Mac App Store
+   Full's, Steam's and Epic's — but Game Details is still where they come
+   from, and a change there replaces every store's. `null` is "still Game
+   Details'": the reader falls through to it, so a store nobody renamed
+   follows every keystroke without being written to. */
+function _overwriteStoreTitles(value) {
+  if (state.appStoreListing) state.appStoreListing.title = null;
+  if (state.webSite) state.webSite.storeTitle = null;
+  if (state.egsSubmitAnswers) state.egsSubmitAnswers.productName = null;
+  if (state.macFullAppStoreListing) state.macFullAppStoreListing.title = value || '';
+}
+/* …and their languages, once the title is settled (leaving the box, or
+   picking a game). Mirrors only, unless a store translates titles. */
+function _settleStoreTitles(value) {
+  _overwriteStoreTitles(value);
+  _iasPropagateTitle(value);
+  if (state.macFullAppStoreListing && typeof _macFullPropagateTitle === 'function') _macFullPropagateTitle(value);
+  if (state.webSite) _steamPropagateTitleField('title', value);
+  if (state.egsSubmitAnswers) _steamPropagateTitleField('productName', value);
+}
+/* Developer / Publisher: no Game Details box today, so the source is the
+   Steam scrape. Written as the game's (formData), then over each store's. */
+function _setGameDevPub(field, value) {
+  const v = value || '';
+  state.formData[field] = v;
+  if (state.webSite) state.webSite[field] = v;
+  if (state.egsSubmitAnswers) state.egsSubmitAnswers[field] = null;
 }
 
 function _steamFieldAutoTranslateEnabled(field) {
@@ -14952,6 +15047,9 @@ function _steamPropagateAllFields() {
   // is what actually gets propagated/translated when nothing's been typed
   // into Short Description directly yet.
   STEAM_LOC_TRANSLATABLE_FIELDS.forEach(field => _steamTriggerAutoTranslate(field, _steamFieldValue(field, primary)));
+  // Steam's and Epic's own titles (v9.58).
+  _steamPropagateTitleField('title', _steamFieldValue('title', primary));
+  if (state.egsSubmitAnswers) _steamPropagateTitleField('productName', _steamFieldValue('productName', primary));
 }
 
 // Mirrors _masToggleAutoTranslateField — Steam's own "Automatically
@@ -14962,7 +15060,9 @@ function _steamPropagateAllFields() {
 // not a per-platform one.
 function _steamToggleAutoTranslateField(field) {
   state.steamAutoTranslateFields = state.steamAutoTranslateFields || {};
-  state.steamAutoTranslateFields[field] = !state.steamAutoTranslateFields[field];
+  // From what the switch SHOWS, so a field whose default is on (absent key)
+  // turns off on the first press rather than staying on (v9.58).
+  state.steamAutoTranslateFields[field] = !_steamFieldAutoTranslateEnabled(field);
   if (state.steamAutoTranslateFields[field]) {
     const ws = state.webSite;
     // Reads through _steamFieldValue (see its own comment) so turning Short
@@ -19266,7 +19366,7 @@ function playSteamTrailer(el) {
    Game Details' own ob-title field, which still calls syncField). */
 function _steamSppTitleInput(value) {
   const lang = _steamEffectivePreviewLang();
-  _iasSetFieldValue('title', lang, value);
+  _steamSetFieldValue('title', lang, value);   // Steam's own title (v9.58)
   const shown = value || 'Your Game Title';
   // The Play/Buy purchase title gets its own shorter fallback ("Your Game")
   // than the breadcrumb/info block's "Your Game Title" — matches
@@ -25409,7 +25509,7 @@ function reRenderAndroidStepModal() {
    every handler that touches the TEXT is Steam's, because the text is shared.
    See buildEgsLocalizationReviewSection (render.js). */
 function setEgsLocReviewField(value) {
-  state.egsLocReviewField = value || 'title';
+  state.egsLocReviewField = value || 'productName';
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
 }
 
@@ -25467,10 +25567,11 @@ function answerEgsProductField(fieldId, value) {
    else. Trimmed on write so that a field holding only spaces is empty to
    every completeness check rather than empty to the eye alone. */
 function setEgsProductText(fieldId, value) {
-  if (fieldId === 'shortDesc' && typeof _steamSetFieldValue === 'function') {
-    // Epic's own English short description: written, and its languages
-    // translated from it (v9.57 — they used to be Steam's).
-    _steamSetFieldValue('shortDesc', (state.formData || {}).primaryLanguage || 'en', (value || '').trim());
+  if ((fieldId === 'shortDesc' || fieldId === 'productName') && typeof _steamSetFieldValue === 'function') {
+    // Epic's own English short description / product name: written, and
+    // its languages translated or mirrored from it (v9.57 / v9.58 — they
+    // used to be Steam's and the App Store's).
+    _steamSetFieldValue(fieldId, (state.formData || {}).primaryLanguage || 'en', (value || '').trim());
   } else {
     state.egsSubmitAnswers[fieldId] = (value || '').trim();
   }

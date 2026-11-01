@@ -204,7 +204,7 @@ function buildAboutTab() {
                      autocomplete="off"
                      oninput="syncField('title', this.value); charCount('ob-title-count', this.value, 30); _onTitleInputScenario(this.value)"
                      onfocus="_onTitleFocus(this.value)"
-                     onblur="_onTitleBlur(); _iasPropagateTitle(this.value)">
+                     onblur="_onTitleBlur(); _settleStoreTitles(this.value)">
             </div>
             <div id="ob-title-picklist" class="title-picklist"></div>
           </div>
@@ -10438,7 +10438,7 @@ function sppRequiredElements(pid, lang) {
                    this page shows. Epic has no App Privacy section. */
   if (pid === 'egs') {
     const fd = state.formData || {}, ws = state.webSite || {}, a = state.egsSubmitAnswers || {};
-    const dev = (ws.developer || '').trim(), pub = (ws.publisher || dev || '').trim();
+    const dev = egsDeveloper().trim(), pub = (egsPublisher() || dev || '').trim();   // Epic's own (v9.58)
     const cq  = (typeof androidCqProgress === 'function') ? androidCqProgress() : { total: 0, answered: 0 };
     const shots = (typeof platformStoreShots === 'function') ? platformStoreShots('egs') : [];
     const pool  = (typeof smPool === 'function') ? smPool() : [];
@@ -10520,7 +10520,7 @@ function sppRequiredElements(pid, lang) {
     const primary = fd.primaryLanguage || 'en';
     const about = sv('aboutGame') || (lang === primary ? (fd.description || '').trim() : '');
     const tags  = [...(ssa.subGenres || []), ...(ssa.genres || []), ...(ssa.topGenres || [])];
-    const title = (typeof _iasFieldValue === 'function' ? (_iasFieldValue('title', lang) || '') : (fd.title || '')).trim();
+    const title = sv('title');   // Steam's own title (v9.58)
     /* THE ROWS JACO ASKED FOR (v9.12): "Title, Media (carousel & header),
        Short description, Dev & Publisher info, Tags, Business price,
        Features & About this game & Languages, Achievements, System
@@ -10759,7 +10759,8 @@ function _sppPinnedNav(pid, elements, sticks) {
    places sit in three different files' worth of markup and each had its own
    placeholder word, so the fallback has to travel with the call. */
 function _sppDeveloperName(placeholder) {
-  const scraped = ((state.webSite && state.webSite.developer) || '').trim();
+  // The game's developer (v9.58) — not Steam's copy, which Steam may rename.
+  const scraped = (typeof gameDevPub === 'function' ? gameDevPub('developer') : ((state.webSite && state.webSite.developer) || '')).trim();
   return scraped || placeholder;
 }
 
@@ -13665,7 +13666,7 @@ const STEAM_LOC_REVIEW_FIELDS = [
    (EGS_ABOUT_LOC_FIELDS, state.js). A single "Headline" row here would now
    mean the first block's, which is a question nobody asked. */
 const EGS_LOC_REVIEW_FIELDS = [
-  { value: 'title',       label: 'Product Name' },
+  { value: 'productName', label: 'Product Name' },        // Epic's own since v9.58
   { value: 'shortDesc',   label: 'Short Description' },   // Epic's own since v9.57
 ];
 
@@ -13708,8 +13709,8 @@ function buildEgsLocalizationReviewSection() {
      on screen would otherwise reopen on a field this list no longer offers.
      Deliberately not written back to state: render functions here do not
      mutate it, and the fallback is recomputed the same way every paint. */
-  let field       = state.egsLocReviewField || 'title';
-  if (!EGS_LOC_REVIEW_FIELDS.some(f => f.value === field)) field = 'title';
+  let field       = (typeof _egsLocField === 'function') ? _egsLocField() : 'productName';
+  if (!EGS_LOC_REVIEW_FIELDS.some(f => f.value === field)) field = 'productName';
   // Epic's own limits, which carry the one field Steam has no table entry
   // for (EGS_LOC_FIELD_CHAR_LIMITS, app.js).
   const limit     = EGS_LOC_FIELD_CHAR_LIMITS[field];
@@ -20138,7 +20139,7 @@ function buildSteamLocalizationsSection() {
          field you cannot open is a setting with nowhere to take effect.
          Developer and Publisher went with the fields in v9.29. */
       settingsRows: [
-        ['title', 'Title', LOC_SHARED_AUTO_OVERRIDE],
+        ['title', 'Title'],                // Steam's own title and switch since v9.58
         ['description', 'Short Description'],
         ['aboutGame', 'About This Game'],
       ],
@@ -21097,7 +21098,7 @@ function buildEgsLocalizationsSection() {
          its switch reads and writes iasAutoTranslateFields — the same
          override Mac App Store's Title uses, for the same reason. */
       settingsRows: [
-        ['title', 'Product Name', LOC_SHARED_AUTO_OVERRIDE],
+        ['productName', 'Product Name'],   // Epic's own switch (v9.58)
         ['shortDesc', 'Short Description'],
       ],
       fieldHasOverLimitLang: _egsLocFieldHasOverLimitLang,
@@ -21688,7 +21689,7 @@ function buildEgsStorePreviewSection() {
   const locSet = (field, primaryCall) => isPrimaryLang ? primaryCall
     : `_steamSetFieldValue('${field}','${previewLang}', this.value)`;
 
-  const title     = locVal('title', (fd.title || '').trim());
+  const title     = locVal('productName', egsProductName().trim());   // Epic's own (v9.58)
   /* Steam's cached blurb stands in until somebody types their own, resolved
      by egsShortDesc so the page and the status bar cannot disagree. */
   const desc      = locVal('shortDesc', egsShortDesc());
@@ -21698,8 +21699,8 @@ function buildEgsStorePreviewSection() {
      this function. `aboutText` survives only as the fallback that function
      uses when the block model is not loaded. */
   const aboutText = egsBodyText(previewLang);
-  const developer = (ws.developer || '').trim();
-  const publisher = (ws.publisher || developer || '').trim();
+  const developer = egsDeveloper().trim();                // Epic's own (v9.58)
+  const publisher = (egsPublisher() || developer || '').trim();
 
   const keyArt = pool.find(x => x.kind === 'art-land' && x.src)
               || pool.find(x => x.kind === 'screenshot' && x.src) || null;
@@ -21827,7 +21828,7 @@ function buildEgsStorePreviewSection() {
              over ? ' is-over-limit' : ''}"
              id="${id}" type="text" value="${escHtml(v)}" placeholder="Not set"
              oninput="_dpCount(this, ${limit})"
-             onchange="setEgsProductShared('${key}', this.value)">
+             onchange="setEgsProductText('${key}', this.value)">
       ${_dpCounterRow(v, limit)}
     </div>`;
   };
@@ -22317,7 +22318,7 @@ function buildEgsStorePreviewSection() {
           rowCls: 'egs-sp-titlerow',
           limit: EGS_PAGE_LIMITS.name, placeholder: 'Game Name',
           onInput: `updateIapCharCounter(this, ${EGS_PAGE_LIMITS.name})`,
-          onChange: locSet('title', `setEgsProductShared('title', this.value)`) })}
+          onChange: locSet('productName', `setEgsProductText('productName', this.value)`) })}
       <div class="egs-sp-tabs">
         <!-- No Add-Ons tab (v8.54). Epic shows one only for a product that
              HAS add-ons; this card has no notion of them, so it was a tab
@@ -24101,7 +24102,7 @@ function buildSteamStorePreviewSection() {
      already handed us. The slot still wins when it is set. */
   const icon = smAppIcon();
   const shots = ups.screenshots || [];
-  const title = escHtml(fd.title || 'Your Game Title');
+  const title = escHtml(steamTitle() || 'Your Game Title');   // Steam's own (v9.58)
   const descRaw = fd.description || '';
   const descShort = escHtml(descRaw.slice(0, 160) + (descRaw.length > 160 ? '…' : ''));
   const topGenres = state.steamSubmitAnswers.topGenres.slice(0, 2).join(', ') || 'Game';
@@ -24318,7 +24319,7 @@ function buildSteamStorePreviewPrototypeSection() {
   // is currently showing rather than always the Primary Language's own
   // fd.title, so switching this preview's own language dropdown actually
   // changes what's shown/edited here, same as the App Store's own preview.
-  const titleRaw = _iasFieldValue('title', previewLang);
+  const titleRaw = _steamFieldValue('title', previewLang);   // Steam's own since v9.58
   const gameTitle = titleRaw || 'Your Game Title';
   // The Play/Buy purchase title below (purchaseAreaHtml) gets its own
   // shorter fallback — "Your Game" rather than "Your Game Title" — per

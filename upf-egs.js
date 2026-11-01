@@ -33,7 +33,8 @@ const UPFEGS = {
   },
 
   _gameName() {
-    return ((state.formData && state.formData.title) || '').trim();
+    // Epic's own product name (v9.58), which is Game Details' until renamed.
+    return ((typeof egsProductName === 'function' ? egsProductName() : (state.formData && state.formData.title)) || '').trim();
   },
 
   /* Where the agent is with this title: the project's status record. */

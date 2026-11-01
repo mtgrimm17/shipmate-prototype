@@ -3477,6 +3477,39 @@ function egsBodyLimit(headlineLen) {
    short_description; the body falls back to Game Details' Description, which
    is where Steam's about_the_game already lands. Neither default is a copy:
    both are read at render time and overridden the moment anybody types. */
+/* ── EACH STORE'S TITLE, DEVELOPER AND PUBLISHER (v9.58, by request) ─────
+   Every store keeps its own; Game Details (and, for Developer and
+   Publisher, which it has no box for, the Steam scrape) fills them first
+   and overwrites them all when it changes (app.js _overwriteStoreTitles /
+   _setGameDevPub). `null` — or a project saved before v9.58, where the key
+   is missing — means the store still shows the game's. */
+function gameDevPub(field) {
+  const fd = state.formData || {};
+  if (fd[field] != null) return fd[field] || '';
+  // Before v9.58 the scrape wrote only Steam's copy, so that is the game's.
+  return ((state.webSite || {})[field] || '');
+}
+function appStoreTitle() {
+  const own = state.appStoreListing && state.appStoreListing.title;
+  return (own ?? (state.formData || {}).title) || '';
+}
+function steamTitle() {
+  const own = state.webSite && state.webSite.storeTitle;
+  return (own ?? (state.formData || {}).title) || '';
+}
+function egsProductName() {
+  const own = state.egsSubmitAnswers && state.egsSubmitAnswers.productName;
+  return (own ?? (state.formData || {}).title) || '';
+}
+function egsDeveloper() {
+  const own = state.egsSubmitAnswers && state.egsSubmitAnswers.developer;
+  return (own ?? gameDevPub('developer')) || '';
+}
+function egsPublisher() {
+  const own = state.egsSubmitAnswers && state.egsSubmitAnswers.publisher;
+  return (own ?? gameDevPub('publisher')) || '';
+}
+
 function egsShortDesc() {
   const own = ((state.egsSubmitAnswers || {}).shortDesc || '').trim();
   if (own) return own;
@@ -4084,6 +4117,9 @@ function makeBlankEgsAnswers() {
        offerName and offerShortDesc, which asked the base game offer to name
        itself a second time. Nothing reads them now. */
     shortDesc:             '',     // the store page's own, seeded from Steam
+    productName:           null,   // Epic's own title; null = Game Details' (v9.58)
+    developer:             null,   // Epic's own; null = the game's (Steam scrape)
+    publisher:             null,
     genres:                [],     // from EGS_GENRES, max EGS_GENRE_MAX
     features:              [],     // from EGS_FEATURES
     loginTypes:            [EGS_LOGIN_TYPE_DEFAULT],  // typed, max 3; Epic ID by default
@@ -5611,6 +5647,8 @@ function makeBlankFormData() {
     title:                '',
     subtitle:             '',
     description:          '',
+    developer:            '',   // the game's — from the Steam scrape (v9.58)
+    publisher:            '',
     price:                '',   // collected per-platform (iOS Business), kept here for store preview
     gameScenario:         null, // null | 'new' | 'new_platform' | 'update'
     supportUrl:           '',
@@ -7131,7 +7169,7 @@ const state = {
 
      `null` means "never written", which is what lets a project saved before the
      split fall back to formData.description until the first propagation. */
-  appStoreListing: { description: null },
+  appStoreListing: { description: null, title: null },   // title: the App Store's own (v9.58)
   macAppStoreListing: null,
 
   // Steam's appdetails 'support_info.url' field, captured at Steam-link
