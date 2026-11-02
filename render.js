@@ -7230,7 +7230,7 @@ function buildTaskContent(platformId, stepId, done) {
       </div>
       <div class="task-content-section">
         <div class="task-content-label">Price</div>
-        <div class="task-content-value">${fd.price ? `$${fd.price}` : '<em style="color:#aaa">Not set</em>'}</div>
+        <div class="task-content-value">${_appStorePrice(platformId) ? `$${_appStorePrice(platformId)}` : '<em style="color:#aaa">Not set</em>'}</div>
       </div>
       <p class="task-stub-note">Review the metadata above. Make any edits via <strong>Game Details</strong>, then mark complete.</p>`;
   }
@@ -10812,7 +10812,7 @@ function buildStorePreviewSection() {
 
   const category  = escHtml(fd.genre || 'Games');
   // This store's own base price — see buildBusinessSection's note on the split.
-  const priceRaw  = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : (fd.price || '');
+  const priceRaw  = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : '';
   const isFree    = !priceRaw || parseFloat(priceRaw) === 0 || priceRaw.trim() === '' || priceRaw.trim() === '0';
   const price     = isFree ? 'GET' : `$${priceRaw}`;
   const priceText = isFree ? 'Free' : `$${priceRaw}`;
@@ -11840,7 +11840,7 @@ function buildMacStorePreviewSection() {
 
   const category  = escHtml(fd.genre || 'Games');
   // This store's own base price — see buildBusinessSection's note on the split.
-  const priceRaw  = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : (fd.price || '');
+  const priceRaw  = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : '';
   const isFree    = !priceRaw || parseFloat(priceRaw) === 0 || priceRaw.trim() === '' || priceRaw.trim() === '0';
   const price     = isFree ? 'GET' : `$${priceRaw}`;
   const priceText = isFree ? 'Free' : `$${priceRaw}`;
@@ -14660,7 +14660,7 @@ function buildPrivacySection(pid = 'ios') {
       </label>
       <input class="form-input" type="url" id="${pid}-privacy-url" value="${a.privacyPolicyUrl}"
              placeholder="${t('ob.field.privacy_url.placeholder') || 'https://yourgame.com/privacy'}"
-             oninput="setPrivacyUrl(this.value)"
+             oninput="setPrivacyUrl(this.value, '${pid}')"
              onblur="_deferredRerenderStepModal()">
     </div>
     ${_buildPrivacyPresetChips()}
@@ -15711,7 +15711,7 @@ function buildBusinessSection(pid = 'ios') {
   const TAX_CATS = ['Games', 'Software', 'Books', 'News', 'Music', 'Podcasts', 'Video'];
 
   const fd = state.formData;
-  const priceVal = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : (fd.price || '');
+  const priceVal = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : '';
 
   // Mac App Store Full only ever submits games, so its Tax Category is
   // hard-set to Games and shown as a locked field — no dropdown, and
@@ -17320,9 +17320,10 @@ function buildMacFullStorePreviewSection() {
   const shots = platformStoreShots(pid);
 
   const category  = escHtml(a.category.primary || 'Games');
-  const isFree    = !fd.price || parseFloat(fd.price) === 0 || fd.price.trim() === '' || fd.price.trim() === '0';
-  const price     = isFree ? 'GET' : `$${fd.price}`;
-  const priceText = isFree ? 'Free' : `$${fd.price}`;
+  const mfPrice   = String(_appStorePrice('macos_full') || '');   // its own (v9.59)
+  const isFree    = !mfPrice || parseFloat(mfPrice) === 0 || mfPrice.trim() === '' || mfPrice.trim() === '0';
+  const price     = isFree ? 'GET' : `$${mfPrice}`;
+  const priceText = isFree ? 'Free' : `$${mfPrice}`;
   const iapNote   = (a.hasIAP === 'yes') ? 'In-App Purchases' : '';
   const activeProj = state.projects.find(p => p.id === state.activeProjectId);
   const activeVer  = activeProj?.versions.find(v => v.id === state.activeVersionId);
@@ -22582,20 +22583,20 @@ function buildAndroidDataSafetySection() {
       ${buildAndroidDataMatrix(a)}
     </div>` : '';
 
-  const privUrl = (a.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
+  const privUrl = (a.privacyPolicyUrl || '').trim();   // Google Play's own (v9.59)
 
   return `
     <div class="form-group" style="margin-bottom:18px;">
       <label class="form-label">Privacy Policy URL
         <span class="tooltip-anchor">
           <span class="tooltip-icon">?</span>
-          <span class="tooltip-body">Google Play requires a valid, publicly accessible privacy policy URL. Setting it here syncs across all platforms.</span>
+          <span class="tooltip-body">Google Play requires a valid, publicly accessible privacy policy URL.</span>
         </span>
       </label>
       <input class="form-input" type="url" id="android-privacy-url"
              value="${escHtml(privUrl)}"
              placeholder="https://yourgame.com/privacy"
-             oninput="setPrivacyUrl(this.value)"
+             oninput="setPrivacyUrl(this.value, 'android')"
              onblur="_deferredRerenderStepModal()">
     </div>
     ${_buildPrivacyPresetChips()}
@@ -24119,7 +24120,7 @@ function buildSteamStorePreviewSection() {
   // "done" means a price has actually been entered, same "gate on the one
   // field that's actually there" treatment dataDone below gives Privacy.
   const businessDone    = !!((state.webSite && state.webSite.price) || '').trim();
-  const privUrl         = (state.steamSubmitAnswers.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
+  const privUrl         = (state.steamSubmitAnswers.privacyPolicyUrl || '').trim();   // Steam's own (v9.59)
   const dataDone        = !!privUrl;
   const screenshotsDone = isSteamSectionComplete('screenshots');
 

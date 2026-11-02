@@ -2736,7 +2736,7 @@ function isIOSSectionComplete(sectionId) {
      same state.iosSubmitAnswers. */
   if (sectionId === 'privacy') {
     // Accept URL from either the step modal field or the onboarding field
-    const url = (a.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
+    const url = (a.privacyPolicyUrl || '').trim();   // the platform's own (v9.59)
     if (!url) return false;
     if (a.collectsData === null) return false;
     if (a.collectsData === 'yes' && Object.keys(a.dataPerType).length === 0) return false;
@@ -3483,6 +3483,29 @@ function egsBodyLimit(headlineLen) {
    and overwrites them all when it changes (app.js _overwriteStoreTitles /
    _setGameDevPub). `null` — or a project saved before v9.58, where the key
    is missing — means the store still shows the game's. */
+/* A platform's own privacy policy URL (v9.59) — there is no game-wide one. */
+function platformPrivacyUrl(pid) {
+  if (pid === 'android') return ((state.androidSubmitAnswers || {}).privacyPolicyUrl || '').trim();
+  if (pid === 'steam')   return ((state.steamSubmitAnswers || {}).privacyPolicyUrl || '').trim();
+  if (pid === 'egs')     return ((state.egsSubmitAnswers || {}).privacyLink || '').trim();
+  if (pid === 'ios' || pid === 'macos' || pid === 'macos_full') {
+    const a = (typeof _appStoreAnswers === 'function') ? _appStoreAnswers(pid, 'privacyPolicyUrl') : null;
+    return ((a && a.privacyPolicyUrl) || '').trim();
+  }
+  return '';
+}
+/* Any price this game has been given on a store — for AI prompts that ask
+   about the game rather than one store (v9.59: there is no game-wide one). */
+function anyPlatformPrice() {
+  const order = ['ios', 'macos', 'macos_full', 'steam', 'egs'];
+  for (const pid of order) {
+    if (state.activePlatforms && !state.activePlatforms.has(pid)) continue;
+    const p = (typeof _appStorePrice === 'function') ? _appStorePrice(pid) : '';
+    if (p) return p;
+  }
+  return '';
+}
+
 function gameDevPub(field) {
   const fd = state.formData || {};
   if (fd[field] != null) return fd[field] || '';
@@ -4908,7 +4931,7 @@ function isAndroidSectionComplete(sectionId) {
 
   const a = state.androidSubmitAnswers;
   if (sectionId === 'dataSafety') {
-    const privUrl = (a.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
+    const privUrl = (a.privacyPolicyUrl || '').trim();   // Google Play's own (v9.59)
     if (!privUrl) return false;
     if (a.collectsOrSharesData === null) return false;
     if (a.collectsOrSharesData === 'yes') {
@@ -4944,7 +4967,7 @@ function computeAndroidSectionRisk(sectionId) {
   }
   const a = state.androidSubmitAnswers;
   if (sectionId === 'dataSafety') {
-    const privUrl = (a.privacyPolicyUrl || state.formData.privacyUrl || '').trim();
+    const privUrl = (a.privacyPolicyUrl || '').trim();
     if (!privUrl) return 'HIGH';
     if (a.collectsOrSharesData === null) return 'HIGH';
     if (a.collectsOrSharesData === 'yes') {
@@ -5098,7 +5121,8 @@ function computeSubmitRisk() {
     const answered = qa.inAppPurchases !== null;
     const lootKW   = ['loot box','lootbox','gacha','casino','slot machine','poker','blackjack','roulette','bet','wager','gambling','jackpot'];
     const hasLoot  = has(lootKW);
-    const isFree   = fd.price === '0' || fd.price === '0.00' || fd.price === '' || fd.price === 'free';
+    const price    = (typeof _appStorePrice === 'function') ? _appStorePrice((state.stepModal || {}).platformId) : '';   // the platform's own (v9.59)
+    const isFree   = price === '0' || price === '0.00' || price === '' || price === 'free';
     let risk, signals = [], justification;
 
     if (ansYes && hasLoot) {
@@ -5129,7 +5153,7 @@ function computeSubmitRisk() {
     const ansYes     = qa.dataCollection === 'yes';
     const ansNo      = qa.dataCollection === 'no';
     const answered   = qa.dataCollection !== null;
-    const hasPrivacy = !!(fd.privacyUrl && fd.privacyUrl.trim());
+    const hasPrivacy = !!platformPrivacyUrl((state.stepModal || {}).platformId);   // the platform's own (v9.59)
     const onlineKW   = ['account','sign in','login','multiplayer','leaderboard','cloud save','analytics','achievements','profile','user data'];
     const hasOnline  = has(onlineKW);
     let risk, signals = [], justification;

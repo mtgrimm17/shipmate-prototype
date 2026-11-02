@@ -2299,21 +2299,24 @@ function _appStoreAnswers(pid, fieldId) {
    The fallback is for the window before seedOnboardingToIOS has run for a
    platform (it fills `price` from state.formData.price the first time that
    platform is seeded). `?? ` and not `||`, because '' is a real answer. */
+/* EACH PLATFORM'S OWN PRICE (v9.59, by request). There is no game-wide
+   price: price is set only inside a platform's submission, so it stays
+   there. App Store, Mac App Store and Mac App Store Full keep theirs on their
+   answers; Steam's is webSite.price, Epic's egsSubmitAnswers.price. The App
+   Store used to write state.formData.price as well, and Mac App Store Full
+   and several prompts read that. */
 function _appStorePrice(pid) {
-  if (pid !== 'ios' && pid !== 'macos') return state.formData.price || '';
+  if (pid === 'steam') return ((state.webSite || {}).price) || '';
+  if (pid === 'egs')   return ((state.egsSubmitAnswers || {}).price) || '';
+  if (pid !== 'ios' && pid !== 'macos' && pid !== 'macos_full') return '';
   const a = _appStoreAnswers(pid, 'price');
-  return a?.price ?? (state.formData.price || '');
+  return (a && a.price) ?? '';
 }
 
 function _setAppStorePrice(pid, value) {
-  if (pid !== 'ios' && pid !== 'macos') { state.formData.price = value; return; }
+  if (pid !== 'ios' && pid !== 'macos' && pid !== 'macos_full') return;
   const a = _appStoreAnswers(pid, 'price');
   if (a) a.price = value;
-  /* The App Store goes on writing the game-wide field. Every other surface that
-     shows "the price" — Game Details' metadata summary, computeRisk's free-game
-     test, the marketing page — is asking a question about the GAME, and the
-     phone listing is the reasonable answer to it. Mac's edits stay Mac's. */
-  if (pid === 'ios') state.formData.price = value;
 }
 
 /* The inline handler the Price field calls. Public name because it is written
@@ -2354,9 +2357,7 @@ function seedOnboardingToIOS(pid) {
   const collectsMeta = _appStoreAnswerMeta(pid, 'collectsData');
   const bizAns  = _appStoreAnswers(pid);
   const bizMeta = _appStoreAnswerMeta(pid);
-  if (!privacyAns.privacyPolicyUrl && state.formData.privacyUrl) {
-    privacyAns.privacyPolicyUrl = state.formData.privacyUrl;
-  }
+  // No Game Details privacy URL to seed from any more (v9.59).
   if (bizAns.hasIAP === null && state.questionAnswers.inAppPurchases !== null) {
     bizAns.hasIAP = state.questionAnswers.inAppPurchases;
     bizMeta.hasIAP = { humanConfirmed: true };
@@ -2368,7 +2369,7 @@ function seedOnboardingToIOS(pid) {
   /* Seed once, then independent — the same contract seedMacAppStoreListing has
      for the listing text. Only `null` is unseeded; '' is a real answer. */
   if (bizAns.price === null || bizAns.price === undefined) {
-    bizAns.price = state.formData.price || '';
+    bizAns.price = '';                 // no game-wide price to seed from (v9.59)
   }
   if (bizAns.selectedCountries.length === 0) {
     const langs = new Set([state.formData.primaryLanguage, ...state.formData.localizations]);
@@ -5373,25 +5374,19 @@ function updateIOSTextField(field, value) {
  * write below is inert (nothing reads it any more) but is left in place as
  * harmless, self-documenting redundancy rather than removed.
  */
-function setPrivacyUrl(url) {
-  state.formData.privacyUrl                    = url;
-  state.iosSubmitAnswers.privacyPolicyUrl      = url;
-  state.macSubmitAnswers.privacyPolicyUrl      = url;
-  state.androidSubmitAnswers.privacyPolicyUrl  = url;
-  state.steamSubmitAnswers.privacyPolicyUrl    = url;
-  // Unlike macSubmitAnswers above (inert redundancy — see this function's
-  // own comment further up), Mac App Store Full genuinely reads its own
-  // independent copy (_appStoreAnswers('macos_full', 'privacyPolicyUrl')
-  // never routes to iOS's — see makeBlankMacFullAnswers' comment, state.js),
-  // so this write is required, not redundant.
-  state.macFullSubmitAnswers.privacyPolicyUrl  = url;
-  // Sync sibling platform inputs that are currently in the DOM
-  // (but don't change the one that's actively focused — it's the source)
-  const active = document.activeElement;
-  ['ios-privacy-url', 'macos-privacy-url', 'macos_full-privacy-url', 'android-privacy-url', 'steam-privacy-url'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el && el !== active && el.value !== url) el.value = url;
-  });
+function setPrivacyUrl(url, pid) {
+  /* THE PLATFORM'S OWN (v9.59, by request). This used to write the URL into
+     Game Details and every platform at once; there is no Game Details field
+     for it any more, and a URL typed into one platform stays there. The App
+     Store and Mac App Store still share one — they are one App Store Connect
+     app (IOS_MAC_SHARED_ANSWER_FIELDS, state.js). */
+  pid = pid || (state.stepModal && state.stepModal.platformId) || 'ios';
+  if (pid === 'android') state.androidSubmitAnswers.privacyPolicyUrl = url;
+  else if (pid === 'steam') state.steamSubmitAnswers.privacyPolicyUrl = url;
+  else {
+    const a = _appStoreAnswers(pid, 'privacyPolicyUrl');
+    if (a) a.privacyPolicyUrl = url;
+  }
   // Update card progress bars and section states — NO full re-render here
   // because that would destroy the focused input. Re-render happens on blur (see inputs).
   updateObSectionStates();
@@ -7796,7 +7791,7 @@ function smReadyToShip(pid) {
     IOS_CONTENT_YN_QUESTIONS.forEach(q => fill(q.id, 'no'));
     fill('ageCategory', 'not_applicable');
 
-    fill('privacyPolicyUrl', (state.formData?.privacyUrl || '').trim() || 'https://example.com/privacy');
+    fill('privacyPolicyUrl', 'https://example.com/privacy');
     fill('collectsData', 'no');
 
     fill('hasIAP', 'no');
@@ -9861,6 +9856,11 @@ function selectPicklistItem(igdbId) {
   // the new title has Steam achievements, _applySteamAchievements
   // repopulates the list; if not (or the lookup fails), it's left empty.
   state.macGameCenterAchievements = [];
+  /* A NEW GAME IS A NEW SUBMISSION (v9.59, by request): everything a scrape
+     fills is cleared here, edits included — every store's achievements now,
+     not only Mac's — and the scrape below fills it again from this game, or
+     leaves it empty where this game has nothing. */
+  _resetScrapedFields();
 
   // Where the rest of this game's data comes from depends on whether the
   // IGDB search backend gave us a Steam app id for this title (item.
@@ -10916,6 +10916,31 @@ function _assetsFoundGlimmerRun() {
 // state.uploads.screenshots, so a later per-id removal (removeScreenshot)
 // still matches correctly on both sides. See the state.js comment above
 // webSite.screenshots.
+/* ── THE LIBRARY'S SCREENSHOTS OVERRIDE EVERY PLATFORM'S (v9.59) ─────────
+   By request: a change to Game Details' screenshot library — a shot added,
+   removed or reordered, or a scrape filling it — replaces whatever each
+   platform had arranged. Each platform's picks, removals and order are
+   cleared, so its listing is the library again; what it keeps is what the
+   library does not hold: its own uploads (`custom`) and the crops it made to
+   fit its devices (`crops`, filed by screenshot). The Web page keeps its own
+   copy of the list (webSite.screenshots); it is rebuilt as the library plus
+   the shots added only to it. */
+function _libraryShotsChanged() {
+  const lib = ((state.uploads && state.uploads.screenshots) || []).filter(Boolean);
+  const all = state.platformScreenshots || {};
+  Object.keys(all).forEach(pid => {
+    const ps = all[pid];
+    if (!ps || typeof ps !== 'object') return;
+    ps.selected = []; ps.removed = []; ps.order = [];
+  });
+  const ws = state.webSite;
+  if (ws && Array.isArray(ws.screenshots)) {
+    const libIds = new Set(lib.map(x => x.id));
+    const ownOnly = ws.screenshots.filter(x => x && !libIds.has(x.id) && x.dataUrl);
+    ws.screenshots = [...lib.map(x => ({ ...x })), ...ownOnly];
+  }
+}
+
 function _wsSyncAutoScreenshots(entries) {
   if (!state.webSite) state.webSite = {};
   if (!state.webSite.screenshots) state.webSite.screenshots = [];
@@ -10949,6 +10974,7 @@ function _fillScreenshotGridFromIgdb(urls) {
   state.uploads.screenshots = state.uploads.screenshots.filter(smIsOwn);
   state.uploads.screenshots.push(...entries);
   _wsSyncAutoScreenshots(entries);
+  _libraryShotsChanged();
   _refreshScreenshotGrid();
 }
 
@@ -10983,6 +11009,7 @@ function _fillScreenshotGridFromSteam(screenshotUrls) {
   state.uploads.screenshots = state.uploads.screenshots.filter(smIsOwn);
   state.uploads.screenshots.push(...entries);
   _wsSyncAutoScreenshots(entries);
+  _libraryShotsChanged();
   _refreshScreenshotGrid();
 }
 
@@ -11757,6 +11784,11 @@ async function _applySteamAboutData(appId, expectedTitle, fallbackItem) {
     // whatever the developer already typed). Backs Factsheet > Developer >
     // Links > "Official Website".
     if (data.website) state.webSite.officialWebsite = data.website;
+    // …and Mac App Store Full's, which were seeded from these once (v9.59).
+    if (state.macFullAppStoreListing) {
+      if (data.website)    state.macFullAppStoreListing.marketingUrl = data.website;
+      if (data.supportUrl) state.macFullAppStoreListing.supportUrl   = data.supportUrl;
+    }
     // Support URL — Steam's appdetails 'support_info' object (shaped like
     // { url, email }), when the developer has filled one in on the store
     // page. Cached on state.steamSupportUrl (see its own comment, state.js)
@@ -12336,6 +12368,7 @@ function handleScreenshotFiles(files) {
       const id = 'ss_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
       const entry = { id, ref: assetId };
       state.uploads.screenshots.push(entry);
+      _libraryShotsChanged();             // every platform follows the library (v9.59)
       const grid = document.getElementById('ob-screenshot-grid');
       if (grid) renderScreenshotGridInto(grid);
       updateObSectionStates();   // clear amber as soon as first screenshot lands
@@ -14856,6 +14889,42 @@ function _settleStoreTitles(value) {
 }
 /* Developer / Publisher: no Game Details box today, so the source is the
    Steam scrape. Written as the game's (formData), then over each store's. */
+/* Every field a Steam (or IGDB) scrape fills, back to blank — called when a
+   game is picked, before the scrape for it lands. Description and title are
+   reset by their own doors (_fillDescriptionField, _settleStoreTitles). */
+function _resetScrapedFields() {
+  const sa = state.steamSubmitAnswers;
+  if (sa) {
+    sa.legalNotice = '';
+    if (typeof makeBlankSteamSysreq === 'function') sa.sysreq = makeBlankSteamSysreq();
+    sa.infoGenres = [];
+    if (sa.players) Object.keys(sa.players).forEach(k => { sa.players[k] = false; });
+    sa.inputSupport = null; sa.psControllers = []; sa.steamInputAPI = null;
+    sa.supportedFeatures = [];
+  }
+  const ws = state.webSite = state.webSite || {};
+  ws.description = '';            // Steam's short description: the scrape's again
+  ws.officialWebsite = ''; ws.genres = ''; ws.price = ''; ws.releaseDate = '';
+  ws.links = [];
+  state.steamSupportUrl = null; state.steamSupportEmail = null;
+  _setGameDevPub('developer', ''); _setGameDevPub('publisher', '');
+  const e = state.egsSubmitAnswers;
+  if (e) {
+    e.legalFooter = ''; e.shortDesc = ''; e.localizedStorePage = {};
+    if (typeof makeBlankEgsSpecOs === 'function') e.specs = { windows: makeBlankEgsSpecOs(), mac: makeBlankEgsSpecOs() };
+    if (typeof makeBlankEgsSocial === 'function') e.social = makeBlankEgsSocial();
+    e.genres = []; e.features = [];
+  }
+  const mf = state.macFullAppStoreListing;
+  if (mf) { mf.supportUrl = ''; mf.marketingUrl = ''; }
+  // Achievements, on every store that takes them from Steam.
+  state.iosGameCenterAchievements = []; state.macGameCenterAchievements = [];
+  state.macFullGameCenterAchievements = []; state.steamAchievements = [];
+  state.egsAchievements = []; state.steamAchievementsBaseline = null;
+  // Each platform's screenshot arrangement, its own uploads and crops too.
+  state.platformScreenshots = {};
+}
+
 function _setGameDevPub(field, value) {
   const v = value || '';
   state.formData[field] = v;
@@ -18971,6 +19040,7 @@ function renderScreenshotGridInto(grid) {
 
 function removeScreenshot(id) {
   state.uploads.screenshots = state.uploads.screenshots.filter(s => s.id !== id);
+  _libraryShotsChanged();                 // every platform follows the library (v9.59)
   const grid = document.getElementById('ob-screenshot-grid');
   if (grid) renderScreenshotGridInto(grid);
   // Mirror the removal into the Web platform's own independent copy, by
@@ -19004,6 +19074,7 @@ function moveUploadScreenshot(id, dir) {
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= arr.length) return;
   [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  _libraryShotsChanged();                 // a library reorder is a library change (v9.59)
   const grid = document.getElementById('steam-assets-screenshot-grid');
   if (grid) grid.innerHTML = _steamAssetsScreenshotGridHTML();
 }

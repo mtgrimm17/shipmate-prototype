@@ -618,7 +618,12 @@ function smRemove(id) {
     const v = u[k];
     if (v && typeof v === 'object' && !Array.isArray(v) && v.ref === id) u[k] = null;
   }
-  if (Array.isArray(u.screenshots)) u.screenshots = u.screenshots.filter(x => !x || x.ref !== id);
+  if (Array.isArray(u.screenshots)) {
+    const n = u.screenshots.length;
+    u.screenshots = u.screenshots.filter(x => !x || x.ref !== id);
+    // A library screenshot gone: every platform follows the library (v9.59).
+    if (u.screenshots.length !== n && typeof _libraryShotsChanged === 'function') _libraryShotsChanged();
+  }
   const ws = state.webSite;
   if (ws && Array.isArray(ws.screenshots)) ws.screenshots = ws.screenshots.filter(x => !x || x.ref !== id);
 }

@@ -655,7 +655,7 @@ const UPF = {
       description: t.description || undefined,
       whatsNew: t.releaseNotes || undefined,
       supportUrl: (full.supportUrl || f.supportUrl) || undefined,
-      privacyPolicyUrl: f.privacyUrl || this._answer(pid, 'privacyPolicyUrl') || undefined,
+      privacyPolicyUrl: this._answer(pid, 'privacyPolicyUrl') || undefined,   // the platform's own (v9.59)
     };
     // Keywords / promo / marketing are single-valued in Shipmate (no per-locale
     // copies), so only attach them to the primary locale.
@@ -1200,7 +1200,7 @@ const UPF = {
     // it through _appStorePrice so an entered price (e.g. 6.99) isn't lost and
     // the app isn't silently set Free.
     const priceRaw = (typeof _appStorePrice === 'function') ? _appStorePrice(pid)
-                     : (a.price != null && a.price !== '' ? a.price : f.price);
+                     : (a.price != null && a.price !== '' ? a.price : '');
     const priceStr = (priceRaw === '' || priceRaw == null) ? '0' : String(priceRaw);
     const isFree = priceStr === '0' || parseFloat(priceStr) === 0;
     return {
@@ -1267,7 +1267,11 @@ const UPF = {
       }
       set(f, 'releaseNotes', L.whatsNew);
       set(f, 'supportUrl', L.supportUrl);
-      set(f, 'privacyUrl', L.privacyPolicyUrl);
+      // The platform's own privacy URL (v9.59) — no Game Details one.
+      if (L.privacyPolicyUrl && typeof _appStoreAnswers === 'function') {
+        const pa = _appStoreAnswers(pid, 'privacyPolicyUrl');
+        if (pa) pa.privacyPolicyUrl = L.privacyPolicyUrl;
+      }
       set(ml, 'keywords', L.keywords);
       set(ml, 'promotionalText', L.promotionalText);
       set(ml, 'marketingUrl', L.marketingUrl);

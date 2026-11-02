@@ -71,7 +71,7 @@ function buildGeminiPrompt() {
 GAME DATA:
 Title: ${fd.title || '(untitled)'}
 Description: ${fd.description || '(none provided)'}
-Price: ${fd.price ? `$${fd.price}` : 'Free'}
+Price: ${_appStorePrice('ios') ? `$${_appStorePrice('ios')}` : 'Free'}
 Primary Language: ${fd.primaryLanguage || 'en'}
 In-App Purchases (from developer): ${hasIAP === 'yes' ? 'Yes' : hasIAP === 'no' ? 'No' : 'Unknown'}
 ${hasScreenshots ? `Screenshots provided: ${ups.screenshots.length} image(s) — analyze visual content carefully.` : 'No screenshots provided.'}
@@ -326,7 +326,7 @@ function buildCQPrompt() {
 GAME DATA:
 Title: ${fd.title || '(untitled)'}
 Description: ${fd.description || '(none provided)'}
-Price: ${fd.price ? `$${fd.price}` : 'Free'}
+Price: ${anyPlatformPrice() ? `$${anyPlatformPrice()}` : 'Free'}
 Active platforms: ${[...state.activePlatforms].join(', ')}
 ${state.formData.genre ? `Genre: ${state.formData.genre}` : ''}
 
@@ -1172,7 +1172,7 @@ function buildContextSources() {
   // Onboarding info — always present if user completed onboarding
   const fd = state.formData;
   const obFields = [fd.title && 'title', fd.description && 'description', fd.genre && 'genre',
-                    fd.price && 'price'].filter(Boolean);
+                    _appStorePrice('ios') && 'price'].filter(Boolean);
   if (obFields.length) {
     sources.push(`Onboarding info entered by the user (${obFields.join(', ')})`);
   }
@@ -1234,7 +1234,7 @@ function buildNaturalLanguageSummary() {
   // ── Title + genre + price ─────────────────────────────────────────────────
   const title = fd.title || '(untitled)';
   const genre = fd.genre ? ` ${fd.genre}` : '';
-  const price = fd.price ? `$${fd.price}` : 'free';
+  const price = _appStorePrice('ios') ? `$${_appStorePrice('ios')}` : 'free';   // the App Store's own (v9.59)
   parts.push(`"${title}" is a${genre} game priced at ${price}.`);
 
   // ── Description snippet (up to 300 chars) ────────────────────────────────
