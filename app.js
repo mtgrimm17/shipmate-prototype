@@ -25952,7 +25952,14 @@ function setEgsSpecField(osId, rowId, which, value) {
      — kept because it is harmless and a direct caller may rely on it. The
      free-text boxes never behaved that way: typing the same thing twice
      is not a request to erase it. */
+  const prevMin = sp[rowId].min || '';
   sp[rowId][which] = (rowId === 'directx' && sp[rowId][which] === v) ? '' : v;
+  /* RECOMMENDED FOLLOWS MINIMUM (v9.64), the same rule as Steam's form —
+     see _sysreqRecFollows. Epic's pair is keyed min / rec. */
+  if (which === 'min' && 'rec' in sp[rowId]
+      && _sysreqRecFollows(sp[rowId].rec || '', prevMin)) {
+    sp[rowId].rec = sp[rowId].min;
+  }
   _egsProductRepaint();
 }
 
@@ -28946,14 +28953,154 @@ function setSteamSysreq64(osId, on) {
 /* The amount or the unit of a Memory / Disk Space row (v8.93). The
    portal stores the two separately and composes them when it prints; so
    does this (steamSysreqText, state.js). */
+/* ── RECOMMENDED FOLLOWS MINIMUM (v9.64) ─────────────────────────────────
+   Jaco: "es un poco tedioso escribir nvidia RTX 2060 & AMD 6000 varias
+   veces". Most games recommend something close to their minimum, so typing
+   a minimum also fills the recommended box beside it — but only while that
+   box is EMPTY or still holds exactly what the minimum used to say. The
+   moment the developer writes their own recommended value the two stop
+   being linked, and a later minimum edit leaves it alone. No flag to keep:
+   "still equals the old minimum" is the link. Steam's form and Epic's
+   Specifications both use it. */
+function _sysreqRecFollows(rec, prevMin) {
+  const r = (rec == null ? '' : String(rec)).trim();
+  return r === '' || r === 'N/A' || r === String(prevMin == null ? '' : prevMin).trim();
+}
+
+/* ── AND IT SHOWS, LIVE (v9.64) ───────────────────────────────────────────
+   Jaco: "¿debería escribirse en gris clarito a la vez, como un placeholder?"
+   Not a real placeholder — that would leave Recommended EMPTY in the data,
+   and an empty recommended is what the store would get. The value is still
+   copied (the setters above); this is only how it reads:
+
+   · while you type a Minimum, the Recommended beside it fills keystroke by
+     keystroke, if it is following (_sysreqRecFollows' rule, applied to what
+     the boxes held when you started typing);
+   · a Recommended that equals its Minimum is drawn in placeholder grey
+     (`.is-following` on its cell), so an inherited value reads as inherited;
+   · type in the Recommended and it turns white and stops following.
+
+   Works off the DOM alone, on any `.steam-sysreq-row` — Steam's form and
+   Epic's Specifications share the markup — so neither builder changes. The
+   data is still written by each form's own onchange. */
+function _sysreqCells(row) {
+  const cells = [...row.children].filter(c => c.classList.contains('steam-sysreq-cell'));
+  if (cells.length !== 2) return null;
+  const ctl = c => [...c.querySelectorAll('input:not([type=checkbox]), select')];
+  const min = ctl(cells[0]), rec = ctl(cells[1]);
+  return (min.length && min.length === rec.length) ? { recCell: cells[1], min, rec } : null;
+}
+function _sysreqBlank(v) { v = (v || '').trim(); return v === '' || v === 'N/A'; }
+/* GREY FOR THIS VISIT ONLY. Jaco: "y quizás si guardas y vuelves, se pone
+   en blanco". The grey says "this was just filled in for you"; once you have
+   saved and come back, the value is yours and reads like any other. So the
+   grey is remembered per Recommended box (by its aria-label, unique per OS,
+   row and side) only for as long as the form is on screen, and forgotten
+   the moment it leaves (the observer below). The FOLLOWING itself is not
+   tied to the visit: an untouched Recommended still tracks its Minimum next
+   time, it just no longer looks borrowed. */
+const _sysreqMirrored = new Set();
+function _sysreqKey(p) { return p.rec[0].getAttribute('aria-label') || ''; }
+function _sysreqPaintRow(row) {
+  const p = _sysreqCells(row);
+  if (!p) return;
+  const same = p.min.every((m, i) => m.value === p.rec[i].value);
+  /* The amount box carries the meaning in a size pair; its unit select is
+     'GB' on both sides by default and says nothing on its own. */
+  const filled = !_sysreqBlank(p.min[0].value);
+  const following = same && filled;
+  if (!following) _sysreqMirrored.delete(_sysreqKey(p));
+  p.recCell.classList.toggle('is-following', following && _sysreqMirrored.has(_sysreqKey(p)));
+}
+function _sysreqPaintAll(root) {
+  (root || document).querySelectorAll('.steam-sysreq-row').forEach(_sysreqPaintRow);
+}
+/* AND WHILE IT IS GREY, IT BEHAVES LIKE A PLACEHOLDER. Jaco: "si quiero
+   escribir otra cosa en el recommended, se hace un poco tedioso
+   seleccionar, y volver a escribir". So the first keystroke into a grey
+   Recommended replaces the whole inherited value instead of adding to it —
+   a typed character, a paste, or a Backspace/Delete (which clears it). The
+   caret is put at the start on focus, where a placeholder's would be. Once
+   it is replaced it is ordinary text, white, and no longer following. */
+document.addEventListener('focusin', e => {
+  const t = e.target;
+  if (t.tagName === 'INPUT' && t.closest && t.closest('.steam-sysreq-cell.is-following')) {
+    requestAnimationFrame(() => { try { t.setSelectionRange(0, 0); } catch (_) {} });
+  }
+});
+document.addEventListener('beforeinput', e => {
+  const t = e.target;
+  if (t.tagName !== 'INPUT' || !(t.closest && t.closest('.steam-sysreq-cell.is-following'))) return;
+  if (/^(insert|delete)/.test(e.inputType || '')) {
+    t.value = '';
+    if (/^delete/.test(e.inputType)) {
+      e.preventDefault();
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+});
+document.addEventListener('focusin', e => {
+  const row = e.target.closest && e.target.closest('.steam-sysreq-row');
+  const p = row && _sysreqCells(row);
+  if (!p || !p.min.includes(e.target)) return;
+  row._sysreqPrev = p.min.map(m => m.value);
+});
+document.addEventListener('input', e => {
+  const row = e.target.closest && e.target.closest('.steam-sysreq-row');
+  const p = row && _sysreqCells(row);
+  if (!p) return;
+  if (p.min.includes(e.target)) {
+    const prev = row._sysreqPrev || p.min.map(m => m.value);
+    const follows = p.rec.every((r, i) => r.value === prev[i])
+                 || _sysreqBlank(p.rec[0].value);
+    if (follows) {
+      p.min.forEach((m, i) => { p.rec[i].value = m.value; });
+      _sysreqMirrored.add(_sysreqKey(p));
+    }
+    row._sysreqPrev = p.min.map(m => m.value);
+  }
+  _sysreqPaintRow(row);
+});
+(function _armSysreqPaint() {
+  const arm = () => {
+    if (window._sysreqPaintArmed) return;
+    window._sysreqPaintArmed = true;
+    _sysreqPaintAll(document);
+    new MutationObserver(muts => {
+      /* The form left the screen (saved, back, closed): forget this visit's
+         grey. A re-render swaps the rows in one batch, so they are already
+         back by the time this runs and the visit carries on. */
+      if (_sysreqMirrored.size && !document.querySelector('.steam-sysreq-row')) {
+        _sysreqMirrored.clear();
+        return;
+      }
+      for (const m of muts) for (const n of m.addedNodes) {
+        if (n.nodeType !== 1) continue;
+        if (n.matches && n.matches('.steam-sysreq-row')) _sysreqPaintRow(n);
+        else if (n.querySelector && n.querySelector('.steam-sysreq-row')) _sysreqPaintAll(n);
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arm);
+  else arm();
+})();
+
 function setSteamSysreqSize(osId, which, rowId, part, value) {
   const os = _steamSysreq()[osId];
   if (!os || !os[which]) return;
   const cur = os[which][rowId];
   const next = (cur && typeof cur === 'object') ? cur : { amount: '', units: 'GB' };
+  const prevKey = which === 'minimum' ? `${next.amount || ''}|${next.units || 'GB'}` : null;
   next[part] = (value || '').trim();
   if (!next.units) next.units = 'GB';
   os[which][rowId] = next;
+  if (prevKey !== null && os.recommended) {
+    const rec = os.recommended[rowId];
+    const recKey = (rec && typeof rec === 'object') ? `${rec.amount || ''}|${rec.units || 'GB'}` : '';
+    if (!rec || !(rec.amount || '').trim() || recKey === prevKey) {
+      os.recommended[rowId] = { amount: next.amount, units: next.units };
+    }
+  }
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
   renderDashboard();
 }
@@ -28963,9 +29110,16 @@ function setSteamSysreqField(osId, which, rowId, value) {
   if (!os || !os[which]) return;
   /* A tick arrives as a boolean and a select as one of its own options;
      only a typed line gets the length cap (v8.93). */
+  const prevMin = os.minimum ? os.minimum[rowId] : undefined;
   os[which][rowId] = (typeof value === 'boolean')
     ? value
     : String(value == null ? '' : value).slice(0, STEAM_SYSREQ_MAX);
+  /* Typed lines and dropdowns follow (see _sysreqRecFollows); a tick does
+     not — an unticked box is an answer, not an empty field. */
+  if (which === 'minimum' && typeof value !== 'boolean' && os.recommended
+      && _sysreqRecFollows(os.recommended[rowId], prevMin)) {
+    os.recommended[rowId] = os.minimum[rowId];
+  }
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
   renderDashboard();
 }

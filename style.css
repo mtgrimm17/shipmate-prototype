@@ -32869,3 +32869,10 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   border: 1px dashed var(--border-hover); color: var(--text-faint);
   display: flex; align-items: center; justify-content: center; font-size: 13px;
 }
+
+/* A Recommended value inherited from its Minimum (v9.64, _sysreqPaintRow in
+   app.js): placeholder grey until it is edited. Steam's System Requirements
+   and Epic's Specifications share the markup. */
+.steam-sysreq-cell.is-following .form-input { color: rgba(255, 255, 255, .35); }
+/* It stays grey when focused, like a placeholder; the first keystroke
+   replaces it (app.js, beforeinput) and the cell stops following. */
