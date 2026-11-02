@@ -10026,6 +10026,10 @@ body.sm-hide-shippy .fabslot{display:none !important}
    flagged red until it's actually edited back under the limit. */
 .ias-editable.is-over-limit,
 .ias-inline-input.is-over-limit { border-color: var(--magenta); background: var(--magenta-soft); }
+/* A single-line localization field edited as a growing textarea (v9.62,
+   _locEditField): wraps like the text it replaced, never scrolls itself. */
+textarea.ias-inline-input[data-loc-wrap] { overflow: hidden; resize: none; }
+textarea.loc-review-field.ias-inline-input[data-loc-wrap] { min-height: 0; max-height: none; }
 
 /* Character-limit counter — sits beneath the bottom-right of an actively-
    edited App Store Product Page Preview field (startIasInlineEdit, app.js).

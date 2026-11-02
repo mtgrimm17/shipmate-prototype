@@ -13919,7 +13919,7 @@ function startIasInlineEdit(field, el, ev) {
   const lang = _iasEffectivePreviewLang();
   const isMultiline = field === 'description' || field === 'releaseNotes';
   const limit = IAS_FIELD_CHAR_LIMITS[field];
-  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  const input = _locEditField(isMultiline);
   // Only the REPLACING editor needs the field's own classes — it stands where
   // the field stood, so it has to carry its font and its box. The nested one
   // sits INSIDE that field and inherits both; copying them there would apply
@@ -14020,7 +14020,7 @@ function startMasInlineEdit(field, el, ev) {
   const lang = _masEffectivePreviewLang();
   const isMultiline = field === 'description' || field === 'releaseNotes';
   const limit = IAS_FIELD_CHAR_LIMITS[field];
-  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  const input = _locEditField(isMultiline);
   // See startIasInlineEdit — the nested editor inherits the field's font and
   // box; copying its classes in would double the padding and the margin.
   if (isMultiline) {
@@ -14286,7 +14286,7 @@ function startMasLocReviewInlineEdit(field, lang, el, ev) {
   const isMultiline = field === 'description' || field === 'releaseNotes';
   const inHalf = !!(el.closest && el.closest('.loc-review-half'));
   const limit = IAS_FIELD_CHAR_LIMITS[field];
-  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  const input = _locEditField(isMultiline);
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
   if (isMultiline) {
@@ -14342,7 +14342,7 @@ function startMasLocReviewBackTranslationEdit(field, lang, el, ev) {
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
 
   const isMultiline = field === 'description' || field === 'releaseNotes';
-  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  const input = _locEditField(isMultiline);
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
   if (isMultiline) {
@@ -15273,7 +15273,7 @@ function startSteamLocReviewInlineEdit(field, lang, el, ev) {
 
   const isMultiline = field === 'description' || field === 'aboutGame';
   const inHalf = !!(el.closest && el.closest('.loc-review-half'));
-  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  const input = _locEditField(isMultiline);
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
   if (isMultiline) {
@@ -15316,7 +15316,7 @@ function startSteamLocReviewBackTranslationEdit(field, lang, el, ev) {
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
 
   const isMultiline = field === 'description' || field === 'aboutGame';
-  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  const input = _locEditField(isMultiline);
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
   if (isMultiline) {
@@ -15501,6 +15501,40 @@ function _steamLocReviewSourceBadge(field, lang) {
    alone in the card) — detected via el.closest('.loc-review-half') so it
    can size down to 4 rows there, since a half only has half the card's
    vertical room. */
+/* THE LOCALIZATION EDITOR WRAPS (v9.62). Every Review-side editor below
+   made an <input> for anything that was not a description, so a translated
+   promotional text, keyword list or achievement line — which READS as two
+   or three wrapped lines — turned into one scrolling line the moment you
+   clicked it. Jaco: "pasa a ser de una línea, haciendo muy tedioso el input".
+
+   So these fields get a textarea too, one that grows with its text. They
+   stay single-line in MEANING: the callers' own Enter-to-commit keydown
+   still applies (it is attached whenever !isMultiline), and a pasted line
+   break is folded to a space, so nothing can store a newline the store
+   would reject. The genuinely multi-line fields are untouched — they keep
+   their fixed rows. One helper, eleven callers, so they cannot drift. */
+function _locEditField(isMultiline) {
+  if (isMultiline) return document.createElement('textarea');
+  const ta = document.createElement('textarea');
+  ta.rows = 1;
+  /* A data attribute, not a class: every caller overwrites className with
+     the display element's classes right after this returns. */
+  ta.dataset.locWrap = '1';
+  const fit = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+  ta.addEventListener('input', () => {
+    if (/[\r\n]/.test(ta.value)) {
+      const pos = ta.selectionStart;
+      ta.value = ta.value.replace(/\r?\n/g, ' ');
+      ta.setSelectionRange(pos, pos);
+    }
+    fit();
+  });
+  /* scrollHeight is 0 until the field is in the document; the callers
+     replaceWith() and focus() synchronously, so one frame is enough. */
+  requestAnimationFrame(fit);
+  return ta;
+}
+
 function startLocReviewInlineEdit(field, lang, el, ev) {
   if (ev) ev.stopPropagation();
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
@@ -15508,7 +15542,7 @@ function startLocReviewInlineEdit(field, lang, el, ev) {
   const isMultiline = field === 'description' || field === 'releaseNotes';
   const inHalf = !!(el.closest && el.closest('.loc-review-half'));
   const limit = IAS_FIELD_CHAR_LIMITS[field];
-  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  const input = _locEditField(isMultiline);
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
   if (isMultiline) {
@@ -15860,7 +15894,7 @@ function startLocReviewBackTranslationEdit(field, lang, el, ev) {
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
 
   const isMultiline = field === 'description' || field === 'releaseNotes';
-  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  const input = _locEditField(isMultiline);
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
   if (isMultiline) {
@@ -23281,7 +23315,7 @@ function startMacFullInlineEdit(field, el, ev) {
   const lang = _macFullEffectivePreviewLang();
   const isMultiline = field === 'description' || field === 'releaseNotes';
   const limit = IAS_FIELD_CHAR_LIMITS[field];
-  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  const input = _locEditField(isMultiline);
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
   if (isMultiline) {
@@ -23420,7 +23454,7 @@ function startMacFullLocReviewInlineEdit(field, lang, el, ev) {
   const isMultiline = field === 'description' || field === 'releaseNotes';
   const inHalf = !!(el.closest && el.closest('.loc-review-half'));
   const limit = IAS_FIELD_CHAR_LIMITS[field];
-  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  const input = _locEditField(isMultiline);
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
   if (isMultiline) {
@@ -23473,7 +23507,7 @@ function startMacFullLocReviewBackTranslationEdit(field, lang, el, ev) {
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return; // already editing
 
   const isMultiline = field === 'description' || field === 'releaseNotes';
-  const input = document.createElement(isMultiline ? 'textarea' : 'input');
+  const input = _locEditField(isMultiline);
   input.className = el.className.split(/\s+/).filter(c => c && c !== 'ias-placeholder' && c !== 'ias-editable').join(' ');
   input.classList.add('ias-inline-input');
   if (isMultiline) {
