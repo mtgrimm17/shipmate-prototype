@@ -14893,6 +14893,11 @@ function _settleStoreTitles(value) {
    game is picked, before the scrape for it lands. Description and title are
    reset by their own doors (_fillDescriptionField, _settleStoreTitles). */
 function _resetScrapedFields() {
+  /* v9.60, by request: every answer in every platform, not only the fields
+     a scrape fills (state.js, resetAllPlatformAnswers). The lines below are
+     what v9.59 cleared; they now run on blank answers and stay as the record
+     of which fields the scrape refills. */
+  if (typeof resetAllPlatformAnswers === 'function') resetAllPlatformAnswers();
   const sa = state.steamSubmitAnswers;
   if (sa) {
     sa.legalNotice = '';
@@ -14923,6 +14928,8 @@ function _resetScrapedFields() {
   state.egsAchievements = []; state.steamAchievementsBaseline = null;
   // Each platform's screenshot arrangement, its own uploads and crops too.
   state.platformScreenshots = {};
+  // Every store's title starts as the new game's, in every language.
+  if (state.formData && state.formData.title) _settleStoreTitles(state.formData.title);
 }
 
 function _setGameDevPub(field, value) {

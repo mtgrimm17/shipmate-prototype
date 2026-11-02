@@ -7854,6 +7854,87 @@ const state = {
   showHighlights: false,
 };
 
+/* ── A NEW GAME RESETS EVERY PLATFORM'S ANSWERS (v9.60, by request) ───────
+   "From scratch should mean resetting every answer in every platform." Picking
+   a game from the title search (selectPicklistItem, app.js) puts every key
+   below back to the value it had when the page loaded, then the scrape fills
+   what it can. The values are snapshotted HERE, straight after the literal,
+   so nothing that runs later can have changed them first.
+
+   What is NOT reset, deliberately: Game Details itself (title, description,
+   languages, distribution, the asset library — the scrape refreshes those),
+   which platforms are on (the picked game decides that), the connections to
+   store accounts and the browser extension (platformAuth, connectStage,
+   ascLogin, googleAccount, extDetect — they belong to the developer, not the
+   game), the local build agent, and view state (which tab, field or language
+   a surface is showing, and each surface's translate switches, which are
+   settings rather than answers). */
+const PLATFORM_ANSWER_KEYS = [
+  'platformBuilds', 'platformBuildProcessing', 'storePreviewSectionSeen', 'stepSectionSeen',
+  'webSite', 'platformScreenshots', 'selectedTracks', 'platformLinkedApp',
+  'iosSubmitAnswers', 'macSubmitAnswers', 'macFullSubmitAnswers', 'androidSubmitAnswers',
+  'steamSubmitAnswers', 'egsSubmitAnswers',
+  'iosAnswerMeta', 'macAnswerMeta', 'macFullAnswerMeta', 'steamAnswerMeta',
+  'iosAnsweredAtInference', 'macAnsweredAtInference', 'macFullAnsweredAtInference', 'steamAnsweredAtInference',
+  'androidAnswerSnapshot', 'platformInferenceCache', 'androidDataAIStatus', 'claudeCache',
+  'lastInferencePrompt', 'lastInferenceSources',
+  'iosStorePreviewSeen', 'macStorePreviewSeen', 'macFullStorePreviewSeen',
+  'iosLocalizationsSeen', 'macLocalizationsSeen', 'macFullLocalizationsSeen',
+  'appStoreListing', 'macAppStoreListing', 'macFullAppStoreListing', 'steamSupportUrl',
+  'iosGameCenterAchievements', 'macGameCenterAchievements', 'macFullGameCenterAchievements',
+  'steamAchievements', 'egsAchievements', 'steamAchievementsBaseline',
+  'egsLogos', 'egsLogoRemoved', 'egsLogoFeatured', 'egsAboutBlocks',
+  'privacyAIStatus', 'privacyPresets',
+  'cqAnswers', 'cqAnswerMeta', 'cqInferenceStatus', 'cqInferenceError', 'cqSeen', 'contentQ',
+  'storePageInsights', 'improveSubmissionAnalysis',
+  'steamLocInfo', 'steamLocSettled',
+];
+/* Every per-platform translation's working state — statuses, pending
+   languages, back-translations, undo histories — by name, so a surface
+   added later is covered without being listed. */
+Object.keys(state).forEach(k => {
+  if (/(TranslateStatus|TranslatePendingLangs|BackTranslation|UndoHistory)$/.test(k)
+      && PLATFORM_ANSWER_KEYS.indexOf(k) < 0) PLATFORM_ANSWER_KEYS.push(k);
+});
+/* Added after load rather than declared above; a reset deletes them. */
+const PLATFORM_ANSWER_LATE_KEYS = [
+  'acceptedFixes', 'dismissedFixes', 'improveLocAnswered', 'privacyStash',
+  'privacyLastSuccessDesc', 'privacyLastSuccessResult', 'steamLocPending', 'steamSupportEmail',
+  'stepSaveAttempted', 'ascRejected', 'upfEgs',
+];
+/* The App Store's own listing text that lives on formData for history's
+   sake: its subtitle, What's New and languages, and the old game-wide
+   support/privacy/price fields. */
+const PLATFORM_ANSWER_FORMDATA_KEYS = ['subtitle', 'releaseNotes', 'supportUrl', 'privacyUrl', 'price', 'localizedStoreText'];
+
+function _cloneStateValue(v) {
+  if (v instanceof Set) return new Set([...v].map(_cloneStateValue));
+  if (v instanceof Map) return new Map([...v].map(([k, x]) => [k, _cloneStateValue(x)]));
+  if (Array.isArray(v)) return v.map(_cloneStateValue);
+  if (v && typeof v === 'object') {
+    const o = {};
+    Object.keys(v).forEach(k => { o[k] = _cloneStateValue(v[k]); });
+    return o;
+  }
+  return v;
+}
+const _PRISTINE_PLATFORM_ANSWERS = (() => {
+  const o = {};
+  PLATFORM_ANSWER_KEYS.forEach(k => { o[k] = _cloneStateValue(state[k]); });
+  const blank = makeBlankFormData();
+  o.__formData = {};
+  PLATFORM_ANSWER_FORMDATA_KEYS.forEach(k => { o.__formData[k] = _cloneStateValue(blank[k]); });
+  return o;
+})();
+
+function resetAllPlatformAnswers() {
+  PLATFORM_ANSWER_KEYS.forEach(k => { state[k] = _cloneStateValue(_PRISTINE_PLATFORM_ANSWERS[k]); });
+  PLATFORM_ANSWER_LATE_KEYS.forEach(k => { delete state[k]; });
+  const fd = state.formData || (state.formData = makeBlankFormData());
+  PLATFORM_ANSWER_FORMDATA_KEYS.forEach(k => { fd[k] = _cloneStateValue(_PRISTINE_PLATFORM_ANSWERS.__formData[k]); });
+  state.platformStepStatus = makeEmptyPlatformSteps();
+}
+
 /* THE LAYOUT FLAG NEEDS A WAY TO BE FLIPPED, AND IT DID NOT HAVE ONE.
 
    `submission.layout` ('inline' | 'modal') is the switch on the step row's
