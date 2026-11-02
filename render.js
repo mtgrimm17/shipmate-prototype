@@ -7877,8 +7877,40 @@ function renderStepModal() {
     ? ((applePreview && APPLE_FLIP_LABELS[flipTarget]) || FLIP_LABELS[flipTarget] || stepTitle)
     : stepTitle;
 
+  /* THE ACHIEVEMENTS LANGUAGE RIDES IN THE HEADER (v9.63), where the two
+     Apple Product Page Previews keep theirs. In the body it scrolled away
+     with the list, so changing language halfway down a long achievement list
+     meant scrolling back to the top first. Steam - Achievements and the two
+     Game Center editors; the body builders still call _achLangBarHTML, which
+     returns nothing for the surface the header is drawing. */
+  const achHeaderPid =
+      (platformId === 'steam' && flipTarget === 'achievements') ? 'steam'
+    : (stepId === 'gameCenter' && !flipTarget && (platformId === 'macos' || platformId === 'ios')) ? platformId
+    : null;
+
+  /* AND EVERY OTHER LANGUAGE SWITCHER JOINS IT (v9.63). Jaco: "estaría bien
+     que la colocación del elemento de cambio de idioma estuviera siempre
+     igual". It lived in four places — the header (App Store, Mac App Store),
+     a label row above the page (Mac App Store Full, Steam), the page's first
+     row (Epic), and the top of a step (Epic About). Now it is always the
+     header, right side, beside the ×. The body sites ask _langPickerInHeader()
+     and draw nothing while the header has it; the inline Submission pane,
+     which has no header, still draws them in the body. */
+  const hdrLangHTML = !isFlipped ? (
+        (stepId === 'storePreview' && platformId === 'macos')      ? _macSppLangDropdownHTML()
+      : (stepId === 'storePreview' && platformId === 'ios')        ? _iasSppLangDropdownHTML()
+      : (stepId === 'storePreview' && platformId === 'macos_full') ? _hdrLangPicker('macfull-preview-lang', _macFullEffectivePreviewLang(), 'setMacFullPreviewLang', _macFullLangHasOverLimitField)
+      : (stepId === 'storePreviewPrototype' && platformId === 'steam') ? _hdrLangPicker('steam-preview-lang', _steamEffectivePreviewLang(), 'setSteamPreviewLang', _steamLangHasOverLimitField)
+      : (stepId === 'storePreview' && platformId === 'egs')        ? _hdrLangStrip(_sppLangBarHTML('egs-preview-lang', _egsEffectivePreviewLang(), 'setEgsPreviewLang'))
+      : (stepId === 'about' && platformId === 'egs')               ? _hdrLangStrip(_sppLangBarHTML('egs-about-lang', _egsEffectivePreviewLang(), 'setEgsPreviewLang'))
+      : '') : '';
+
   // Step body — one dispatcher, shared with the inline Submission pane.
-  const body = _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus);
+  window._achLangInHeader = achHeaderPid;
+  window._langInHeader = !!hdrLangHTML;
+  let body;
+  try { body = _stepBodyFor(platformId, stepId, flipTarget, inferenceStatus); }
+  finally { window._achLangInHeader = null; window._langInHeader = false; }
   const complete = _paneComplete(platformId, stepId);
 
   /* GOING BACK IS NOT CLOSING, and the header used to offer only the second.
@@ -7956,15 +7988,18 @@ function renderStepModal() {
           <div class="submit-modal-subtitle">${p.label}</div>
         </div>
       </div>
+      ${(isSubPanel && achHeaderPid) ? `
+      <div class="submit-modal-header-actions">${_achLangSelectHTML(achHeaderPid)}
+        <!-- Where the × sits on every other modal: a sub-panel has none (back
+             is the arrow), and without this slot the switcher would land 38px
+             further right than everywhere else. -->
+        <span class="task-modal-close-slot" aria-hidden="true"></span>
+      </div>` : ''}
       ${isSubPanel ? '' : `
       <div class="submit-modal-header-actions">
-        <!-- The two Apple Product Page Previews' language switchers. Both sit
-             here, left of the ×, because the ask is "above the top bar" and the
-             pinned section nav is the first thing inside the body — see
-             _iasSppLangDropdownHTML / _macSppLangDropdownHTML. Mac Full and
-             Steam keep theirs in the scrollable body, unchanged. -->
-        ${(stepId === 'storePreview' && platformId === 'macos') ? _macSppLangDropdownHTML() : ''}
-        ${(stepId === 'storePreview' && platformId === 'ios')   ? _iasSppLangDropdownHTML() : ''}
+        <!-- Every preview's language switcher, left of the × (v9.63; see
+             hdrLangHTML above). -->
+        ${hdrLangHTML}
         <button class="task-modal-close" onclick="closeStepModal()">×</button>
       </div>`}
     </div>
@@ -11769,9 +11804,33 @@ function _achLangIsPrimary(pid) {
 }
 
 function _achLangBarHTML(pid) {
+  if (window._achLangInHeader === pid) return '';   // drawn in the modal header (v9.63)
   const s = ACH_LANG_SURFACE[pid];
   return s ? _sppLangBarHTML(s.id, _achLangOf(pid), s.setter) : '';
 }
+/* The same switcher without the body bar's wrapper and margins, for the
+   modal header (showStepModal). Hidden, like the bar, with one language. */
+function _achLangSelectHTML(pid) {
+  const s = ACH_LANG_SURFACE[pid];
+  return _hdrLangStrip(s ? _sppLangBarHTML(s.id, _achLangOf(pid), s.setter) : '');
+}
+function _hdrLangStrip(bar) {
+  return (bar || '').replace(/^<div class="spp-langbar">/, '').replace(/<\/div>$/, '');
+}
+/* A preview's switcher for the modal header (v9.63): the primary language
+   and every localization, each flagged when a field is over its limit —
+   the options the body copy of each one built for itself. */
+function _hdrLangPicker(id, lang, setter, warnFn) {
+  const fd = state.formData || {};
+  const codes = [fd.primaryLanguage || 'en', ...((fd.localizations || []).slice()
+    .sort((a, b) => (OB_LANG_NAMES[a] || a).localeCompare(OB_LANG_NAMES[b] || b)))];
+  const opts = codes.map(l => ({ value: l, label: OB_LANG_NAMES[l] || l,
+    warning: typeof warnFn === 'function' ? !!warnFn(l) : false }));
+  return `<div class="ias-locs-lang-group">${swSelect(id, lang, opts, setter, 'auto', 'right')}</div>`;
+}
+/* True while showStepModal is building a body whose header carries the
+   language switcher — the body's own copy stays out. */
+function _langPickerInHeader() { return !!window._langInHeader; }
 
 /* The text one field should SHOW. Falls back to the primary language's own
    text when a translation is missing, so switching language never blanks a
@@ -17710,7 +17769,7 @@ function buildMacFullStorePreviewSection() {
           <span class="ias-label-note">Reflects your submission data</span>
           <div class="ias-locs-lang-group">
             <button class="ias-all-locs-btn" onclick="openStorePreviewSection('${pid}','localization')" title="Review every localized field side by side">Localizations</button>
-            ${swSelect('macfull-preview-lang', previewLang, previewLangOptions, 'setMacFullPreviewLang', '150px', 'right')}
+            ${_langPickerInHeader() ? '' : swSelect('macfull-preview-lang', previewLang, previewLangOptions, 'setMacFullPreviewLang', '150px', 'right')}
           </div>
         </div>
       </div>
@@ -20555,7 +20614,7 @@ function buildEgsAboutSection() {
   const outOfChars = egsAboutUsed() >= EGS_ABOUT_TOTAL_CHARS;   // the primary's, as the handlers count it
   const imagesFull = imgCount >= EGS_ABOUT_MAX_IMAGES;
 
-  const langBar = (typeof _sppLangBarHTML === 'function')
+  const langBar = (typeof _sppLangBarHTML === 'function' && !_langPickerInHeader())
     ? _sppLangBarHTML('egs-about-lang', lang, 'setEgsPreviewLang') : '';
 
   /* EPIC'S REQUIREMENT, SAID ONCE, at the top where it is a rule rather than
@@ -22315,7 +22374,7 @@ function buildEgsStorePreviewSection() {
             floating; so it is the page's first row now, right-aligned, and
             the title begins beneath it. Nothing can be under it because
             nothing is beside it. */''}
-      ${_sppLangBarHTML('egs-preview-lang', previewLang, 'setEgsPreviewLang')}
+      ${_langPickerInHeader() ? '' : _sppLangBarHTML('egs-preview-lang', previewLang, 'setEgsPreviewLang')}
       ${egsPageField({ spp: 'title', id: 'egs-sp-name', cls: 'egs-sp-title', value: title,
           rowCls: 'egs-sp-titlerow',
           limit: EGS_PAGE_LIMITS.name, placeholder: 'Game Name',
@@ -25254,9 +25313,9 @@ function buildSteamStorePreviewPrototypeSection() {
              language dropdown stays: it chooses which language this page is
              drawn in, which is a different question from reviewing them all
              side by side. */''}
-        <div class="ias-locs-lang-group">
+        ${_langPickerInHeader() ? '' : `<div class="ias-locs-lang-group">
           ${swSelect('steam-preview-lang', previewLang, previewLangOptions, 'setSteamPreviewLang', '150px', 'right')}
-        </div>
+        </div>`}
       </div>
     </div>`;
 

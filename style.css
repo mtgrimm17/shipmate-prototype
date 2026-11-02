@@ -12886,12 +12886,16 @@ a.mac-spp-link-row.is-live:focus-visible {
    to `--text` on approach, so the chevron is what says "this opens" at rest.
    Scoped to `.submit-modal-header-actions` — the component keeps its blue
    everywhere else, exactly as `.rel-track` scopes its own copy. */
+/* AND IN v9.63 IT WENT BACK TO THE BLUE PILL, by request. Jaco: "con el
+   mismo layout de steam, el multipicker azul… cambiar la mac app y app store
+   para que sea igual". Steam's body switcher was always the blue pill; with
+   the achievements switchers moving up here too, three surfaces had two
+   looks for one control, and the ask was one look — Steam's. So the ghost
+   treatment below is gone (fill, dim label, no ring, hover box) and the
+   component's own blue applies; only the chrome sizing stays — shrink-wrapped
+   to its value, and the name not stretched. The argument above is kept
+   because it is still the case against; it lost to consistency. */
 .submit-modal-header-actions .loc-primary-pill {
-  height: 30px;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-dim);
-  transition: background .15s, color .15s;
   /* Shrink-wrapped, the third half of the `.rel-track` copy. The component
      defaults to `width: 100%` for the form it was built for; in chrome it takes
      the room its value needs. The wrap's own width comes from the `swSelect`
@@ -12904,18 +12908,10 @@ a.mac-spp-link-row.is-live:focus-visible {
    the 8px gap does the spacing. Exactly `.rel-track .sw-select-wrap`'s intent,
    one level further in. */
 .submit-modal-header-actions .loc-primary-name { flex: none; }
-/* NO RING, EVER — the shared masked `::after`, switched off rather than deleted
-   so Localization's copy of the same pill keeps the one it wears. `.rel-track`
-   does this with the identical line. */
-.submit-modal-header-actions .loc-primary-pill::after { display: none; }
-/* One fill for hover AND open: there is no second value to borrow for an open
-   state, and the panel appearing is feedback enough. */
-.submit-modal-header-actions .loc-primary-pill:hover,
-.submit-modal-header-actions .loc-primary-wrap.is-open .loc-primary-pill {
-  background: var(--surface-hover, rgba(255, 255, 255, .06));
-  color: var(--text);
-}
 
+/* The ×'s footprint on a sub-panel that has no × (v9.63), so a language
+   switcher beside it lands where it does on every other modal. */
+.task-modal-close-slot { width: 30px; height: 30px; flex: none; margin-left: 10px; }
 .task-modal-close {
   width: 30px; height: 30px;
   border: none;
