@@ -27575,11 +27575,14 @@ function _refreshBuildUI(pid) {
     return;
   }
 
-  if (pid === 'ios')             card.outerHTML = buildIOSActiveCard(pid);
-  else if (pid === 'macos')      card.outerHTML = buildIOSActiveCard(pid);
-  else if (pid === 'macos_full') card.outerHTML = buildIOSActiveCard(pid);
-  else if (pid === 'android')    card.outerHTML = buildAndroidActiveCard(pid);
-  else if (pid === 'steam')      card.outerHTML = buildSteamActiveCard(pid);
+  /* THROUGH buildActiveCard, NOT A LIST OF ITS OWN (v9.61). This used to
+     name five platforms and Epic was not one of them, so an Epic upload set
+     the build and the processing flag and repainted nothing: the card kept
+     saying "no build" until some unrelated render — finishing Product
+     Details, typically — happened to redraw it. buildActiveCard already
+     knows which builder each platform takes; asking it means a new
+     platform cannot be left out here again. */
+  card.outerHTML = buildActiveCard(pid);
 }
 
 /* ── Binary findings navigation ─────────────────────────────────────────────── */
