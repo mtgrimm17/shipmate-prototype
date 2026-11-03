@@ -32898,3 +32898,11 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   color: var(--magenta); font-size: 12px; font-weight: 600; line-height: 1.4;
 }
 .egs-sp .egs-sp-headline.is-over { color: var(--magenta); }
+
+/* What an unfinished Shippy row still needs, in words (v9.72). On its own
+   line under the label, quiet, so the list still reads as a list. */
+.gd-task-label .gd-miss {
+  display: block; margin-top: 2px;
+  font-size: 11.5px; line-height: 1.35; color: var(--text-faint);
+  white-space: normal;
+}

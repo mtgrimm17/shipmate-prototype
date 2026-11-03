@@ -29033,6 +29033,69 @@ function _sysreqPaintRow(row) {
 function _sysreqPaintAll(root) {
   (root || document).querySelectorAll('.steam-sysreq-row').forEach(_sysreqPaintRow);
 }
+
+/* ── AND AN EMPTY RECOMMENDED IS FILLED ON SIGHT (v9.72) ─────────────────
+   Jaco, with a scraped Minimum column and an empty Recommended one: "we
+   should copy recommended, in grey". The live mirror above only runs while
+   a Minimum is being TYPED, so values that arrived any other way — a scrape,
+   an earlier visit — left Recommended blank, and Epic asks for both.
+
+   So the first time a row is drawn in a visit, a blank Recommended beside a
+   filled Minimum takes the Minimum's value: in the DATA (so the step counts
+   it) and painted grey (it is borrowed, and the first keystroke replaces it,
+   exactly like the live mirror). ONCE PER ROW PER VISIT: a Recommended the
+   developer clears on purpose stays cleared until they leave the form, or
+   this would refill it under them on every repaint.
+
+   The data is written by reading the row's own onchange — the setter and
+   its arguments are already printed there — and storing the value straight
+   into state rather than calling the setter, which would re-render the
+   step from inside a paint. The panel and the card are refreshed once,
+   after the batch. */
+const _sysreqAutoFilled = new Set();
+let _sysreqAutoTimer = null;
+function _sysreqWriteRec(ctl) {
+  const m = (ctl.getAttribute('onchange') || '').match(/^(setSteamSysreqField|setSteamSysreqSize|setEgsSpecField)\((.*?),\s*this\.value\)/);
+  if (!m) return false;
+  const args = (m[2].match(/'([^']*)'/g) || []).map(x => x.slice(1, -1));
+  const v = ctl.value;
+  if (m[1] === 'setSteamSysreqField') {
+    const [osId, which, rowId] = args, os = _steamSysreq()[osId];
+    if (!os || !os[which]) return false;
+    os[which][rowId] = String(v).slice(0, STEAM_SYSREQ_MAX);
+  } else if (m[1] === 'setSteamSysreqSize') {
+    const [osId, which, rowId, part] = args, os = _steamSysreq()[osId];
+    if (!os || !os[which]) return false;
+    const cur = os[which][rowId];
+    const next = (cur && typeof cur === 'object') ? cur : { amount: '', units: 'GB' };
+    next[part] = (v || '').trim();
+    if (!next.units) next.units = 'GB';
+    os[which][rowId] = next;
+  } else {
+    const [osId, rowId, which] = args, sp = _egsSpecs()[osId];
+    if (!sp || !sp[rowId]) return false;
+    sp[rowId][which] = (v || '').trim();
+  }
+  return true;
+}
+function _sysreqAutoFill(row) {
+  const p = _sysreqCells(row);
+  if (!p) return;
+  const key = _sysreqKey(p);
+  if (!key || _sysreqAutoFilled.has(key)) return;
+  _sysreqAutoFilled.add(key);
+  if (_sysreqBlank(p.min[0].value) || !_sysreqBlank(p.rec[0].value)) return;
+  if (p.rec.some(r => r.readOnly || r.disabled)) return;
+  let wrote = false;
+  p.min.forEach((m, i) => { p.rec[i].value = m.value; if (_sysreqWriteRec(p.rec[i])) wrote = true; });
+  if (!wrote) return;
+  _sysreqMirrored.add(key);
+  clearTimeout(_sysreqAutoTimer);
+  _sysreqAutoTimer = setTimeout(() => {
+    try { renderDashboard(); } catch (_) {}
+    try { renderGuide(); } catch (_) {}
+  }, 0);
+}
 /* AND WHILE IT IS GREY, IT BEHAVES LIKE A PLACEHOLDER. Jaco: "si quiero
    escribir otra cosa en el recommended, se hace un poco tedioso
    seleccionar, y volver a escribir". So the first keystroke into a grey
@@ -29088,14 +29151,16 @@ document.addEventListener('input', e => {
       /* The form left the screen (saved, back, closed): forget this visit's
          grey. A re-render swaps the rows in one batch, so they are already
          back by the time this runs and the visit carries on. */
-      if (_sysreqMirrored.size && !document.querySelector('.steam-sysreq-row')) {
+      if ((_sysreqMirrored.size || _sysreqAutoFilled.size) && !document.querySelector('.steam-sysreq-row')) {
         _sysreqMirrored.clear();
+        _sysreqAutoFilled.clear();
         return;
       }
       for (const m of muts) for (const n of m.addedNodes) {
         if (n.nodeType !== 1) continue;
-        if (n.matches && n.matches('.steam-sysreq-row')) _sysreqPaintRow(n);
-        else if (n.querySelector && n.querySelector('.steam-sysreq-row')) _sysreqPaintAll(n);
+        const rows = (n.matches && n.matches('.steam-sysreq-row')) ? [n]
+                   : (n.querySelectorAll ? [...n.querySelectorAll('.steam-sysreq-row')] : []);
+        rows.forEach(r => { _sysreqAutoFill(r); _sysreqPaintRow(r); });
       }
     }).observe(document.body, { childList: true, subtree: true });
   };
@@ -36272,7 +36337,12 @@ function _smSteamFlipItems(flip) {
       return (typeof STEAM_SYSREQ_OS !== 'undefined' ? STEAM_SYSREQ_OS : []).map(o => {
         const r = sr[o.id] || {};
         const done = r.supported === 'no' || (r.supported === 'yes' && typeof _steamSysreqOsFilled === 'function' && _steamSysreqOsFilled(o.id));
-        return row(o.label, done, 'tab:sys:' + o.id);
+        /* What is missing, in words (v9.72). */
+        const miss = done ? '' : (r.supported === 'yes' ? 'Fill in at least one minimum requirement.'
+                                                         : `Say whether it runs on ${o.label}.`);
+        const out = row(o.label, done, 'tab:sys:' + o.id);
+        if (miss) out.label += `<span class="gd-miss">${escHtml(miss)}</span>`;
+        return out;
       });
     }
     case 'languages':
@@ -36716,8 +36786,12 @@ function _dpCount(input, max) {
    steps no earlier pass claims. */
 function _smEgsStepRows(stepId) {
   const a   = state.egsSubmitAnswers || {};
-  const row = (label, done, step, optional) => ({
-    label: escHtml(label) + (optional ? ' <span class="gd-opt">(optional)</span>' : ''),
+  /* `miss` is WHAT IS MISSING, in words, shown under an unfinished row
+     (v9.72, by request — "show always what's missing on Shippy, as a rule
+     of thumb"). A row that is done says nothing more. */
+  const row = (label, done, step, optional, miss) => ({
+    label: escHtml(label) + (optional ? ' <span class="gd-opt">(optional)</span>' : '')
+         + (!done && miss ? `<span class="gd-miss">${escHtml(miss)}</span>` : ''),
     done: !!done, bad: false, step: step || 'spp:__status' });
   switch (stepId) {
     /* ABOUT LISTS EPIC'S RULES, NOT ITS BLOCKS (v9.67, by request). A row
@@ -36734,13 +36808,19 @@ function _smEgsStepRows(stepId) {
       const badImg  = images.find(b => !((b.image || {}).dataUrl)
         || (b.caption || '').length > EGS_ABOUT_CAPTION_MAX
         || (typeof egsAboutLinkValid === 'function' && !egsAboutLinkValid(b.link)));
+      const textMiss = !texts.length ? 'Add a block of text.'
+        : texts.some(b => (b.headline || '').length > EGS_ABOUT_HEADLINE_MAX) ? `A headline is over ${EGS_ABOUT_HEADLINE_MAX} characters.`
+        : texts.some(b => !(b.body || '').trim()) ? 'A text block has no body.' : '';
       const rows = [row('Text with a body', texts.length && !badText,
-                        'egx:about:' + ((badText || texts[0] || {}).id || ''))];
+                        'egx:about:' + ((badText || texts[0] || {}).id || ''), false, textMiss)];
       /* A headline over its limit is an ERROR, not an unfinished part: the
          red cross, as on the store page's own About row (v9.69). */
       if (texts.some(b => (b.headline || '').length > EGS_ABOUT_HEADLINE_MAX)) rows[0].bad = true;
       if (images.length) {
-        const r = row('Every image has a file', !badImg, 'egx:about:' + ((badImg || images[0]).id));
+        const imgMiss = images.some(b => !((b.image || {}).dataUrl)) ? 'An image block has no file.'
+          : images.some(b => (b.caption || '').length > EGS_ABOUT_CAPTION_MAX) ? `A caption is over ${EGS_ABOUT_CAPTION_MAX} characters.`
+          : 'An image link is not a valid URL.';
+        const r = row('Every image has a file', !badImg, 'egx:about:' + ((badImg || images[0]).id), false, imgMiss);
         if (images.some(b => (b.caption || '').length > EGS_ABOUT_CAPTION_MAX
               || (typeof egsAboutLinkValid === 'function' && !egsAboutLinkValid(b.link)))) r.bad = true;
         rows.push(r);
@@ -36766,15 +36846,27 @@ function _smEgsStepRows(stepId) {
     case 'specifications': {
       const sp = (typeof _egsSpecs === 'function') ? _egsSpecs() : {};
       const on = EGS_SPEC_OS.filter(o => sp[o.id] && sp[o.id].supported);
-      if (!on.length) return [row('An operating system it runs on', false, 'egx:spec:' + EGS_SPEC_OS[0].id)];
-      return on.map(o => row(o.label, typeof egsSpecOsFilled === 'function' && egsSpecOsFilled(o.id), 'egx:spec:' + o.id));
+      if (!on.length) return [row('An operating system it runs on', false, 'egx:spec:' + EGS_SPEC_OS[0].id,
+                                  false, 'Switch on Windows or Mac.')];
+      return on.map(o => {
+        const req = EGS_SPEC_ROWS.filter(r => r.required && (!r.winOnly || o.directx));
+        const s = sp[o.id];
+        const minMiss = req.filter(r => !(s[r.id].min || '').trim()).map(r => r.label);
+        const recMiss = req.filter(r => !(s[r.id].rec || '').trim()).map(r => r.label);
+        const miss = [minMiss.length ? 'minimum: ' + minMiss.join(', ') : '',
+                      recMiss.length ? 'recommended: ' + recMiss.join(', ') : ''].filter(Boolean).join(' · ');
+        return row(o.label, typeof egsSpecOsFilled === 'function' && egsSpecOsFilled(o.id),
+                   'egx:spec:' + o.id, false, miss && 'Missing ' + miss);
+      });
     }
     case 'logo':
-      return [row('Logo', typeof egsFeaturedLogo === 'function' && !!egsFeaturedLogo(), null)];
+      return [row('Logo', typeof egsFeaturedLogo === 'function' && !!egsFeaturedLogo(), null, false,
+                  'Upload a logo or pick one from your assets.')];
     case 'productDetails':
       return [
         row('Seller name', (a.sellerName || '').trim(), 'egx:label:Seller name'),
-        row('User support', (a.supportPageLink || '').trim() || (a.supportEmail || '').trim(), 'egx:label:User support'),
+        row('User support', (a.supportPageLink || '').trim() || (a.supportEmail || '').trim(), 'egx:label:User support',
+            false, 'A support page link or a support email.'),
         row('Early access', a.earlyAccess !== null && a.earlyAccess !== undefined, 'egx:label:Early access'),
         row('NFT or blockchain', a.nftBlockchain !== null && a.nftBlockchain !== undefined, 'egx:label:Contains NFT'),
         row('Promotional content', a.promotionalContent !== null && a.promotionalContent !== undefined, 'egx:label:Contains promotional'),
@@ -36787,7 +36879,9 @@ function _smEgsStepRows(stepId) {
       return langs.map(l => {
         const sd   = (typeof _steamFieldValue === 'function') ? _steamFieldValue('shortDesc', l) : '';
         const body = (typeof egsBodyText === 'function') ? egsBodyText(l) : '';
-        return row(OB_LANG_NAMES[l] || l, (sd || '').trim() && (body || '').trim());
+        const miss = [!(sd || '').trim() ? 'short description' : '', !(body || '').trim() ? 'About' : ''].filter(Boolean);
+        return row(OB_LANG_NAMES[l] || l, (sd || '').trim() && (body || '').trim(), null, false,
+                   miss.length ? 'Missing ' + miss.join(' and ') + '.' : '');
       });
     }
   }
