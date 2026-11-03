@@ -8784,6 +8784,11 @@ function charCount(countId, value, max) {
   el.textContent = `${len}/${max}`;
   if (note) el.appendChild(note);
   el.className = 'char-count';
+  /* THE TITLE'S 30 IS A HARD LIMIT (v9.75, by decision). It was briefly a
+     "recommended 30" because Epic takes 64 and Steam sets none; Jaco:
+     "estamos en un terreno intermedio, vamos a forzarlo — que sea 30 límite".
+     So it goes red past 30 like the Description past 4,000, and Shippy's
+     "Add a game title" wears the cross. */
   if (len > max * 0.9) el.classList.add('is-warn');
   if (len > max)       el.classList.add('is-over');
   /* AND THE FIELD SAYS SO TOO (v9.74), as the store fields do: Jaco, "que si

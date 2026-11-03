@@ -3994,7 +3994,15 @@ function _chkGroups() {
   const hasDataSafety = [...(state.activePlatforms || [])].some(pid => CHK_DATA_DONE[pid]);
   return [
     { group: t('guide.group.details') || 'Details', view: 'details', items: [
-      { label: t('guide.item.title') || 'Add a game title',            section: 'gamedetails',  anchor: 'ob-title',           done: !!(fd.title && fd.title.trim()) },
+      /* OVER 30 IS AN ERROR (v9.75): Game Details' title has a hard limit
+         of 30, so past it the row wears the red cross and says so. */
+      (() => {
+        const has = !!(fd.title && fd.title.trim());
+        const over = has && fd.title.length > 30;
+        const label = (t('guide.item.title') || 'Add a game title')
+          + (over ? `<span class="gd-miss">Over 30 characters. Shorten it to 30 or fewer.</span>` : '');
+        return { label, section: 'gamedetails', anchor: 'ob-title', done: has && !over, bad: over };
+      })(),
       { label: t('guide.item.desc') || 'Write a description',          section: 'gamedetails',  anchor: 'ob-desc',            done: !!(fd.description && fd.description.trim()) },
       { label: t('guide.item.platforms') || 'Choose platforms',        section: 'gamedetails',  anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
       // Languages sits ABOVE countries by request: Distribution's own
@@ -4263,7 +4271,12 @@ function renderGuide() {
        under its own category (v9.14). Appended rather than replacing, so
        done/current still decide the rest. */
     const cls = (i.done ? ' is-done' : (idx === currentIdx ? ' is-current' : ''))
-              + (i.cls ? ' ' + i.cls : '');
+              + (i.cls ? ' ' + i.cls : '')
+              /* AN ERROR IS A CROSS ON ANY LIST (v9.75): `bad` was honoured
+                 only by the store-page arm's post-pass; now every row that
+                 says it is wrong wears the same magenta cross. */
+              + (i.bad ? ' sm-task-bad' : '');
+    const boxIn = i.bad && typeof smCrossSVG === 'function' ? smCrossSVG() : (i.done ? GUIDE_CHECK_SVG : '');
     /* AND `i.plain` MAKES IT A DIV (v9.16). Steam - Tags' pills row holds a
        button per tag — pressing one takes that tag off — and a button
        inside a button is not markup a browser keeps: it closes the outer
@@ -4273,12 +4286,12 @@ function renderGuide() {
        promise the press does not keep. */
     if (i.plain) return `
     <div class="gd-task${cls}">
-      <span class="gd-task-box">${i.done ? GUIDE_CHECK_SVG : ''}</span>
+      <span class="gd-task-box">${boxIn}</span>
       <span class="gd-task-label">${i.label}</span>
     </div>`;
     return `
     <button class="gd-task${cls}" onclick="${i.step ? `chkGoStep('${i.step}')` : `chkGo('${view}','${i.anchor || ''}','${i.section || ''}')`}">
-      <span class="gd-task-box">${i.done ? GUIDE_CHECK_SVG : ''}</span>
+      <span class="gd-task-box">${boxIn}</span>
       <span class="gd-task-label">${i.label}</span>
     </button>`;
   }).join('');
