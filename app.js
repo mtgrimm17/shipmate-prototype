@@ -3506,7 +3506,16 @@ function closeStepModal() {
   updateIOSCard('macos_full');
   updateAndroidCard();
   updateSteamCard();
-  if (sm?.platformId === 'web') renderDashboard();
+  /* EPIC TOO (v9.65). There is no updateEgsCard, and this list of five never
+     had Epic in it, so an Epic answer whose handler does not repaint the
+     dashboard itself — Content Questions, the About blocks, the visit that
+     opening Content records — was left on a card nobody redrew. Enrique saw
+     every row of Shippy's checklist green and the card's Store Page Preview
+     still grey, until switching Steam off forced a full render and Epic's
+     card caught up. A full render, as for 'web': Epic's card has no
+     surgical updater to call, and writing one would be a sixth inventory
+     to keep in step (see _refreshBuildUI's note). */
+  if (sm?.platformId === 'web' || sm?.platformId === 'egs') renderDashboard();
 }
 
 function toggleDocPane() {
