@@ -31153,6 +31153,10 @@ window.chkGoStep = function (step) {
        that can drift. */
     // A row that stands for several blocks lights them all and opens none.
     if (sm.platformId === 'steam' && id === 'featabout') return _smFieldGo(id, true);
+    /* Epic's two block rows (v9.66): pickers, not a field to type into, and
+       setStorePreviewFocus's repaint-then-scroll landed back at the top.
+       _smFieldGo is the trip Steam's blocks already take. */
+    if (sm.platformId === 'egs' && (id === 'languages' || id === 'genresFeatures')) return _smFieldGo(id, true);
     if (act) return _smDoorGo(id, act);
     if (sm.platformId === 'steam') return _smFieldGo(id);
     if (typeof setStorePreviewFocus === 'function') {
@@ -36355,75 +36359,6 @@ window.renderGuide = function () {
   });
   const eb = card.querySelector(':scope > .guide-eyebrow');
   card.insertBefore(el, eb ? eb.nextSibling : card.firstChild);
-  return out;
-};
-
-/* ══ DEBUG — WHAT THE CARD STILL WANTS (v9.65, TEMPORARY) ═════════════════
-   Jaco: "un debug temporal en el checklist, que diga exactamente lo que te
-   falta y que al clicar cada palabra te lleve ahí". The Epic card's Store
-   Page Preview tick (isEgsSectionComplete('storePreview'), state.js) asks
-   for Shippy's checklist PLUS four things the checklist has no row for —
-   the Content Rating visit, Genres, Features and Text languages — so the
-   list could be all green while the card stayed grey with no way to tell
-   why. This lists every term of the card's predicate that is still false,
-   each one clickable.
-
-   TEMPORARY BY DESIGN: one flag, this block and the `.gd-dbg-*` rules in
-   style.css. When the real fix lands (the missing rows in Shippy, the
-   shared Android/Epic visit), delete all three rather than switching the
-   flag off — the dev bar's rule. */
-const SM_DEBUG_CARD_MISSING = true;
-
-function _smDbgEgsMissing() {
-  const a = state.egsSubmitAnswers || {};
-  const out = [];
-  (sppRequiredElements('egs') || []).forEach(e => {
-    if (e.required && !e.done) out.push({ key: 'spp:' + e.id, label: e.short || e.label });
-  });
-  if (typeof stepVisitSatisfied === 'function' && !stepVisitSatisfied('egs', 'contentRating'))
-    out.push({ key: 'crvisit', label: 'Content Rating (open it on Epic)' });
-  if (!(a.genres || []).length)        out.push({ key: 'genres',   label: 'Genres' });
-  if (!(a.features || []).length)      out.push({ key: 'features', label: 'Features' });
-  if (!(a.textLanguages || []).length) out.push({ key: 'textlang', label: 'Text languages' });
-  return out;
-}
-
-/* Where each term lives on the page. The checklist's own rows go through
-   their row's own action; the four extras are found by the label the page
-   prints over them, scrolled to and flashed. */
-function _smDbgGo(key) {
-  if (key.slice(0, 4) === 'spp:') { if (typeof chkGoStep === 'function') chkGoStep(key); return; }
-  if (key === 'crvisit') { openStorePreviewSection('egs', 'content'); return; }
-  const scope = document.querySelector('#submit-overlay') || document;
-  const findLabel = (sel, re) => [...scope.querySelectorAll(sel)].find(n => re.test((n.textContent || '').trim()));
-  let target = null;
-  if (key === 'genres')   { const l = findLabel('.egs-sp-tagrow-label', /^Genres$/);   target = l && l.parentElement; }
-  if (key === 'features') { const l = findLabel('.egs-sp-tagrow-label', /^Features$/); target = l && l.parentElement; }
-  if (key === 'textlang') { const l = findLabel('.egs-sp-foot-sub', /Languages Supported/); target = l && l.parentElement; }
-  if (!target) return;
-  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  target.classList.remove('gd-dbg-flash'); void target.offsetWidth;
-  target.classList.add('gd-dbg-flash');
-  setTimeout(() => target.classList.remove('gd-dbg-flash'), 1600);
-}
-
-const _smDbgOrigGuide = window.renderGuide;
-window.renderGuide = function () {
-  const out = _smDbgOrigGuide.apply(this, arguments);
-  if (!SM_DEBUG_CARD_MISSING) return out;
-  const card = document.querySelector('#app-guide > .guide-card');
-  const sm = (typeof _smOpenStep === 'function') ? _smOpenStep() : null;
-  if (!card || !sm || sm.platformId !== 'egs' || sm.stepId !== 'storePreview') return out;
-  if (typeof _smFlipTarget === 'function' && _smFlipTarget('egs')) return out;
-  if (state.egsPreviewTab === 'achievements') return out;
-  const miss = _smDbgEgsMissing();
-  const el = document.createElement('div');
-  el.className = 'gd-dbg' + (miss.length ? '' : ' is-done');
-  el.innerHTML = `<div class="gd-dbg-head">DEBUG · card step</div>` + (miss.length
-    ? `<div class="gd-dbg-sub">Still missing for the Epic card:</div>` +
-      miss.map(m => `<button type="button" class="gd-dbg-item" onclick="_smDbgGo('${m.key}')">${escHtml(m.label)}</button>`).join('')
-    : `<div class="gd-dbg-sub">Nothing missing. Store Page Preview is complete.</div>`);
-  card.appendChild(el);
   return out;
 };
 

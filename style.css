@@ -32877,26 +32877,8 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 /* It stays grey when focused, like a placeholder; the first keystroke
    replaces it (app.js, beforeinput) and the cell stops following. */
 
-/* ══ DEBUG — what the Epic card still wants (v9.65, TEMPORARY) ══════════
-   Drawn by _smDbgEgsMissing / the renderGuide wrap in app.js. Delete with
-   them (see SM_DEBUG_CARD_MISSING). Deliberately looks like a debug tool,
-   not like part of the design. */
-.gd-dbg {
-  margin: 16px 0 4px; padding: 10px 12px;
-  border: 1px dashed rgba(255, 196, 0, .55); border-radius: 8px;
-  background: rgba(255, 196, 0, .06);
-  font-family: ui-monospace, Menlo, monospace; font-size: 11.5px;
-}
-.gd-dbg.is-done { border-color: rgba(47, 220, 128, .55); background: rgba(47, 220, 128, .06); }
-.gd-dbg-head { color: #ffc400; letter-spacing: .06em; font-weight: 600; margin-bottom: 4px; }
-.gd-dbg.is-done .gd-dbg-head { color: #2fdc80; }
-.gd-dbg-sub { color: var(--text-dim); margin-bottom: 6px; }
-.gd-dbg-item {
-  display: block; width: 100%; text-align: left;
-  padding: 4px 6px; margin: 0 -6px; border: 0; border-radius: 6px;
-  background: transparent; color: #ffc400; font: inherit; cursor: pointer;
-  text-decoration: underline; text-underline-offset: 3px;
-}
-.gd-dbg-item:hover { background: rgba(255, 196, 0, .12); }
-.gd-dbg-flash { outline: 2px solid #ffc400; outline-offset: 4px; border-radius: 8px;
-  transition: outline-color 1.4s ease; }
+/* A card whose builder threw (v9.66, _safeActiveCard in render.js). */
+.card-render-error { padding: 16px 18px; border: 1px dashed var(--magenta); }
+.card-render-error-msg { color: var(--text); font-size: 13px; line-height: 1.5; }
+.card-render-error-msg span { display: block; margin-top: 4px; color: var(--magenta);
+  font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; }

@@ -5377,6 +5377,26 @@ function buildDashboardAnnounceCta() {
     </button>`;
 }
 
+/* ONE CARD'S ERROR IS ONE CARD'S PROBLEM (v9.66). The grid is built in a
+   single innerHTML from every active card, so a builder that throws took
+   the WHOLE render down with it: nothing was written, and every other card
+   kept whatever it showed before. Enrique: Epic's Store Page Preview stayed
+   unticked with everything filled in, and ticked the moment the Steam card
+   was switched off — the signature of a Steam card that threw on his data,
+   freezing Epic's behind it. Now a failing card draws a small error box in
+   its own slot and logs which platform and why, and the others render. */
+function _safeActiveCard(pid) {
+  try { return buildActiveCard(pid); }
+  catch (err) {
+    console.error('[renderDashboard] the ' + pid + ' card failed to draw:', err);
+    const label = (typeof PLATFORMS !== 'undefined' && PLATFORMS[pid] && PLATFORMS[pid].label) || pid;
+    return `<div class="active-card card-render-error" id="active-card-${pid}">
+      <div class="card-render-error-msg">The ${escHtml(label)} card could not be drawn.
+        <span>${escHtml(String(err && err.message || err))}</span></div>
+    </div>`;
+  }
+}
+
 function renderDashboard() {
   // The guide column is rendered beside these cards and reads the same
   // completion predicates they do — keep the two in step. No-op unless
@@ -5453,7 +5473,7 @@ function renderDashboard() {
   el.innerHTML = modalMode ? `
     <div class="sec-solo">
       <div class="dash-column">
-        ${active.map(pid => buildActiveCard(pid)).join('')}
+        ${active.map(pid => _safeActiveCard(pid)).join('')}
       </div>
     </div>` : `
     <div class="sec-solo">
@@ -10503,6 +10523,13 @@ function sppRequiredElements(pid, lang) {
          that opens a step should say where it goes. The id stays
          `description`: it is what data-spp-el on the block says, and
          renaming it would be renaming a wire to match a label. */
+      /* GENRES & FEATURES (v9.66, by request). Both are required by Epic and
+         by the card's own tick (isEgsSectionComplete('storePreview')), and
+         had no row — the list could be all green while the card waited on
+         them. One row because they are one block on the page, read in the
+         order the page reads: under the short description, above About. */
+      { id: 'genresFeatures', label: 'Genres & Features', required: true,
+        done: !!((a.genres || []).length && (a.features || []).length) },
       { id: 'description',  label: 'About',             required: true,  done: !!(typeof egsBodyText === 'function' && (egsBodyText() || '').trim()) },
       /* Two more of Epic's own sections, as rows (v8.70). Jaco: "añade Social
          Media y System Requirements como pasos de Shippy." Each row's tick is
@@ -10514,6 +10541,13 @@ function sppRequiredElements(pid, lang) {
         done: typeof isEgsSectionComplete === 'function' && isEgsSectionComplete('socialMedia') },
       { id: 'specifications', label: 'System Requirements', required: true,
         done: typeof isEgsSectionComplete === 'function' && isEgsSectionComplete('specifications') },
+      /* LANGUAGES (v9.66). The Text column of Languages Supported sits inside
+         the System Requirements chip, where the row above only ever opened
+         Specifications, so a required field lived on the page with no way to
+         reach it from Shippy. Text is the required half; Audio stays
+         optional and does not count. */
+      { id: 'languages', label: 'Languages', required: true,
+        done: !!(a.textLanguages || []).length },
       /* NO PRODUCT DETAILS ROW (v9.43, by request). It was added in v8.73 —
          "pon Product Details como último paso del checklist" — pointing at
          the Login Accounts, Languages and Legal parts at the foot of the
@@ -20499,7 +20533,7 @@ function egsPreviewPick(fieldId, label, emptyPlaceholder) {
                      stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
   return `
     <div class="egs-sp-tagcol">
-      <span class="egs-sp-tagrow-label">${escHtml(label)}</span>
+      <span class="egs-sp-tagrow-label">${escHtml(label)}${cfg.required ? EGS_REQ_STAR : ''}</span>
       <div class="egs-pick${open ? ' is-open' : ''}" id="egspick-${fieldId}">
         <div class="egs-tagbox${full ? ' is-full' : ''}${sel.length ? '' : ' egs-sp-edit-empty'}"
              onclick="openEgsPick(event, '${fieldId}')">
@@ -22105,7 +22139,7 @@ function buildEgsStorePreviewSection() {
      them at 0.8fr and 1.2fr, from a reading of Rocket League where Features
      simply had more tags in it. */
   const tagsHtml = `
-    <div class="egs-sp-tagcols">
+    <div class="egs-sp-tagcols" data-spp-el="genresFeatures">
       ${egsPreviewPick('genres', 'Genres')}
       ${egsPreviewPick('features', 'Features')}
     </div>`;
@@ -22313,7 +22347,9 @@ function buildEgsStorePreviewSection() {
               onKey: 'egsLoginTypeKey', onRemove: 'removeEgsLoginType', bare: true })}
         </div>
 
-        <div class="egs-sp-chip-part" data-spp-el="productDetails">
+        <!-- Shippy's Languages row lands here (v9.66): Text is required and
+             had no row, so it could hold the card's tick back unseen. -->
+        <div class="egs-sp-chip-part" data-spp-el="languages">
           <div class="egs-sp-foot-sub">Languages Supported</div>
           <div class="egs-sp-langpick">
             ${egsPreviewPick('audioLanguages', 'Audio', 'Choose or type (optional)')}
