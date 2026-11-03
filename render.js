@@ -20655,20 +20655,14 @@ function buildEgsAboutSection() {
      an error on whichever block happens to be last. */
   const head = `
     ${langBar}
-    <div class="egs-about-head">
-      <div class="egs-about-budget${over ? ' is-over' : ''}">
-        <span class="egs-about-budget-label">Characters</span>
-        <span class="ias-char-count${over ? ' is-over' : ''}" id="egs-about-budget">${
-          used.toLocaleString()} / ${EGS_ABOUT_TOTAL_CHARS.toLocaleString()}</span>
-      </div>
-      <div class="egs-about-blockcount">${imgCount} of ${EGS_ABOUT_MAX_IMAGES} images</div>
-    </div>
+    ${/* THE COUNTERS MOVED TO SHIPPY (v9.67), as Tags' did in v9.34: the
+         characters used (with its bar and the over-by note) and the images
+         count are the panel's status line now (_smEgsAboutCap, app.js), and
+         the panel stays put while the blocks scroll. The rule stays here. */''}
     <div class="form-hint egs-about-rule">Text and images share
       ${EGS_ABOUT_TOTAL_CHARS.toLocaleString()} characters. Each image counts as one
       character plus its caption, up to ${EGS_ABOUT_MAX_IMAGES} images. At least one block
       of text is required, and every block of text needs a body.</div>
-    ${over ? `<div class="egs-about-overnote">That is ${(used - EGS_ABOUT_TOTAL_CHARS).toLocaleString()}
-      characters more than Epic takes. Shorten a block or remove one.</div>` : ''}
     ${isPrimary ? '' : (typeof _achLangNoteHTML === 'function' ? _achLangNoteHTML('egs') : '')}`;
 
   const moveBtns = (b, i) => `

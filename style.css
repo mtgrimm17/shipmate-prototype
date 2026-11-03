@@ -32882,3 +32882,7 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .card-render-error-msg { color: var(--text); font-size: 13px; line-height: 1.5; }
 .card-render-error-msg span { display: block; margin-top: 4px; color: var(--magenta);
   font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; }
+
+/* "(optional)" on a Shippy row (v9.67, _smEgsStepRows): quieter than the
+   label it qualifies. */
+.gd-opt { color: var(--text-faint); font-weight: 400; }

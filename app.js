@@ -36687,3 +36687,240 @@ function _dpCount(input, max) {
   const c = wrap && wrap.querySelector('.dp-counter-row .ias-char-count');
   if (c) { c.textContent = `${len}/${max}`; c.classList.toggle('is-over', over); }
 }
+
+/* ══ EPIC'S STEPS GET THEIR OWN SHIPPY LISTS (v9.67) ═════════════════════
+   Jaco: "una primera pasada de los shippy panels de cada modal. Al menos en
+   Epic veo que sigue habiendo placeholdery things en screenshots, about,
+   social media y specifications." Measured: six of Epic's step modals —
+   About, Logo, Product Details, Social Media, Specifications and
+   Localizations — fell through to the dashboard's own list ("Submit to
+   every platform, the right way…"), which is about the whole submission
+   and nothing on screen; and the Store Page Preview's Screenshots layer
+   showed the page's eleven sections instead of the two things it edits.
+
+   Each list is the step's own predicate, broken into the parts the step
+   asks, and each row goes to its part: the field is found by the words
+   the step prints over it, scrolled to and lit (_smSteamSpot, the trip
+   Steam's rows take). Rows that only report — a language's translation —
+   carry no destination. Optional parts say so and never hold a step back.
+   Last wrapper on _smStepItems and chkGoStep, so it only answers for the
+   steps no earlier pass claims. */
+function _smEgsStepRows(stepId) {
+  const a   = state.egsSubmitAnswers || {};
+  const row = (label, done, step, optional) => ({
+    label: escHtml(label) + (optional ? ' <span class="gd-opt">(optional)</span>' : ''),
+    done: !!done, bad: false, step: step || 'spp:__status' });
+  switch (stepId) {
+    /* ABOUT LISTS EPIC'S RULES, NOT ITS BLOCKS (v9.67, by request). A row
+       per block was the page's contents turned into tasks — "no inventes
+       items por inventar". These are egsAboutComplete's own terms, grouped
+       the way a developer would fix them, and the image row appears only
+       when there are images to have rules about. A row goes to the first
+       block that breaks it. */
+    case 'about': {
+      const blocks = (typeof egsAboutBlocks === 'function') ? egsAboutBlocks() : [];
+      const texts  = blocks.filter(b => b.kind === 'text');
+      const images = blocks.filter(b => b.kind === 'image');
+      const badText = texts.find(b => !(b.body || '').trim() || (b.headline || '').length > EGS_ABOUT_HEADLINE_MAX);
+      const badImg  = images.find(b => !((b.image || {}).dataUrl)
+        || (b.caption || '').length > EGS_ABOUT_CAPTION_MAX
+        || (typeof egsAboutLinkValid === 'function' && !egsAboutLinkValid(b.link)));
+      const rows = [row('Text with a body', texts.length && !badText,
+                        'egx:about:' + ((badText || texts[0] || {}).id || ''))];
+      if (images.length) rows.push(row('Every image has a file', !badImg,
+                                       'egx:about:' + ((badImg || images[0]).id)));
+      /* The character budget is a COUNTER, not a task (v9.67, by request):
+         it lives at the top of the panel like Tags' twenty, with a bar —
+         see _smEgsAboutCap below. Going over still holds the step back
+         (egsAboutComplete); the counter turns red and says by how much. */
+      return rows;
+    }
+    /* SOCIAL MEDIA IS NOT A CHECKLIST. Epic files it under Optional
+       Information and nothing in it is required, so it gets no rows — only
+       a status line, written by the pass below. */
+    case 'socialMedia':
+      return [];
+    case 'specifications': {
+      const sp = (typeof _egsSpecs === 'function') ? _egsSpecs() : {};
+      const anyOn = EGS_SPEC_OS.some(o => sp[o.id] && sp[o.id].supported);
+      return EGS_SPEC_OS.map(o => {
+        const on = sp[o.id] && sp[o.id].supported;
+        if (!on) return row(o.label + (anyOn ? ' · not supported' : ''), anyOn, 'egx:spec:' + o.id);
+        return row(o.label, typeof egsSpecOsFilled === 'function' && egsSpecOsFilled(o.id), 'egx:spec:' + o.id);
+      });
+    }
+    case 'logo':
+      return [row('Logo', typeof egsFeaturedLogo === 'function' && !!egsFeaturedLogo(), null)];
+    case 'productDetails':
+      return [
+        row('Seller name', (a.sellerName || '').trim(), 'egx:label:Seller name'),
+        row('User support', (a.supportPageLink || '').trim() || (a.supportEmail || '').trim(), 'egx:label:User support'),
+        row('Early access', a.earlyAccess !== null && a.earlyAccess !== undefined, 'egx:label:Early access'),
+        row('NFT or blockchain', a.nftBlockchain !== null && a.nftBlockchain !== undefined, 'egx:label:Contains NFT'),
+        row('Promotional content', a.promotionalContent !== null && a.promotionalContent !== undefined, 'egx:label:Contains promotional'),
+        row('EULA link', (a.eulaLink || '').trim(), 'egx:label:EULA link', true),
+      ];
+    case 'localizations': {
+      const primary = (state.formData || {}).primaryLanguage || 'en';
+      const langs = (state.formData.localizations || []).filter(l => l !== primary);
+      if (!langs.length) return [row('No other languages yet', !!a.localizationsSeen)];
+      return langs.map(l => {
+        const sd   = (typeof _steamFieldValue === 'function') ? _steamFieldValue('shortDesc', l) : '';
+        const body = (typeof egsBodyText === 'function') ? egsBodyText(l) : '';
+        return row(OB_LANG_NAMES[l] || l, (sd || '').trim() && (body || '').trim());
+      });
+    }
+  }
+  return null;
+}
+
+/* The Store Page Preview's Screenshots layer edits two things. */
+function _smEgsFlipRows(flip) {
+  if (flip !== 'screenshots') return null;
+  const shots = (typeof platformStoreShots === 'function') ? platformStoreShots('egs') : [];
+  const trailer = typeof smAppTrailer === 'function' && smAppTrailer();
+  return [
+    { label: 'Screenshots' + (shots.length ? ` (${shots.length})` : ''), done: shots.length > 0 || !!trailer, bad: false, step: 'spp:__status' },
+    { label: 'Trailer <span class="gd-opt">(optional)</span>', done: !!trailer, bad: false, step: 'spp:__status' },
+  ];
+}
+
+/* Where an egx: row goes. */
+function _smEgsGo(step) {
+  const scope = (typeof _smStepScope === 'function' && _smStepScope()) || document.querySelector('#submit-overlay') || document;
+  const [, kind, ...rest] = step.split(':');
+  const arg = rest.join(':');
+  if (kind === 'spec') { if (typeof setEgsSpecTab === 'function') setEgsSpecTab(arg); return true; }
+  if (kind === 'about') {
+    if (arg) { state.egsAboutOpenId = arg; if (typeof reRenderStepModal === 'function') reRenderStepModal(); }
+    requestAnimationFrame(() => {
+      const el = arg ? scope.querySelector(`[data-block-id="${arg}"]`) : scope.querySelector('.egs-about-add');
+      if (el && typeof _smSteamSpot === 'function') _smSteamSpot([el], el);
+    });
+    return true;
+  }
+  if (kind === 'label') {
+    const lab = [...scope.querySelectorAll('.form-label, .ios-content-step-label, .ios-q-label, label')]
+      .find(n => (n.textContent || '').trim().indexOf(arg) === 0);
+    if (!lab) return false;
+    const block = lab.closest('.form-group, .ios-q-row, .ios-q, .egs-portal-field') || lab;
+    if (typeof _smSteamSpot === 'function') _smSteamSpot([block], block);
+    const input = block.querySelector('input, textarea');
+    if (input) { try { input.focus({ preventScroll: true }); } catch (_) {} }
+    return true;
+  }
+  return false;
+}
+
+(() => {
+  const prevItems = _smStepItems;
+  _smStepItems = function () {
+    if (!_smShippyStep) return prevItems.apply(this, arguments);
+    const sm = _smOpenStep();
+    if (sm && sm.platformId === 'egs') {
+      if (sm.stepId === 'storePreview') {
+        const flip = _smFlipTarget('egs');
+        const f = flip && _smEgsFlipRows(flip);
+        if (f) return f;
+      } else {
+        const r = _smEgsStepRows(sm.stepId);
+        if (r) return r;
+      }
+    }
+    return prevItems.apply(this, arguments);
+  };
+  const prevGo = window.chkGoStep;
+  window.chkGoStep = function (step) {
+    if (typeof step === 'string' && step.slice(0, 4) === 'egx:') return _smEgsGo(step);
+    return prevGo.apply(this, arguments);
+  };
+})();
+
+/* The status line for a step with no checklist (v9.67): Epic's Social
+   Media. It goes where Content Rating's "N of M answered" goes, replacing
+   the reserved empty slot so the column keeps its height. */
+(() => {
+  const prev = window.renderGuide;
+  window.renderGuide = function () {
+    const out = prev.apply(this, arguments);
+    const sm = (typeof _smOpenStep === 'function') ? _smOpenStep() : null;
+    if (!sm || sm.platformId !== 'egs' || sm.stepId !== 'socialMedia') return out;
+    const card = document.querySelector('#app-guide > .guide-card') || document.querySelector('#app-guide .guide-card');
+    if (!card) return out;
+    const soc = (state.egsSubmitAnswers || {}).social || {};
+    const n = EGS_SOCIAL_LINKS.filter(l => (soc[l.id] || '').trim()).length;
+    card.querySelectorAll(':scope > .sm-cr-line-moved').forEach(x => x.remove());
+    const line = document.createElement('div');
+    line.className = 'sw-tip-text sm-cr-line-moved';
+    line.textContent = `Optional. ${n} of ${EGS_SOCIAL_LINKS.length} links added.`;
+    const eb = card.querySelector(':scope > .guide-eyebrow');
+    card.insertBefore(line, eb ? eb.nextSibling : card.firstChild);
+    return out;
+  };
+})();
+
+/* ══ ABOUT'S CHARACTER COUNTER, IN SHIPPY (v9.67) ══════════════════════════
+   Jaco: "el contador de caracteres de About va en Shippy, igual que los tags
+   o el número de preguntas respondidas — no debería ser un checkable item".
+   The same object as Tags' counter (.gd-tagcap): the label and n / max, a
+   bar, and a note only when there is something to say — over the budget,
+   or images in play. It takes the reserved status slot's place, as Tags'
+   does. Typing does not re-render the step (setEgsAboutField's v9.46 note),
+   so _egsAboutPaintBudget, which already runs per keystroke, also patches
+   this in place: _smEgsAboutCapPaint. */
+function _smEgsAboutCapHTML() {
+  const lang = (typeof _egsEffectivePreviewLang === 'function') ? _egsEffectivePreviewLang() : undefined;
+  const used = (typeof egsAboutUsed === 'function') ? egsAboutUsed(lang) : 0;
+  const max  = EGS_ABOUT_TOTAL_CHARS;
+  const imgs = (typeof egsAboutImageCount === 'function') ? egsAboutImageCount() : 0;
+  const over = used > max;
+  const note = over ? `${(used - max).toLocaleString()} over what Epic takes. Shorten a block or remove one.`
+             : (imgs ? `${imgs} of ${EGS_ABOUT_MAX_IMAGES} images, one character each plus its caption.` : '');
+  return {
+    cls: 'gd-tagcap gd-aboutcap' + (over ? ' is-over' : (used >= max ? ' is-full' : '')),
+    html: `<div class="gd-tagcap-row"><span>Characters</span>` +
+          `<span class="gd-tagcap-n"><b>${used.toLocaleString()}</b> / ${max.toLocaleString()}</span></div>` +
+          `<div class="gd-tagcap-track"><i style="width:${Math.min(100, Math.round(used / max * 100))}%"></i></div>` +
+          (note ? `<div class="gd-tagcap-note">${escHtml(note)}</div>` : ''),
+  };
+}
+function _smEgsAboutCapPaint() {
+  const el = document.querySelector('#app-guide .gd-aboutcap');
+  if (!el) return;
+  const c = _smEgsAboutCapHTML();
+  el.className = c.cls; el.innerHTML = c.html;
+}
+(() => {
+  const prev = window.renderGuide;
+  window.renderGuide = function () {
+    const out = prev.apply(this, arguments);
+    const sm = (typeof _smOpenStep === 'function') ? _smOpenStep() : null;
+    if (!sm || sm.platformId !== 'egs' || sm.stepId !== 'about') return out;
+    /* What the panel now shows, so the per-keystroke check above repaints
+       only when a tick really differs from it. */
+    window._smAboutRowsSig = (_smEgsStepRows('about') || []).map(x => x.done ? 1 : 0).join('');
+    const card = document.querySelector('#app-guide > .guide-card') || document.querySelector('#app-guide .guide-card');
+    if (!card) return out;
+    card.querySelectorAll(':scope > .sm-cr-line-slot').forEach(n => { if (!n.textContent.trim()) n.remove(); });
+    const c = _smEgsAboutCapHTML();
+    const el = document.createElement('div');
+    el.className = c.cls; el.innerHTML = c.html;
+    const eb = card.querySelector(':scope > .guide-eyebrow');
+    card.insertBefore(el, eb ? eb.nextSibling : card.firstChild);
+    return out;
+  };
+  const prevPaint = window._egsAboutPaintBudget;
+  if (typeof prevPaint === 'function') {
+    window._egsAboutPaintBudget = function () {
+      const r = prevPaint.apply(this, arguments);
+      _smEgsAboutCapPaint();
+      /* And the rows' ticks: a body typed into an empty block finishes
+         "Text with a body" on that keystroke. Repaint the panel only when a
+         tick actually moved — the panel, never the step under the caret. */
+      const rows = _smEgsStepRows('about') || [];
+      const sig = rows.map(x => x.done ? 1 : 0).join('');
+      if (sig !== window._smAboutRowsSig) { try { renderGuide(); } catch (_) {} }
+      return r;
+    };
+  }
+})();
