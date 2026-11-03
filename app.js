@@ -37083,3 +37083,46 @@ function smReplaceTrailerFile(pid, files) {
     if (typeof reRenderStepModal === 'function') reRenderStepModal();
   });
 }
+
+/* Steam's hero arrows (v9.77): the next or previous thumbnail, wrapping, and
+   brought into view in the strip as the arrow moves past its edge. */
+function _steamSppCarouselStep(btn, dir) {
+  const left = btn.closest('.steam-spp-media-left');
+  const thumbs = left ? [...left.querySelectorAll('.steam-spp-media-thumbs .steam-spp-carousel-thumb')] : [];
+  if (thumbs.length < 2) return;
+  const cur = Math.max(0, thumbs.findIndex(t => t.classList.contains('is-active')));
+  const next = thumbs[(cur + dir + thumbs.length) % thumbs.length];
+  _steamSppCarouselSelect(next);
+  try { next.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); } catch (_) {}
+  if (typeof _steamSppUpdateScrollbar === 'function') setTimeout(_steamSppUpdateScrollbar, 350);
+}
+
+/* EPIC'S TRAILER PLAYS WHERE IT IS (v9.77). Jaco: "no necesitamos el zoom
+   que hace el vídeo". The stage's trailer opened the asset lightbox
+   (smPlayAppTrailer → smZoom); Steam's preview already plays in place, and
+   both real stores do too. So the poster is swapped for a playing <video>
+   inside the stage: an uploaded trailer by its file, Steam's by its HLS
+   manifest (native on Safari, hls.js elsewhere — playSteamTrailer's two
+   paths). Clicks on the player stay on the player; leaving the step
+   re-renders the stage, which puts the poster back. */
+function _egsPlayStageTrailer(el) {
+  const tr = (typeof smAppTrailer === 'function') ? smAppTrailer() : null;
+  if (!tr || !el) return;
+  const v = document.createElement('video');
+  v.controls = true; v.autoplay = true; v.playsInline = true;
+  v.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000;display:block;';
+  v.addEventListener('click', e => e.stopPropagation());
+  if (tr.isSteam) {
+    const url = tr.hlsUrl || ((state.uploads || {}).steamTrailer || {}).hlsUrl;
+    if (!url) { smPlayAppTrailer(); return; }
+    if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = url;
+    else if (window.Hls && window.Hls.isSupported()) { const h = new window.Hls(); h.loadSource(url); h.attachMedia(v); }
+    else { smPlayAppTrailer(); return; }
+  } else if (tr.src) {
+    v.src = tr.src;
+  } else { smPlayAppTrailer(); return; }
+  el.innerHTML = '';
+  el.appendChild(v);
+  el.onclick = e => e.stopPropagation();
+  el.style.cursor = 'default';
+}

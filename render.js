@@ -22107,7 +22107,7 @@ function buildEgsStorePreviewSection() {
       return onStage
         ? `<div class="egs-sp-car-trailer" role="button" tabindex="0"
                 title="Play ${escHtml(it.name)}"
-                onclick="event.stopPropagation(); smPlayAppTrailer()"
+                onclick="event.stopPropagation(); _egsPlayStageTrailer(this)"
            >${pic}${badge}</div>`
         : `${pic}${badge}`;
     }
@@ -24716,8 +24716,20 @@ function buildSteamStorePreviewPrototypeSection() {
   // structural element to delete a class it no longer carries is how the
   // thumbnail strip's own layout gets broken by accident.
   const heroGlowClass = '';
+  /* ARROWS INSIDE THE PICTURE, AS STEAM DRAWS THEM (v9.77). Jaco, with the
+     real Steam page beside it: the prev / next chevrons sit inside the
+     player at its left and right edges, faint until the pointer is over it.
+     They step the same selection a thumbnail press makes
+     (_steamSppCarouselStep → _steamSppCarouselSelect), so the hero, the
+     lit thumbnail and the strip's scroll stay one state. */
+  const steamChev = pts => `<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="${pts}"/></svg>`;
+  const heroArrows = carouselItems.length > 1 ? `
+      <button type="button" class="steam-spp-hero-arrow is-prev" aria-label="Previous"
+              onclick="event.stopPropagation(); _steamSppCarouselStep(this, -1)">${steamChev('15 18 9 12 15 6')}</button>
+      <button type="button" class="steam-spp-hero-arrow is-next" aria-label="Next"
+              onclick="event.stopPropagation(); _steamSppCarouselStep(this, 1)">${steamChev('9 18 15 12 9 6')}</button>` : '';
   const heroHtml = firstCarouselItem
-    ? `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero" data-spp-el="media" data-kind="${firstCarouselItem.kind}" onclick="_steamSppCarouselItemClick(this.dataset.kind)">${heroInnerHtml}</div></div>`
+    ? `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero" data-spp-el="media" data-kind="${firstCarouselItem.kind}" onclick="_steamSppCarouselItemClick(this.dataset.kind)">${heroInnerHtml}</div>${heroArrows}</div>`
     : `<div class="steam-spp-media-hero-glow-wrap${heroGlowClass}"><div class="steam-spp-media-hero steam-spp-media-empty" data-spp-el="media" onclick="_steamSppOpenAssetsSection('steam-assets-screenshots-section')">No screenshots yet</div></div>`;
 
   // Thumbs row + scrollbar are ALWAYS rendered (even with 0 or 1 items),
