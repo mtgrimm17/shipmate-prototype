@@ -20782,10 +20782,16 @@ function buildEgsAboutSection() {
         ${_dpCounterRow(v.headline, EGS_ABOUT_HEADLINE_MAX)}
       </div>
       ${(() => {
-        /* The body has no limit of its own (v9.53): what it spends is the
-           page's 10,000, so that is what its counter reads — the same
-           number as the budget at the top, kept live by _egsAboutPaintBudget. */
+        /* ITS OWN CHARACTERS, OUT OF WHAT IS LEFT FOR IT (v9.71). This read
+           the whole section's total, so a body of 28 letters said 428/10,000
+           under a long headline — "el body empieza a contar con los
+           excedentes del headline". The section's total is Shippy's counter
+           now; this one answers the question its field asks: how much body,
+           out of the room everything else leaves it. Red when the section
+           is over, kept live by _egsAboutPaintBudget (_egsBodyCap). */
         const used = egsAboutUsed(lang), over = used > EGS_ABOUT_TOTAL_CHARS;
+        const own = (v.body || '').length;
+        const cap = Math.max(0, EGS_ABOUT_TOTAL_CHARS - (used - own));
         return `
       <div class="egs-about-field dp-counted egs-about-bodycount${over ? ' is-over' : ''}">
         <label class="egs-about-label" for="egs-about-body-${b.id}">Body${EGS_REQ_STAR}</label>
@@ -20794,7 +20800,7 @@ function buildEgsAboutSection() {
                   oninput="setEgsAboutField('${b.id}','body', this.value)"
                   onchange="commitEgsAboutField('${b.id}','body', this.value)">${escHtml(v.body)}</textarea>
         <div class="ias-char-counter-row dp-counter-row"><span class="ias-char-count${over ? ' is-over' : ''}">${
-          used.toLocaleString()}/${EGS_ABOUT_TOTAL_CHARS.toLocaleString()}</span></div>
+          own.toLocaleString()}/${cap.toLocaleString()}</span></div>
       </div>`;
       })()}`;
   };

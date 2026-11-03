@@ -26497,7 +26497,11 @@ function _egsAboutPaintBudget() {
     const ta = f.querySelector('textarea');
     if (ta) ta.classList.toggle('is-over-limit', over);
     const c = f.querySelector('.dp-counter-row .ias-char-count');
-    if (c) { c.textContent = `${used.toLocaleString()}/${EGS_ABOUT_TOTAL_CHARS.toLocaleString()}`; c.classList.toggle('is-over', over); }
+    /* Its own characters out of the room left for it (v9.71, see the
+       builder's note) — not the section's total. */
+    const own = ta ? (ta.value || '').length : 0;
+    const cap = Math.max(0, EGS_ABOUT_TOTAL_CHARS - (used - own));
+    if (c) { c.textContent = `${own.toLocaleString()}/${cap.toLocaleString()}`; c.classList.toggle('is-over', over); }
   });
 }
 
