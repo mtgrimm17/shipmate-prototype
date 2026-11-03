@@ -32906,3 +32906,13 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
   font-size: 11.5px; line-height: 1.35; color: var(--text-faint);
   white-space: normal;
 }
+/* A row with a missing-line grows, and its disc stays with the TITLE: the
+   row is 36.5px and centres a 20px disc, so the disc sits 8.25px from the
+   top — kept here, with the title on a 20px line beside it, and the
+   missing-line hanging underneath. */
+.gd-task:has(.gd-miss) {
+  height: auto; min-height: 36.5px;
+  align-items: flex-start; padding-top: 8.25px; padding-bottom: 8px;
+}
+.gd-task:has(.gd-miss) .gd-task-label { line-height: 20px; }
+.gd-task:has(.gd-miss) .gd-task-label .gd-miss { line-height: 1.35; margin-top: 0; }
