@@ -4003,7 +4003,14 @@ function _chkGroups() {
           + (over ? `<span class="gd-miss">Over 30 characters. Shorten it to 30 or fewer.</span>` : '');
         return { label, section: 'gamedetails', anchor: 'ob-title', done: has && !over, bad: over };
       })(),
-      { label: t('guide.item.desc') || 'Write a description',          section: 'gamedetails',  anchor: 'ob-desc',            done: !!(fd.description && fd.description.trim()) },
+      /* AND THE DESCRIPTION'S 4,000, THE SAME WAY (v9.75). */
+      (() => {
+        const has = !!(fd.description && fd.description.trim());
+        const over = has && fd.description.length > 4000;
+        const label = (t('guide.item.desc') || 'Write a description')
+          + (over ? `<span class="gd-miss">Over 4,000 characters. Shorten it to 4,000 or fewer.</span>` : '');
+        return { label, section: 'gamedetails', anchor: 'ob-desc', done: has && !over, bad: over };
+      })(),
       { label: t('guide.item.platforms') || 'Choose platforms',        section: 'gamedetails',  anchor: 'ob-plat-grid-wrap',  done: plats > 0 },
       // Languages sits ABOVE countries by request: Distribution's own
       // presets read the primary/supported languages chosen here, so the
