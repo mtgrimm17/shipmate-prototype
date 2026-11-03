@@ -26476,15 +26476,20 @@ function _egsAboutPaintAdds() {
 }
 
 function _egsAboutPaintBudget() {
-  const el = document.getElementById('egs-about-budget');
-  if (!el) return;
   const lang = (typeof _egsEffectivePreviewLang === 'function')
     ? _egsEffectivePreviewLang() : ((state.formData || {}).primaryLanguage || 'en');
   const used = egsAboutUsed(lang);
-  el.textContent = `${used.toLocaleString()} / ${EGS_ABOUT_TOTAL_CHARS.toLocaleString()}`;
-  el.classList.toggle('is-over', used > EGS_ABOUT_TOTAL_CHARS);
-  const wrap = el.closest('.egs-about-budget');
-  if (wrap) wrap.classList.toggle('is-over', used > EGS_ABOUT_TOTAL_CHARS);
+  /* The step's own meter left for Shippy in v9.67, and this function still
+     returned when it could not find it — so the Body counter below stopped
+     moving (stuck at 0/10,000 with text in the box). The meter is optional
+     now; the counters after it are not. */
+  const el = document.getElementById('egs-about-budget');
+  if (el) {
+    el.textContent = `${used.toLocaleString()} / ${EGS_ABOUT_TOTAL_CHARS.toLocaleString()}`;
+    el.classList.toggle('is-over', used > EGS_ABOUT_TOTAL_CHARS);
+    const wrap = el.closest('.egs-about-budget');
+    if (wrap) wrap.classList.toggle('is-over', used > EGS_ABOUT_TOTAL_CHARS);
+  }
   /* And the open body's own counter, which reads the same page total (v9.53). */
   const over = used > EGS_ABOUT_TOTAL_CHARS;
   document.querySelectorAll('.egs-about-bodycount').forEach(f => {
@@ -36727,8 +36732,15 @@ function _smEgsStepRows(stepId) {
         || (typeof egsAboutLinkValid === 'function' && !egsAboutLinkValid(b.link)));
       const rows = [row('Text with a body', texts.length && !badText,
                         'egx:about:' + ((badText || texts[0] || {}).id || ''))];
-      if (images.length) rows.push(row('Every image has a file', !badImg,
-                                       'egx:about:' + ((badImg || images[0]).id)));
+      /* A headline over its limit is an ERROR, not an unfinished part: the
+         red cross, as on the store page's own About row (v9.69). */
+      if (texts.some(b => (b.headline || '').length > EGS_ABOUT_HEADLINE_MAX)) rows[0].bad = true;
+      if (images.length) {
+        const r = row('Every image has a file', !badImg, 'egx:about:' + ((badImg || images[0]).id));
+        if (images.some(b => (b.caption || '').length > EGS_ABOUT_CAPTION_MAX
+              || (typeof egsAboutLinkValid === 'function' && !egsAboutLinkValid(b.link)))) r.bad = true;
+        rows.push(r);
+      }
       /* The character budget is a COUNTER, not a task (v9.67, by request):
          it lives at the top of the panel like Tags' twenty, with a bar —
          see _smEgsAboutCap below. Going over still holds the step back

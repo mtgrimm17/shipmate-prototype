@@ -10530,7 +10530,22 @@ function sppRequiredElements(pid, lang) {
          order the page reads: under the short description, above About. */
       { id: 'genresFeatures', label: 'Genres & Features', required: true,
         done: !!((a.genres || []).length && (a.features || []).length) },
-      { id: 'description',  label: 'About',             required: true,  done: !!(typeof egsBodyText === 'function' && (egsBodyText() || '').trim()) },
+      /* AN ERROR IS A RED CROSS, NOT A TICK (v9.69). Jaco: a headline over
+         its 140 came back to the store page with About ticked. The row asked
+         only "is there text?"; it now also says when the section has
+         something Epic would refuse — a headline or caption over its limit,
+         an image link that is not a URL, or the 10,000 exceeded — as `bad`,
+         the same red cross an over-limit Title wears. `bad` also holds the
+         card's Store Page Preview step back (sppAllRequiredDone). */
+      { id: 'description',  label: 'About',             required: true,
+        done: !!(typeof egsBodyText === 'function' && (egsBodyText() || '').trim()),
+        bad: (() => {
+          const bl = (typeof egsAboutBlocks === 'function') ? egsAboutBlocks() : [];
+          return bl.some(b => b.kind === 'text' && (b.headline || '').length > EGS_ABOUT_HEADLINE_MAX)
+              || bl.some(b => b.kind === 'image' && ((b.caption || '').length > EGS_ABOUT_CAPTION_MAX
+                    || (typeof egsAboutLinkValid === 'function' && !egsAboutLinkValid(b.link))))
+              || (typeof egsAboutOverBudget === 'function' && egsAboutOverBudget());
+        })() },
       /* Two more of Epic's own sections, as rows (v8.70). Jaco: "añade Social
          Media y System Requirements como pasos de Shippy." Each row's tick is
          its step's own (isEgsSectionComplete): Social Media is optional and
