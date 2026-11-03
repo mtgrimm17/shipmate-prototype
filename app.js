@@ -36740,14 +36740,18 @@ function _smEgsStepRows(stepId) {
        a status line, written by the pass below. */
     case 'socialMedia':
       return [];
+    /* ONLY THE SYSTEMS SWITCHED ON (fixed in v9.67). This listed every OS
+       and ticked an OFF one as "not supported" the moment another was on —
+       so switching Windows to Yes appeared to answer Mac, a claim nobody
+       made. Epic's switch cannot tell "no" from "not asked yet" (see
+       isEgsSectionComplete's own note), so an off OS is not a row at all.
+       The rows are the predicate itself: at least one OS on, and every one
+       that is on filled in. */
     case 'specifications': {
       const sp = (typeof _egsSpecs === 'function') ? _egsSpecs() : {};
-      const anyOn = EGS_SPEC_OS.some(o => sp[o.id] && sp[o.id].supported);
-      return EGS_SPEC_OS.map(o => {
-        const on = sp[o.id] && sp[o.id].supported;
-        if (!on) return row(o.label + (anyOn ? ' · not supported' : ''), anyOn, 'egx:spec:' + o.id);
-        return row(o.label, typeof egsSpecOsFilled === 'function' && egsSpecOsFilled(o.id), 'egx:spec:' + o.id);
-      });
+      const on = EGS_SPEC_OS.filter(o => sp[o.id] && sp[o.id].supported);
+      if (!on.length) return [row('An operating system it runs on', false, 'egx:spec:' + EGS_SPEC_OS[0].id)];
+      return on.map(o => row(o.label, typeof egsSpecOsFilled === 'function' && egsSpecOsFilled(o.id), 'egx:spec:' + o.id));
     }
     case 'logo':
       return [row('Logo', typeof egsFeaturedLogo === 'function' && !!egsFeaturedLogo(), null)];
