@@ -32886,3 +32886,15 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 /* "(optional)" on a Shippy row (v9.67, _smEgsStepRows): quieter than the
    label it qualifies. */
 .gd-opt { color: var(--text-faint); font-weight: 400; }
+
+/* Epic's About block with something Epic would refuse (v9.69, render.js
+   aboutErrs): the app's over-limit red, inset like the block's own line. */
+.egs-sp .egs-sp-about.egs-sp-hit.is-error,
+.egs-sp .egs-sp-about.egs-sp-hit.is-error:hover {
+  background: var(--magenta-soft);
+  box-shadow: inset 0 0 0 1px var(--magenta);
+}
+.egs-sp .egs-sp-about-err {
+  color: var(--magenta); font-size: 12px; font-weight: 600; line-height: 1.4;
+}
+.egs-sp .egs-sp-headline.is-over { color: var(--magenta); }

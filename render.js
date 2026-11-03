@@ -22225,22 +22225,39 @@ function buildEgsStorePreviewSection() {
     const h = (v.headline || '').trim();
     const t = (v.body || '').trim();
     if (!h && !t) return '';
+    const hOver = (b.headline || '').length > EGS_ABOUT_HEADLINE_MAX;
     /* EACH BLOCK IS ONE CHILD, which is what keeps a headline next to its
        own text. Emitted as two siblings they both took the section's own
        gap, so the distance from a heading to the words under it was the
        same as the distance to the next block entirely — and the page read
        as a list of headings rather than as blocks. */
     return `<div class="egs-sp-about-block">${
-      h ? `<h2 class="egs-sp-headline">${escHtml(h)}</h2>` : ''}${
+      h ? `<h2 class="egs-sp-headline${hOver ? ' is-over' : ''}">${escHtml(h)}</h2>` : ''}${
       t ? `<div class="egs-sp-body">${escHtml(t).replace(/\n/g, '<br>')}</div>` : ''}</div>`;
   }).join('');
 
+  /* AN ERROR SHOWS ON THE PAGE TOO (v9.69). Jaco, with a 450-character
+     headline printed in the About block: "en la store, debería marcarse como
+     un error". The same terms as Shippy's About row carries as `bad`
+     (sppRequiredElements): the block wears the app's over-limit red, the
+     offending headline is marked, and one line above says what Epic would
+     refuse — in words, so the red is never the only thing saying it. */
+  const aboutErrs = [];
+  if (aboutBlocks.some(b => b.kind === 'text' && (b.headline || '').length > EGS_ABOUT_HEADLINE_MAX))
+    aboutErrs.push(`A headline is over ${EGS_ABOUT_HEADLINE_MAX} characters.`);
+  if (aboutBlocks.some(b => b.kind === 'image' && (b.caption || '').length > EGS_ABOUT_CAPTION_MAX))
+    aboutErrs.push(`A caption is over ${EGS_ABOUT_CAPTION_MAX} characters.`);
+  if (aboutBlocks.some(b => b.kind === 'image' && typeof egsAboutLinkValid === 'function' && !egsAboutLinkValid(b.link)))
+    aboutErrs.push('An image link is not a valid URL.');
+  if (typeof egsAboutOverBudget === 'function' && egsAboutOverBudget())
+    aboutErrs.push(`The section is over ${EGS_ABOUT_TOTAL_CHARS.toLocaleString()} characters.`);
   const aboutHtml = `
     <div class="egs-sp-long">
       ${locBtnHtml ? `<div class="egs-sp-locrow">${locBtnHtml}</div>` : ''}
-      <div class="egs-sp-about ${egsHitCls(aboutFilled)}" data-spp-el="description"
+      <div class="egs-sp-about ${egsHitCls(aboutFilled)}${aboutErrs.length ? ' is-error' : ''}" data-spp-el="description"
            title="Edit the About section"
            onclick="openStepModal('egs','about')">
+        ${aboutErrs.length ? `<div class="egs-sp-about-err">${aboutErrs.map(escHtml).join(' ')}</div>` : ''}
         ${aboutBody || `<div class="egs-spp-placeholder">Your About section appears here</div>`}
       </div>
     </div>`;
