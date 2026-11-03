@@ -8786,6 +8786,13 @@ function charCount(countId, value, max) {
   el.className = 'char-count';
   if (len > max * 0.9) el.classList.add('is-warn');
   if (len > max)       el.classList.add('is-over');
+  /* AND THE FIELD SAYS SO TOO (v9.74), as the store fields do: Jaco, "que si
+     te pasas de caracteres en título o descripción, el número se ponga en
+     rojo, y todo el texto y el stroke también". The counter's id is its
+     field's plus "-count" (ob-title-count → ob-title), so the field is found
+     rather than passed. */
+  const field = document.getElementById(countId.replace(/-count$/, ''));
+  if (field) field.classList.toggle('is-over-limit', len > max);
 }
 
 
@@ -18208,7 +18215,23 @@ function _shotEdLoad(pid, shotId) {
      and merely taints the bake into one that does not load at all — the
      opposite trade from `_iconLoadCors`, and for the opposite reason: there,
      a tainted image is worth nothing; here, it still draws. */
+  /* …AND NOW ALSO WHEREVER IT WORKS, WITH A FALLBACK (v9.74). Jaco: changing
+     the zoom on Epic's screenshots did not change the thumbnail or the store.
+     Those shots come from Steam's CDN, the image loaded without CORS, the
+     canvas was tainted, and both the live thumbnail and the bake threw — so
+     the crop was saved as numbers with no picture. Steam's CDN does answer
+     CORS (measured: a cors-mode fetch succeeds), so a remote shot is asked
+     for with CORS FIRST; if the host refuses, the error handler loads it
+     again the old way, which is the trade the note above protects. */
+  let triedCors = false;
   if (orig.cors) img.crossOrigin = 'anonymous';
+  else if (/^https?:/i.test(src) && !src.startsWith(location.origin)) { img.crossOrigin = 'anonymous'; triedCors = true; }
+  img.onerror = () => {
+    if (!triedCors || _shotEd.shotId !== shotId) return;
+    triedCors = false;
+    img.removeAttribute('crossorigin');
+    img.src = src + (src.includes('?') ? '&' : '?') + 'nocors=1';
+  };
   img.onload = () => {
     if (_shotEd.shotId !== shotId) return;   // selection changed while decoding
     _shotEd.img = img; _shotEd.natW = img.naturalWidth; _shotEd.natH = img.naturalHeight;
@@ -37038,3 +37061,20 @@ function _smEgsAboutCapPaint() {
     };
   }
 })();
+
+/* A TRAILER FROM THE MEDIA EDITOR (v9.74). The file goes into the asset
+   library the way Game Details' own trailer well puts it there (smAddFile),
+   becomes the app's trailer (smUseAsTrailer — the same slot every carousel
+   reads), and the editor reopens on it so you see what you just chose. */
+function smReplaceTrailerFile(pid, files) {
+  const file = files && files[0];
+  if (!file || typeof smAddFile !== 'function') return;
+  smAddFile(file, id => {
+    if (!id) return;
+    if (typeof smUseAsTrailer === 'function') smUseAsTrailer(id);
+    if (typeof _shotEd !== 'undefined' && typeof SPP_TRAILER_ID !== 'undefined') {
+      _shotEd.pid = pid; _shotEd.shotId = SPP_TRAILER_ID;
+    }
+    if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  });
+}

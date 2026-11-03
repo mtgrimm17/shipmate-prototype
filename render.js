@@ -26030,7 +26030,11 @@ function buildScreenshotsSection(pid) {
 
      Apple only, as asked: Google Play, Steam and Mac App Store Full reach this
      same builder and keep the plain screenshots strip. */
-  const applePreview = (pid === 'ios' || pid === 'macos');
+  /* AND EPIC (v9.74, by request): Epic's carousel leads with the trailer
+     too (its Media Carousel row counts a trailer), so its editor shows it,
+     and every carousel that has a trailer can now replace it from here —
+     "para verlo / resubir otro" — or add one when there is none. */
+  const applePreview = (pid === 'ios' || pid === 'macos' || pid === 'egs');
   const trailer = applePreview && typeof smAppTrailer === 'function' ? smAppTrailer() : null;
 
   const selectable = id => id === SPP_TRAILER_ID ? !!trailer : shots.some(s => s.id === id);
@@ -26067,6 +26071,14 @@ function buildScreenshotsSection(pid) {
       <span class="shot-thumb-play">▶</span>
     </div>` : '';
 
+  /* No trailer yet: a slot to add one, at the head of the strip where it
+     will sit. */
+  const trailerAdd = (applePreview && !trailer) ? `
+    <label class="shot-thumb-add shot-thumb-add--trailer" title="Add a trailer">
+      <span class="shot-thumb-add-plus">+</span><span class="shot-thumb-add-word">Trailer</span>
+      <input type="file" accept="video/*" hidden onchange="smReplaceTrailerFile('${pid}', this.files)">
+    </label>` : '';
+
   const thumbs = shots.map((s, i) => `
     <div class="shot-thumb${s.id === sel ? ' is-selected' : ''}" data-shot-thumb="${s.id}"
          draggable="true" title="${escHtml(s.name || 'Screenshot')}">
@@ -26100,9 +26112,14 @@ function buildScreenshotsSection(pid) {
      `is-trailer` is what `_shotEdArm` bails on, the same way it already bails
      on `is-empty` — one shape, two reasons, and neither arms a cropper over
      something with no crop to make. */
+  /* THE SAME FRAME AS A SCREENSHOT'S (v9.74). It was a fixed 16:9, so on a
+     store whose frame is another shape (Epic's is 16:10) selecting the
+     trailer changed the stage's height and the strip under it jumped —
+     "que no cambie la altura de la fila de thumbnails". The video sits in
+     the store's frame the way the store will show it, letterboxed. */
   const trailerStage = trailer ? `
       <div class="shot-ed-stage is-trailer" id="shot-ed-stage"
-           style="--shot-canvas-ratio:1.777"
+           style="--shot-canvas-ratio:${_shotEdCanvasRatio(pid)}"
            role="button" tabindex="0" title="Play ${escHtml(trailer.name)}"
            onclick="smPlayAppTrailer()">
         ${trailer.poster
@@ -26174,10 +26191,14 @@ function buildScreenshotsSection(pid) {
           <input type="range" class="shot-ed-zoom-slider" id="shot-ed-zoom"
                  min="1" max="4" step="0.01" value="1" ${cropOff ? 'disabled' : ''}>
         </div>
-        <button class="shot-ed-reset" id="shot-ed-reset" ${cropOff ? 'disabled' : ''}>Reset</button>
+        ${trailerFocused ? `
+        <label class="shot-ed-reset shot-ed-replace" title="Upload a different trailer">Replace trailer
+          <input type="file" accept="video/*" hidden onchange="smReplaceTrailerFile('${pid}', this.files)">
+        </label>` : `
+        <button class="shot-ed-reset" id="shot-ed-reset" ${cropOff ? 'disabled' : ''}>Reset</button>`}
       </div>
 
-      <div class="shot-ed-strip" id="shot-ed-strip">${trailerThumb}${thumbs}${addSlot}</div>
+      <div class="shot-ed-strip" id="shot-ed-strip">${trailerThumb}${trailerAdd}${thumbs}${addSlot}</div>
 
       ${pool.length === 0 && shots.length === 0 ? `
       <p class="shot-ed-note">No screenshots uploaded yet — add them here, or under Assets in Game Details.</p>` : ''}

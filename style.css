@@ -21455,7 +21455,10 @@ body.is-splash .ai-disclaimer { display: none; }
   gap: 14px;
   margin: 10px 0 14px;
 }
-.shot-ed-toolbar.is-off { opacity: .4; pointer-events: none; }
+/* Off dims the CROP controls only (v9.74): with the trailer selected the
+   toolbar also carries "Replace trailer", which is very much on. */
+.shot-ed-toolbar.is-off .shot-ed-zoom,
+.shot-ed-toolbar.is-off .shot-ed-reset:not(.shot-ed-replace) { opacity: .4; pointer-events: none; }
 .shot-ed-zoom {
   flex: 1;
   display: flex;
@@ -32916,3 +32919,22 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 }
 .gd-task:has(.gd-miss) .gd-task-label { line-height: 20px; }
 .gd-task:has(.gd-miss) .gd-task-label .gd-miss { line-height: 1.35; margin-top: 0; }
+
+/* The editor's trailer controls (v9.74): "Replace trailer" wears Reset's
+   shape (it takes Reset's place when the trailer is selected), and the
+   add-a-trailer slot is the + slot with its word under it. */
+.shot-ed-replace { cursor: pointer; display: inline-flex; align-items: center; }
+.shot-thumb-add--trailer { flex-direction: column; gap: 2px; cursor: pointer; }
+.shot-thumb-add--trailer .shot-thumb-add-word { font-size: 10.5px; color: var(--text-dim); }
+
+/* Game Details' Title and Description over their limit (v9.74, charCount):
+   the counter in red (the row's own grey rule out-ranked .char-count.is-over,
+   so the number never turned), and the field's text and stroke in red too,
+   with the same soft fill the store fields wear. */
+.ob-form .gi-head .char-count.is-over { color: var(--magenta); font-weight: 600; }
+.ob-form .form-input.is-over-limit,
+.ob-form .form-input.is-over-limit:focus {
+  color: var(--magenta);
+  border-color: var(--magenta);
+  background: var(--magenta-soft);
+}
