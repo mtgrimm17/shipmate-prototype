@@ -32990,3 +32990,17 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .steam-spp-hero-arrow:hover svg,
 .egs-sp .egs-sp-car-btn:hover svg { transform: scale(1.22); filter: drop-shadow(0 1px 4px rgba(0, 0, 0, .9)); }
 .egs-sp .egs-sp-car-edge:hover { opacity: 1; }
+
+/* The trial's back link in Shippy (v9.78): a link, not a task — no disc,
+   the panel's mono at the status line's size, lighting on hover. */
+.gd-backlink {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 2px 0 10px; padding: 4px 8px 4px 0;
+  border: 0; background: none; cursor: pointer;
+  font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+  transition: color .15s;
+}
+.gd-backlink:hover, .gd-backlink:focus-visible { color: var(--text); }
+/* …and the page's Overview tab answers it, growing from its own centre. */
+.egs-sp .egs-sp-tabs > span { display: inline-block; transition: transform .18s ease, color .18s ease; transform-origin: 50% 60%; }
+.egs-sp .egs-sp-tabs > span.is-pointed { transform: scale(1.18); color: var(--text); }

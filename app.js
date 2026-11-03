@@ -27005,6 +27005,15 @@ function setEgsPreviewTab(tab) {
   state.egsPreviewTab = next;
   if (next === 'achievements') _egsEnsureAchievements();
   if (typeof reRenderStepModal === 'function') reRenderStepModal();
+  /* The header changes with the tab now (v9.78: back arrow + "Achievements"
+     title), and the repaint above can stop at the body. A whole-modal
+     render while the modal is the surface on screen keeps the two in step. */
+  const ov = document.getElementById('submit-overlay');
+  if (ov && !ov.classList.contains('hidden') && typeof renderStepModal === 'function') {
+    renderStepModal();
+    const sc = document.querySelector('#submit-overlay .submit-modal-scroll');
+    if (sc) sc.scrollTop = 0;
+  }
 }
 
 /* The price, set from the Store Page Preview's buy box (v8.41). It replaces
@@ -37126,3 +37135,40 @@ function _egsPlayStageTrailer(el) {
   el.onclick = e => e.stopPropagation();
   el.style.cursor = 'default';
 }
+
+/* ══ TRIAL: "BACK TO OVERVIEW" IN SHIPPY, ON EPIC'S ACHIEVEMENTS TAB (v9.78) ══
+   A teammate's idea, tried as asked: the way back also sits in the panel,
+   where the eye is while reading the achievements list. NOT a checklist
+   row — no disc, not counted — but a small link under the eyebrow, in the
+   slot a status line takes. Hovering it scales up the page's own Overview
+   tab, so the link shows where it goes before it is pressed. The header's
+   back arrow stays; this is the comparison. */
+function _smEgsBackPoint(on) {
+  const ov = document.querySelector('#submit-overlay .egs-sp-tabs > span');
+  if (ov) ov.classList.toggle('is-pointed', !!on);
+}
+(() => {
+  const prev = window.renderGuide;
+  window.renderGuide = function () {
+    const out = prev.apply(this, arguments);
+    const sm = (typeof _smOpenStep === 'function') ? _smOpenStep() : null;
+    if (!sm || sm.platformId !== 'egs' || sm.stepId !== 'storePreview') return out;
+    if (typeof _smFlipTarget === 'function' && _smFlipTarget('egs')) return out;
+    if (state.egsPreviewTab !== 'achievements') return out;
+    const card = document.querySelector('#app-guide > .guide-card') || document.querySelector('#app-guide .guide-card');
+    if (!card || card.querySelector('.gd-backlink')) return out;
+    card.querySelectorAll(':scope > .sm-cr-line-slot').forEach(n => { if (!n.textContent.trim()) n.remove(); });
+    const a = document.createElement('button');
+    a.type = 'button';
+    a.className = 'gd-backlink';
+    a.innerHTML = '<span aria-hidden="true">←</span> Back to overview';
+    a.onclick = () => { _smEgsBackPoint(false); setEgsPreviewTab('overview'); };
+    a.onmouseenter = () => _smEgsBackPoint(true);
+    a.onmouseleave = () => _smEgsBackPoint(false);
+    a.onfocus = () => _smEgsBackPoint(true);
+    a.onblur = () => _smEgsBackPoint(false);
+    const eb = card.querySelector(':scope > .guide-eyebrow');
+    card.insertBefore(a, eb ? eb.nextSibling : card.firstChild);
+    return out;
+  };
+})();

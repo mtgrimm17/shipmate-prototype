@@ -7992,6 +7992,16 @@ function renderStepModal() {
     || (stepId === 'gameCenter'
         && (platformId === 'macos' || platformId === 'ios' || platformId === 'macos_full'));
   const isSubPanel = isFlipped || cameFromPreview;
+  /* EPIC'S ACHIEVEMENTS TAB HAS A WAY BACK (v9.78). Jaco: "siendo una tab,
+     quieres volver atrás pero no hay forma, y como no hay un back, solo
+     puedes cerrar". The Overview tab is there, but it is small text at the
+     top of the page and scrolls away with the list — so in practice the only
+     visible control was the ×, which throws the store page away. The tab
+     now wears the sub-panel's chrome: the back arrow (to Overview) and the
+     tab's own name as the title. The × stays: this is still the store page's
+     modal, not a level below it. */
+  const egsAchTab = platformId === 'egs' && stepId === 'storePreview' && !flipTarget
+                 && state.egsPreviewTab === 'achievements';
 
   const returnAction = flipTarget === 'iapLocalizations'
     // IAP Locs is reached FROM Business Questions rather than from the Store
@@ -8009,9 +8019,9 @@ function renderStepModal() {
   modal.innerHTML = `
     <div class="submit-modal-header" style="border-top-color:${p.color};">
       <div class="submit-modal-title-row">
-        ${isSubPanel ? `
-        <button class="submit-modal-back" onclick="${returnAction}"
-                title="Back" aria-label="Back">
+        ${(isSubPanel || egsAchTab) ? `
+        <button class="submit-modal-back" onclick="${egsAchTab ? "setEgsPreviewTab('overview')" : returnAction}"
+                title="${egsAchTab ? 'Back to the store page' : 'Back'}" aria-label="Back">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M15 18l-6-6 6-6"/>
@@ -8024,7 +8034,7 @@ function renderStepModal() {
              identities for one store. Sized in CSS, not by these arguments. -->
         <div class="submit-modal-hicon">${(typeof smMarkFor === 'function' && smMarkFor(platformId, 30)) || platformIcon(platformId, 30, 'white')}</div>
         <div class="submit-modal-head-titles">
-          <div class="submit-modal-title">${displayStepLabel || ''}</div>
+          <div class="submit-modal-title">${egsAchTab ? 'Achievements' : (displayStepLabel || '')}</div>
           <div class="submit-modal-subtitle">${p.label}</div>
         </div>
       </div>
