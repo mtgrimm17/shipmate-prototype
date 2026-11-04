@@ -36901,13 +36901,17 @@ function _smEgsStepRows(stepId) {
                   'Upload a logo or pick one from your assets.')];
     case 'productDetails':
       return [
+        /* IN THE ORDER THE STEP PRINTS THEM (v9.79): Seller, Legal info
+           (EULA), User support, then the three questions. The EULA was last
+           because it is optional, which made the list and the form disagree
+           about what comes next. */
         row('Seller name', (a.sellerName || '').trim(), 'egx:label:Seller name'),
+        row('EULA link', (a.eulaLink || '').trim(), 'egx:label:EULA link', true),
         row('User support', (a.supportPageLink || '').trim() || (a.supportEmail || '').trim(), 'egx:label:User support',
             false, 'A support page link or a support email.'),
         row('Early access', a.earlyAccess !== null && a.earlyAccess !== undefined, 'egx:label:Early access'),
         row('NFT or blockchain', a.nftBlockchain !== null && a.nftBlockchain !== undefined, 'egx:label:Contains NFT'),
         row('Promotional content', a.promotionalContent !== null && a.promotionalContent !== undefined, 'egx:label:Contains promotional'),
-        row('EULA link', (a.eulaLink || '').trim(), 'egx:label:EULA link', true),
       ];
     case 'localizations': {
       const primary = (state.formData || {}).primaryLanguage || 'en';
