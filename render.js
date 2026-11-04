@@ -18684,7 +18684,8 @@ function _buildUnifiedLocalizationsSection(p) {
        whatever the store's own record calls itself. */
     const achLabel = ic.itemLabel || (x => x.displayName || x.refName);
     itemOptions = items.map(x => ({
-      value: x.id, label: escHtml(achLabel(x) || '') || 'Untitled Achievement' }));
+      value: x.id, label: escHtml(achLabel(x) || '') || 'Untitled Achievement',
+      thumb: (ic.itemThumb && ic.itemThumb(x)) || '' }));
     itemSetterName = ic.itemSetterFn;
     cardClass = 'iap-loc';
     settingsHtml = _locsSettingsMenu({
@@ -18733,11 +18734,12 @@ function _buildUnifiedLocalizationsSection(p) {
   // rather than rendering one that can never hold a real value.
   const itemDropdown = view === 'storePage'
     ? ''
-    : swSelect(`${p.idPrefix}-locs-item`, itemId, itemOptions, itemSetterName, 'auto', 'right');
+    : swSelect(`${p.idPrefix}-locs-item`, itemId, itemOptions, itemSetterName, 'auto', p.pickersFirst ? 'left' : 'right',
+               undefined, { sizeToWidest: !!p.pickersFirst });
   const fieldDropdown = swSelect(`${p.idPrefix}-locs-field`, field, fieldOptions, view === 'storePage' ? p.storePage.fieldSetterFn
     : view === 'iaps' ? p.iaps.fieldSetterFn
     : view === 'about' ? p.about.fieldSetterFn
-    : p.achievements.fieldSetterFn, 'auto', 'right');
+    : p.achievements.fieldSetterFn, 'auto', p.pickersFirst ? 'left' : 'right');
 
   // By request: the "Localizations" title text is gone (the sub-tabs below
   // already say which section this is), the leftmost Store Page/IAPs/
@@ -18766,6 +18768,20 @@ function _buildUnifiedLocalizationsSection(p) {
   return `
     ${_locsViewTabsHtml(view, p.viewSetterFn, visibleViewOptions)}
     <div class="form-group iap-loc-section">
+      ${p.pickersFirst ? `
+      <!-- PICKERS FIRST, REVIEW ON THE RIGHT (v9.80, Epic and Steam): what
+           you are looking at is chosen on the left, where the cards below
+           start; the action that flips them sits at the far end. -->
+      <div class="loc-review-header loc-unified-header is-pickers-first">
+        <div class="loc-review-header-controls">
+          ${itemDropdown}
+          ${fieldDropdown}
+        </div>
+        <div class="loc-review-title-group loc-unified-title-group">
+          ${reviewBtnHtml}
+          ${settingsHtml}
+        </div>
+      </div>` : `
       <div class="loc-review-header loc-unified-header">
         <div class="loc-review-title-group loc-unified-title-group">
           ${reviewBtnHtml}
@@ -18775,7 +18791,7 @@ function _buildUnifiedLocalizationsSection(p) {
           ${itemDropdown}
           ${fieldDropdown}
         </div>
-      </div>
+      </div>`}
       ${emptyState || `<div class="${wrapperClass}${wrapperModifiers}">${cardsHtml}</div>`}
     </div>`;
 }
@@ -19243,7 +19259,7 @@ function trailerFileRowHTML(name, mb, prefix = '') {
  *                                silently clipped instead of just wrapping to a new line.
  */
 function swSelect(id, currentValue, options, onChangeFn, width = '100%', align = 'left',
-                  placeholder = 'Select\u2026') {
+                  placeholder = 'Select\u2026', cfg = {}) {
   const chevSvg = `<svg class="loc-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
   const warnSvg = `<svg class="loc-dd-warn" width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="var(--magenta)" stroke-width="1.5"/><rect x="7.25" y="4" width="1.5" height="5" rx="0.75" fill="var(--magenta)"/><rect x="7.25" y="10.5" width="1.5" height="1.5" rx="0.75" fill="var(--magenta)"/></svg>`;
   const warnIcon = `<span class="tooltip-anchor" data-tip="One or more fields are over the character limit for this language">${warnSvg}</span>`;
@@ -19256,17 +19272,29 @@ function swSelect(id, currentValue, options, onChangeFn, width = '100%', align =
      what it is even asking. */
   const currentLabel = isNull ? placeholder : (currentOption?.label || placeholder);
 
+  /* An option may carry a picture (v9.80): an achievement's icon in the
+     Localizations picker. Drawn in the pill for the current one and beside
+     each row in the menu; options without one are unchanged. */
+  const thumbHtml = o => o && o.thumb
+    ? `<img class="loc-dd-thumb" src="${escHtml(o.thumb)}" alt="" draggable="false">` : '';
   const ddItems = options.map(o => `
     <button class="loc-dd-item${o.value === currentValue ? ' is-current' : ''}"
             onclick="swSelectChoose('${id}','${o.value}','${onChangeFn}')">
-      <span class="loc-dd-name">${escHtml(o.label)}</span>
+      ${thumbHtml(o)}<span class="loc-dd-name">${escHtml(o.label)}</span>
       ${o.warning ? warnIcon : ''}
     </button>`).join('');
 
   return `
     <div class="loc-primary-wrap sw-select-wrap${align === 'right' ? ' align-right' : ''}" id="swsel-${id}" style="min-width:0;max-width:100%;width:${width};">
-      <button class="loc-primary-pill" onclick="toggleSwSelect(event,'${id}')">
-        <span class="loc-primary-name${isNull ? ' is-placeholder' : ''}">${currentLabel}</span>
+      <button class="loc-primary-pill${!isNull && currentOption && currentOption.thumb ? ' has-thumb' : ''}" onclick="toggleSwSelect(event,'${id}')">
+        ${isNull ? '' : thumbHtml(currentOption)}${cfg.sizeToWidest
+          /* AS WIDE AS ITS LONGEST OPTION (v9.80), so choosing a shorter one
+             does not pull whatever sits beside it sideways. Every label is
+             laid in the same grid cell, hidden but measured; the cell is the
+             widest of them and the current one is the one you see. */
+          ? `<span class="loc-primary-name sw-widest${isNull ? ' is-placeholder' : ''}"><span class="sw-widest-cur">${currentLabel}</span>${
+              options.map(o => `<span class="sw-widest-ghost" aria-hidden="true">${o.label}</span>`).join('')}</span>`
+          : `<span class="loc-primary-name${isNull ? ' is-placeholder' : ''}">${currentLabel}</span>`}
         ${chevSvg}
         ${!isNull && currentOption?.warning ? warnIcon : ''}
       </button>
@@ -20258,6 +20286,7 @@ function buildStepStubSection(title, note) {
 function buildSteamLocalizationsSection() {
   return _buildUnifiedLocalizationsSection({
     idPrefix: 'steam',
+    pickersFirst: true,
     viewStateKey: 'steamLocsView',
     viewSetterFn: 'setSteamLocsView',
     storePage: {
@@ -20299,6 +20328,7 @@ function buildSteamLocalizationsSection() {
       savedKey: 'steamAchievements',
       isSaved: steamAchLocIsSaved,
       itemLabel: a => a.displayName,
+      itemThumb: a => { const i = a.achievedIcon || a.unachievedIcon; return i ? (typeof i === 'string' ? i : (i.dataUrl || i.url || i.src || '')) : ''; },
       emptyText: 'No achievements yet \u2014 add one from Steam - Achievements.',
       fields: STEAM_ACH_LOC_FIELDS,
       limits: STEAM_ACH_FIELD_LIMITS,
@@ -21218,6 +21248,7 @@ function buildEgsSocialMediaSection() {
    that teaches you to ignore the row it is in. */
 function buildEgsLocalizationsSection() {
   return _buildUnifiedLocalizationsSection({
+    pickersFirst: true,
     /* 'egs', not 'egs-locs': the builder appends '-locs-…' itself, so the
        longer one produced ids like egs-locs-locs-item and the settings wrap
        this page's own gear looks for never matched. */
@@ -21307,6 +21338,7 @@ function buildEgsLocalizationsSection() {
       /* Epic's rows have no persistent saved flag, so the picker names them
          by the field its own editor marks required. */
       itemLabel: a => a.unlockedDisplayName,
+      itemThumb: a => ((a.unlockedIcon || a.lockedIcon || {}).dataUrl) || '',
       emptyText: 'No achievements yet \u2014 add one from Achievements.',
       fields: EGS_ACH_LOC_FIELDS,
       limits: EGS_ACH_FIELD_LIMITS,

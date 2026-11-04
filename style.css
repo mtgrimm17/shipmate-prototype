@@ -33004,3 +33004,19 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 /* …and the page's Overview tab answers it, growing from its own centre. */
 .egs-sp .egs-sp-tabs > span { display: inline-block; transition: transform .18s ease, color .18s ease; transform-origin: 50% 60%; }
 .egs-sp .egs-sp-tabs > span.is-pointed { transform: scale(1.18); color: var(--text); }
+
+/* An option's picture in a picker (v9.80, swSelect `thumb`): the
+   achievement's icon in Epic's and Steam's Localizations, in the pill and
+   beside each row of its menu. */
+.loc-dd-thumb {
+  width: 22px; height: 22px; flex: none;
+  border-radius: 5px; object-fit: cover; display: block;
+}
+.loc-primary-pill.has-thumb { padding-left: 6px; }
+.loc-dropdown .loc-dd-item { gap: 8px; }
+.loc-dropdown .loc-dd-item .loc-dd-thumb { width: 20px; height: 20px; border-radius: 4px; }
+
+/* A picker as wide as its longest option (v9.80, swSelect cfg.sizeToWidest). */
+.loc-primary-name.sw-widest { display: grid; flex: none; }
+.loc-primary-name.sw-widest > span { grid-area: 1 / 1; white-space: nowrap; }
+.loc-primary-name.sw-widest > .sw-widest-ghost { visibility: hidden; height: 0; overflow: hidden; }
