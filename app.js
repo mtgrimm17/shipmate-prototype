@@ -36371,7 +36371,19 @@ function _smSteamFlipItems(flip) {
     }
     case 'sysreq': {
       const sr = typeof _steamSysreq === 'function' ? _steamSysreq() : {};
-      return (typeof STEAM_SYSREQ_OS !== 'undefined' ? STEAM_SYSREQ_OS : []).map(o => {
+      /* AN OS ANSWERED "NO" LEAVES THE LIST (v9.81), as on Epic. It was a
+         ticked row — "Mac ✓" for a game that does not run on a Mac read as
+         if Mac were done, and Epic's list (only the systems switched on)
+         and Steam's disagreed. Unanswered systems stay, saying what they
+         need; if every one is "no", one row asks for a system it runs on. */
+      const all = (typeof STEAM_SYSREQ_OS !== 'undefined' ? STEAM_SYSREQ_OS : []);
+      const shown = all.filter(o => (sr[o.id] || {}).supported !== 'no');
+      if (!shown.length && all.length) {
+        const out = row('An operating system it runs on', false, 'tab:sys:' + all[0].id);
+        out.label += `<span class="gd-miss">${escHtml('Set at least one system to Yes.')}</span>`;
+        return [out];
+      }
+      return shown.map(o => {
         const r = sr[o.id] || {};
         const done = r.supported === 'no' || (r.supported === 'yes' && typeof _steamSysreqOsFilled === 'function' && _steamSysreqOsFilled(o.id));
         /* What is missing, in words (v9.72). */
