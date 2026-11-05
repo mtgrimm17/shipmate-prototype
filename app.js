@@ -37188,3 +37188,178 @@ function _smEgsBackPoint(on) {
     return out;
   };
 })();
+
+/* ══ SHIPPY'S SEARCH ON EPIC'S STORE PAGE (v9.82) ═════════════════════════
+   Jaco: "vamos a extender la funcionalidad del search bar de Content Rating
+   de Epic también a la página de la store." The same bar, at the foot of
+   Shippy's card, aligned with Save & Close, Escape to clear; the same result
+   rows, count line and spotlight. What it searches is the page:
+     · its sections — the checklist's own rows (sppRequiredElements('egs'));
+     · the fields that are on the page but not rows of their own —
+       Developer, Publisher, Login accounts, Audio and Text languages,
+       Legal, Privacy policy, Achievements;
+     · every option of the Genres, Features and language pickers, so typing
+       "co-op" finds Features and "japanese" finds Languages.
+   A result goes where its row would: a section through the row's own action
+   (chkGoStep), a field or an option to the block that holds it, lit. */
+function _sppSearchOn() {
+  if (typeof _smShippyStep === 'undefined' || !_smShippyStep) return false;
+  const sm = typeof _smOpenStep === 'function' && _smOpenStep();
+  return !!(sm && sm.platformId === 'egs' && sm.stepId === 'storePreview'
+    && !(typeof _smFlipTarget === 'function' && _smFlipTarget('egs'))
+    && state.egsPreviewTab !== 'achievements');
+}
+function _sppSearchIndex() {
+  const a = state.egsSubmitAnswers || {};
+  const out = [];
+  (sppRequiredElements('egs') || []).forEach(e => out.push({
+    group: 'Store page', label: e.short || e.label, kw: e.id, done: !!e.done && !e.bad,
+    go: { step: 'spp:' + e.id } }));
+  const FIELDS = [
+    ['Developer', 'studio company made by', 'Developer'],
+    ['Publisher', 'company', 'Publisher'],
+    ['Release date', 'launch coming soon', 'Release Date'],
+    ['Login accounts required', 'epic id sign in account', 'Login Accounts Required'],
+    ['Audio languages', 'voice dubbing speech', 'Languages Supported'],
+    ['Text languages', 'subtitles interface localization', 'Languages Supported'],
+    ['Legal', 'copyright trademark footer', 'Legal'],
+    ['Privacy policy', 'privacy link url', 'Privacy Policy'],
+    ['Achievements', 'trophies xp', null],
+  ];
+  FIELDS.forEach(([label, kw, anchor]) => out.push({
+    group: 'Fields', label, kw, go: anchor ? { text: anchor } : { tab: 'achievements' } }));
+  const pick = (list, field, group, rowId) => (list || []).forEach(v => out.push({
+    group, label: v, kw: field, done: (a[field] || []).indexOf(v) >= 0, go: { step: 'spp:' + rowId, el: rowId } }));
+  if (typeof EGS_GENRES !== 'undefined')   pick(EGS_GENRES, 'genres', 'Genres', 'genresFeatures');
+  if (typeof EGS_FEATURES !== 'undefined') pick(EGS_FEATURES, 'features', 'Features', 'genresFeatures');
+  if (typeof EGS_LANGUAGES !== 'undefined') {
+    EGS_LANGUAGES.forEach(v => out.push({ group: 'Languages', label: v, kw: 'language text audio',
+      done: (a.textLanguages || []).indexOf(v) >= 0 || (a.audioLanguages || []).indexOf(v) >= 0,
+      go: { step: 'spp:languages' } }));
+  }
+  /* A picker OPTION is found by its own name only: matching "lang" or
+     "genre" against the group would list all forty languages or all thirty
+     genres, which is the list you could open anyway. Sections and fields
+     match their keywords too. */
+  out.forEach(r => {
+    const isOption = r.group === 'Genres' || r.group === 'Features' || r.group === 'Languages';
+    r.lab = _egsNorm(r.label);
+    r.hay = isOption ? r.lab : _egsNorm(r.label + ' ' + (r.kw || '') + ' ' + r.group);
+  });
+  return out;
+}
+let _sppSearchHits = [];
+function _sppSearch(q) {
+  const toks = _egsNorm(q).split(/\s+/).filter(Boolean);
+  if (!toks.length) return [];
+  return _sppSearchIndex()
+    .filter(r => toks.every(t => r.hay.includes(t)))
+    .map(r => ({ r, s: toks.reduce((n, t) => n + (r.lab.startsWith(t) ? 4 : r.lab.includes(t) ? 3 : 1), 0) }))
+    .sort((x, y) => y.s - x.s).slice(0, 40).map(x => x.r);
+}
+function _sppSearchPaint() {
+  const card = document.querySelector('#app-guide > .guide-card');
+  if (!card) return;
+  const q = state.egsSppQuery || '';
+  card.querySelectorAll('.sm-cr-results, .sm-cr-count').forEach(n => n.remove());
+  const live = q.trim().length > 0;
+  card.querySelectorAll(':scope > .guide-tasks-head, :scope > .guide-tasks').forEach(n => { n.style.display = live ? 'none' : ''; });
+  const clr = card.querySelector('.sm-cr-search-clear'); if (clr) clr.hidden = !q;
+  const fld = card.querySelector('.sm-cr-search-field'); if (fld) fld.classList.toggle('is-filled', !!q);
+  if (!live) { _sppSearchHits = []; return; }
+  const hits = _sppSearch(q);
+  /* Grouped in the index's own order — the page first, then its fields,
+     then the picker options — and ranked inside each group. */
+  const order = ['Store page', 'Fields', 'Genres', 'Features', 'Languages'];
+  hits.sort((x, y) => order.indexOf(x.group) - order.indexOf(y.group));
+  _sppSearchHits = hits;
+  let out = '', last = null;
+  hits.forEach((r, i) => {
+    if (r.group !== last) { out += `<div class="sm-cr-group">${escHtml(r.group)}</div>`; last = r.group; }
+    out += `<button type="button" class="sm-cr-node is-match${r.done ? ' is-done' : ''}" onclick="egsSppSearchGo(${i})">
+      <span class="sm-cr-node-dot">${r.done && typeof GUIDE_CHECK_SVG !== 'undefined' ? GUIDE_CHECK_SVG : ''}</span>
+      <span class="sm-cr-node-label">${_egsMark(r.label, q)}</span></button>`;
+  });
+  const cnt = document.createElement('div');
+  cnt.className = 'sw-tip-text sm-cr-line-moved sm-cr-count';
+  cnt.textContent = hits.length ? `${hits.length} ${hits.length === 1 ? 'match' : 'matches'} for “${q.trim()}”.` : `No matches for “${q.trim()}”.`;
+  const eb = card.querySelector(':scope > .guide-eyebrow');
+  card.insertBefore(cnt, eb ? eb.nextSibling : card.firstChild);
+  const block = document.createElement('div');
+  block.className = 'sm-cr-results';
+  block.innerHTML = out || `<div class="sm-cr-empty">Nothing on this page mentions “${escHtml(q.trim())}”.</div>`;
+  card.insertBefore(block, card.querySelector('.sm-cr-search') || null);
+}
+function _sppSearchMount() {
+  const card = document.querySelector('#app-guide > .guide-card');
+  if (!card || card.querySelector('.sm-cr-search')) return;
+  const bar = document.createElement('div');
+  bar.className = 'sm-cr-search';
+  bar.innerHTML = `<label class="sm-cr-search-field">
+      <span class="sm-cr-search-icon">${SM_SEARCH_SVG}</span>
+      <input id="sm-spp-search-input" type="text" autocomplete="off" spellcheck="false" placeholder="Search anything"
+             oninput="egsSppSearchInput(this.value)" onkeydown="egsSppSearchKey(event)">
+      <button type="button" class="sm-cr-search-clear" aria-label="Clear" onclick="egsSppSearchClear()" hidden>${SM_CLEAR_SVG}</button>
+    </label>`;
+  card.appendChild(bar);
+  bar.querySelector('input').value = state.egsSppQuery || '';
+  card.classList.add('has-cr-search');
+  _sppSearchPaint();
+  if (typeof _egsSearchAlign === 'function') _egsSearchAlign();
+}
+function egsSppSearchInput(v) { state.egsSppQuery = v; _sppSearchPaint(); }
+function egsSppSearchClear() {
+  state.egsSppQuery = '';
+  const i = document.getElementById('sm-spp-search-input');
+  if (i) { i.value = ''; i.focus(); }
+  _sppSearchPaint();
+}
+function egsSppSearchKey(e) {
+  if (e.key === 'Enter' && _sppSearchHits.length) { e.preventDefault(); egsSppSearchGo(0); }
+}
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !_sppSearchOn()) return;
+  const i = document.getElementById('sm-spp-search-input');
+  if (!state.egsSppQuery && document.activeElement !== i) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  state.egsSppQuery = '';
+  if (i) { i.value = ''; i.blur(); }
+  _sppSearchPaint();
+}, true);
+function egsSppSearchGo(i) {
+  const r = _sppSearchHits[i];
+  if (!r) return;
+  const g = r.go || {};
+  if (g.tab) { setEgsPreviewTab(g.tab); return; }
+  if (g.step) { chkGoStep(g.step); return; }
+  if (g.text) {
+    const scope = (typeof _smStepScope === 'function' && _smStepScope()) || document.querySelector('#submit-overlay') || document;
+    const lab = [...scope.querySelectorAll('div, span, label, a, dt, th')]
+      .find(n => n.children.length === 0 && (n.textContent || '').trim() === g.text);
+    if (!lab) return;
+    const block = lab.closest('.egs-sp-chip-part, .egs-sp-row, .egs-sp-meta-row, .egs-sp-side-row, tr, li') || lab.parentElement;
+    if (typeof _smSteamSpot === 'function') _smSteamSpot([block], block);
+  }
+}
+(() => {
+  const orig = window.renderGuide;
+  if (typeof orig !== 'function') return;
+  window.renderGuide = function () {
+    const a = document.activeElement;
+    const caret = a && a.id === 'sm-spp-search-input' ? [a.selectionStart, a.selectionEnd] : null;
+    const out = orig.apply(this, arguments);
+    if (_sppSearchOn()) {
+      _sppSearchMount();
+      if (typeof _egsSearchAlign === 'function') {
+        _egsSearchAlign();
+        clearTimeout(_sppSearchMount._t);
+        _sppSearchMount._t = setTimeout(() => { if (_sppSearchOn()) _egsSearchAlign(); }, 450);
+      }
+      if (caret) {
+        const i = document.getElementById('sm-spp-search-input');
+        if (i) { i.focus({ preventScroll: true }); try { i.setSelectionRange(caret[0], caret[1]); } catch (_) {} }
+      }
+    }
+    return out;
+  };
+})();
