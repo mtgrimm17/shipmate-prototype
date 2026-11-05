@@ -37249,6 +37249,7 @@ function _sppSearchIndex() {
   return out;
 }
 let _sppSearchHits = [];
+let _sppCrHits = [];
 function _sppSearch(q) {
   const toks = _egsNorm(q).split(/\s+/).filter(Boolean);
   if (!toks.length) return [];
@@ -37273,6 +37274,14 @@ function _sppSearchPaint() {
   const order = ['Store page', 'Fields', 'Genres', 'Features', 'Languages'];
   hits.sort((x, y) => order.indexOf(x.group) - order.indexOf(y.group));
   _sppSearchHits = hits;
+  /* AND THE CONTENT RATING QUESTIONNAIRE, WHICH IS PART OF THIS PAGE (v9.83).
+     Jaco: "si busco cosas nazis o de violencia, debería mostrarme también
+     las cosas de Content Rating." The questionnaire's own index and ranking
+     (_egsSearch, the one its own bar uses), under its own heading, the first
+     eight shown and the rest one press away in the questionnaire itself. */
+  const crAll = (typeof _egsSearch === 'function') ? _egsSearch(q) : [];
+  const CR_MAX = 8;
+  _sppCrHits = crAll.slice(0, CR_MAX);
   let out = '', last = null;
   hits.forEach((r, i) => {
     if (r.group !== last) { out += `<div class="sm-cr-group">${escHtml(r.group)}</div>`; last = r.group; }
@@ -37280,9 +37289,26 @@ function _sppSearchPaint() {
       <span class="sm-cr-node-dot">${r.done && typeof GUIDE_CHECK_SVG !== 'undefined' ? GUIDE_CHECK_SVG : ''}</span>
       <span class="sm-cr-node-label">${_egsMark(r.label, q)}</span></button>`;
   });
+  if (_sppCrHits.length) {
+    out += `<div class="sm-cr-group">Content Rating</div>`;
+    _sppCrHits.forEach((r, j) => {
+      const done = typeof _egsHitAnswered === 'function' && _egsHitAnswered(r);
+      out += `<button type="button" class="sm-cr-node is-match${done ? ' is-done' : ''}" onclick="egsSppSearchGoCr(${j})"
+                title="${escHtml(r.crumb || '')}">
+        <span class="sm-cr-node-dot">${done && typeof GUIDE_CHECK_SVG !== 'undefined' ? GUIDE_CHECK_SVG : ''}</span>
+        <span class="sm-cr-node-label">${_egsMark(r.label, q)}${r.crumb
+          ? `<span class="sm-cr-node-crumb">${escHtml(r.crumb)}</span>` : ''}</span></button>`;
+    });
+    if (crAll.length > CR_MAX) {
+      out += `<button type="button" class="sm-cr-node sm-cr-more" onclick="egsSppSearchOpenCr()">
+        <span class="sm-cr-node-dot"></span>
+        <span class="sm-cr-node-label">${crAll.length - CR_MAX} more in Content Rating →</span></button>`;
+    }
+  }
+  const total = hits.length + crAll.length;
   const cnt = document.createElement('div');
   cnt.className = 'sw-tip-text sm-cr-line-moved sm-cr-count';
-  cnt.textContent = hits.length ? `${hits.length} ${hits.length === 1 ? 'match' : 'matches'} for “${q.trim()}”.` : `No matches for “${q.trim()}”.`;
+  cnt.textContent = total ? `${total} ${total === 1 ? 'match' : 'matches'} for “${q.trim()}”.` : `No matches for “${q.trim()}”.`;
   const eb = card.querySelector(':scope > .guide-eyebrow');
   card.insertBefore(cnt, eb ? eb.nextSibling : card.firstChild);
   const block = document.createElement('div');
@@ -37315,7 +37341,26 @@ function egsSppSearchClear() {
   _sppSearchPaint();
 }
 function egsSppSearchKey(e) {
-  if (e.key === 'Enter' && _sppSearchHits.length) { e.preventDefault(); egsSppSearchGo(0); }
+  if (e.key !== 'Enter') return;
+  if (_sppSearchHits.length) { e.preventDefault(); egsSppSearchGo(0); }
+  else if (_sppCrHits.length) { e.preventDefault(); egsSppSearchGoCr(0); }
+}
+/* A Content Rating result opens the questionnaire with the same query in
+   its own bar, then takes you to that question the way its own result rows
+   do (egsCrSearchGo: open the path to it, scroll, dim the rest). */
+async function egsSppSearchOpenCr() {
+  state.egsCrQuery = state.egsSppQuery || '';
+  await openStorePreviewSection('egs', 'content');
+}
+async function egsSppSearchGoCr(j) {
+  const r = _sppCrHits[j];
+  if (!r) return;
+  await egsSppSearchOpenCr();
+  setTimeout(() => {
+    if (typeof egsCrSearchGo !== 'function') return;
+    _egsSearchHits = [r];
+    egsCrSearchGo(0);
+  }, 350);
 }
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || !_sppSearchOn()) return;

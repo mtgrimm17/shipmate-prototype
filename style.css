@@ -33020,3 +33020,8 @@ body.sm-guide-frozen #app-guide > .guide-card > * { opacity: 0 !important; trans
 .loc-primary-name.sw-widest { display: grid; flex: none; }
 .loc-primary-name.sw-widest > span { grid-area: 1 / 1; white-space: nowrap; }
 .loc-primary-name.sw-widest > .sw-widest-ghost { visibility: hidden; height: 0; overflow: hidden; }
+
+/* Where a Content Rating result sits in the questionnaire (v9.83), under its
+   label in the store page's search — "Types" or "Reactions" alone say
+   nothing until you know whose they are. */
+.sm-cr-node-crumb { display: block; margin-top: 1px; font-size: 10.5px; line-height: 1.3; color: var(--text-faint); }
